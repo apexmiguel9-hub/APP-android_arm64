@@ -200,9 +200,9 @@ jobs:
           SO_FILE=$(find "$GITROOT/OBlender" -path "*/build/*" -name "libblender.so" -type f 2>/dev/null)
           if [ -n "$SO_FILE" ]; then
             SIZE=$(stat --format=%s "$SO_FILE")
-            SIZE_MB=$(echo "scale=1; $SIZE / 1048576" | bc)
+            SIZE_MB=$(python3 -c "print(round($SIZE / 1048576, 1))")
             echo "=== libblender.so: ${SIZE_MB} MB ($SIZE bytes) ==="
-            if [ "$(echo "$SIZE_MB < 80" | bc)" -eq 1 ]; then
+            if [ "$(python3 -c "print(1 if $SIZE_MB < 80 else 0)")" -eq 1 ]; then
               echo "::warning::libblender.so is ${SIZE_MB} MB — below expected 85-96 MB. Verify linking."
             else
               echo "OK: within expected range (85-96 MB)"
