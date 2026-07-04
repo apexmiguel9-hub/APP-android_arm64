@@ -14,22 +14,20 @@ jobs:
     steps:
       - name: Checkout APP-android_arm64
         uses: actions/checkout@v4
-        with:
-          path: APP-android_arm64
 
       - name: Checkout Blender-android_arm64 (headers for includes)
         uses: actions/checkout@v4
         with:
           repository: dexapex377-coder/Blender-android_arm64
           ref: blender-v3.6-release
-          path: ../Blender-android_arm64
+          path: Blender-android_arm64
           fetch-depth: 1
 
       - name: Checkout lib-android_arm64 (third-party headers + .a files)
         uses: actions/checkout@v4
         with:
           repository: dexapex377-coder/lib-android_arm64
-          path: ../lib-android_arm64
+          path: lib-android_arm64
           fetch-depth: 1
 
       - name: Setup Java
@@ -87,7 +85,7 @@ jobs:
 
       - name: Clean old Blender .a files from APP repo
         run: |
-          GITROOT="${{ github.workspace }}/APP-android_arm64"
+          GITROOT="${{ github.workspace }}"
           echo "=== .a viejas encontradas en el repo (antes de reemplazar) ==="
           find "$GITROOT/OBlender" -name "*.a" -type f
           find "$GITROOT/OBlender" -name "*.a" -type f -delete
@@ -95,7 +93,7 @@ jobs:
 
       - name: Inspect artifact structure and flatten .a files
         run: |
-          GITROOT="${{ github.workspace }}/APP-android_arm64"
+          GITROOT="${{ github.workspace }}"
           A_DIR="$GITROOT/OBlender/app/.cxx/blender-libs/release/arm64-v8a/lib"
           mkdir -p "$A_DIR"
 
@@ -110,9 +108,9 @@ jobs:
 
       - name: Patch hardcoded Windows paths in CMakeLists.txt
         run: |
-          GITROOT="${{ github.workspace }}/APP-android_arm64"
-          BLENDER_DIR="$GITROOT/../Blender-android_arm64"
-          LIB_ABS="$GITROOT/../lib-android_arm64"
+          GITROOT="${{ github.workspace }}"
+          BLENDER_DIR="$GITROOT/Blender-android_arm64"
+          LIB_ABS="$GITROOT/lib-android_arm64"
           RELEASE_DIR="$GITROOT/OBlender/app/.cxx/blender-libs/release/arm64-v8a"
           CM="$GITROOT/OBlender/app/src/main/cpp/CMakeLists.txt"
 
@@ -131,8 +129,8 @@ jobs:
 
       - name: Generate buildinfo.h
         run: |
-          GITROOT="${{ github.workspace }}/APP-android_arm64"
-          BLENDER_DIR="$GITROOT/../Blender-android_arm64"
+          GITROOT="${{ github.workspace }}"
+          BLENDER_DIR="$GITROOT/Blender-android_arm64"
           RELEASE_DIR="$GITROOT/OBlender/app/.cxx/blender-libs/release/arm64-v8a"
           BUILDINFO_DIR="$RELEASE_DIR/source/creator"
           mkdir -p "$BUILDINFO_DIR"
@@ -145,7 +143,7 @@ jobs:
 
       - name: Build APK via Gradle
         run: |
-          GITROOT="${{ github.workspace }}/APP-android_arm64"
+          GITROOT="${{ github.workspace }}"
           cd "$GITROOT/OBlender"
           chmod +x gradlew
           export ANDROID_SDK_ROOT="$ANDROID_HOME"
@@ -154,7 +152,7 @@ jobs:
 
       - name: Check libblender.so size against expected range (85-96 MB)
         run: |
-          GITROOT="${{ github.workspace }}/APP-android_arm64"
+          GITROOT="${{ github.workspace }}"
           SO_FILE=$(find "$GITROOT/OBlender" -path "*/build/*" -name "libblender.so" -type f 2>/dev/null)
           if [ -n "$SO_FILE" ]; then
             SIZE=$(stat --format=%s "$SO_FILE")
@@ -171,7 +169,7 @@ jobs:
 
       - name: Check APK exists and report size
         run: |
-          GITROOT="${{ github.workspace }}/APP-android_arm64"
+          GITROOT="${{ github.workspace }}"
           APK=$(ls "$GITROOT/OBlender/app/build/outputs/apk/release/"*.apk 2>/dev/null | head -1)
           if [ -n "$APK" ]; then
             SIZE=$(stat --format=%s "$APK")
@@ -186,5 +184,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: blender-android-apk
-          path: ${{ github.workspace }}/APP-android_arm64/OBlender/app/build/outputs/apk/release/*.apk
+          path: ${{ github.workspace }}/OBlender/app/build/outputs/apk/release/*.apk
           if-no-files-found: error
