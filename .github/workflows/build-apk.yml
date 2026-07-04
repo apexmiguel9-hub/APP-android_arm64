@@ -1,0 +1,190 @@
+name: Build Blender Android APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      blender_run_id:
+        description: 'Blender CI run ID (optional, defaults to latest successful)'
+        required: false
+        type: string
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout APP-android_arm64
+        uses: actions/checkout@v4
+        with:
+          path: APP-android_arm64
+
+      - name: Checkout Blender-android_arm64 (headers for includes)
+        uses: actions/checkout@v4
+        with:
+          repository: dexapex377-coder/Blender-android_arm64
+          ref: blender-v3.6-release
+          path: ../Blender-android_arm64
+          fetch-depth: 1
+
+      - name: Checkout lib-android_arm64 (third-party headers + .a files)
+        uses: actions/checkout@v4
+        with:
+          repository: dexapex377-coder/lib-android_arm64
+          path: ../lib-android_arm64
+          fetch-depth: 1
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '11'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install SDK platform, build-tools, NDK
+        run: |
+          yes | sdkmanager "platforms;android-30" "build-tools;30.0.3" "ndk;21.4.7075529" > /dev/null 2>&1
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          ls "$ANDROID_HOME/ndk/21.4.7075529" > /dev/null && echo "NDK 21.4.7075529 installed ✓"
+
+      - name: Get latest successful Blender CI run
+        id: get-run
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          if [ -n "${{ inputs.blender_run_id }}" ]; then
+            echo "run_id=${{ inputs.blender_run_id }}" >> $GITHUB_OUTPUT
+            echo "Using specified run: ${{ inputs.blender_run_id }}"
+          else
+            RUN_ID=$(gh run list \
+              --repo dexapex377-coder/Blender-android_arm64 \
+              --workflow build-static-libs.yml \
+              --status success \
+              --json databaseId \
+              --jq '.[0].databaseId' \
+              --limit 1)
+            if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
+              echo "ERROR: No successful Blender CI run found. Trigger a Blender build first." >&2
+              exit 1
+            fi
+            echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
+            echo "Using latest successful Blender run: $RUN_ID"
+          fi
+
+      - name: Download Blender static libs artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: blender-android-arm64-static-libs
+          repository: dexapex377-coder/Blender-android_arm64
+          run-id: ${{ steps.get-run.outputs.run_id }}
+          github-token: ${{ secrets.GH_PAT }}
+          path: /tmp/blender-libs
+
+      - name: Count .a files received
+        run: |
+          echo "=== .a files from Blender CI ==="
+          find /tmp/blender-libs -name "*.a" -type f | wc -l
+
+      - name: Clean old Blender .a files from APP repo
+        run: |
+          GITROOT="${{ github.workspace }}/APP-android_arm64"
+          echo "=== .a viejas encontradas en el repo (antes de reemplazar) ==="
+          find "$GITROOT/OBlender" -name "*.a" -type f
+          find "$GITROOT/OBlender" -name "*.a" -type f -delete
+          echo "Old .a files cleaned ✓"
+
+      - name: Inspect artifact structure and flatten .a files
+        run: |
+          GITROOT="${{ github.workspace }}/APP-android_arm64"
+          A_DIR="$GITROOT/OBlender/app/.cxx/blender-libs/release/arm64-v8a/lib"
+          mkdir -p "$A_DIR"
+
+          echo "=== Estructura real del artifact ==="
+          find /tmp/blender-libs -name "*.a" -type f | head -5
+          find /tmp/blender-libs -name "*.a" -type f | wc -l
+
+          echo "=== Copiando .a a $A_DIR ==="
+          find /tmp/blender-libs -name "*.a" -type f -exec cp {} "$A_DIR/" \;
+          COUNT=$(ls "$A_DIR/" | wc -l)
+          echo "Deployed $COUNT .a files"
+
+      - name: Patch hardcoded Windows paths in CMakeLists.txt
+        run: |
+          GITROOT="${{ github.workspace }}/APP-android_arm64"
+          BLENDER_DIR="$GITROOT/../Blender-android_arm64"
+          LIB_ABS="$GITROOT/../lib-android_arm64"
+          RELEASE_DIR="$GITROOT/OBlender/app/.cxx/blender-libs/release/arm64-v8a"
+          CM="$GITROOT/OBlender/app/src/main/cpp/CMakeLists.txt"
+
+          echo "=== Before patching ==="
+          grep -n 'D:/FreeProjects' "$CM" || echo "(none found)"
+
+          sed -i \
+            -e "s|D:/FreeProjects/Blender/Blender/lib-android_arm64|${LIB_ABS}|g" \
+            -e "s|D:/FreeProjects/Blender/Blender/Blender-android_arm64|${BLENDER_DIR}|g" \
+            -e "s|D:/FreeProjects/Blender/Blender/Utilities-android_arm64/MakeBlender/app/\.cxx/cmake/release/arm64-v8a|${RELEASE_DIR}|g" \
+            -e "s|D:/FreeProjects/Blender/Blender/Utilities-android_arm64/MakeBlender/app/\.cxx/cmake/debug/arm64-v8a|${RELEASE_DIR}|g" \
+            "$CM"
+
+          echo "=== After patching ==="
+          grep -n 'D:/FreeProjects' "$CM" || echo "All patched ✓"
+
+      - name: Generate buildinfo.h
+        run: |
+          GITROOT="${{ github.workspace }}/APP-android_arm64"
+          BLENDER_DIR="$GITROOT/../Blender-android_arm64"
+          RELEASE_DIR="$GITROOT/OBlender/app/.cxx/blender-libs/release/arm64-v8a"
+          BUILDINFO_DIR="$RELEASE_DIR/source/creator"
+          mkdir -p "$BUILDINFO_DIR"
+
+          cd "$BUILDINFO_DIR"
+          cmake -DSOURCE_DIR="$BLENDER_DIR" \
+            -P "$BLENDER_DIR/build_files/cmake/buildinfo.cmake"
+          echo "=== buildinfo.h generated ==="
+          head -10 buildinfo.h
+
+      - name: Build APK via Gradle
+        run: |
+          GITROOT="${{ github.workspace }}/APP-android_arm64"
+          cd "$GITROOT/OBlender"
+          chmod +x gradlew
+          export ANDROID_SDK_ROOT="$ANDROID_HOME"
+          export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/21.4.7075529"
+          ./gradlew assembleRelease 2>&1
+
+      - name: Check libblender.so size against expected range (85-96 MB)
+        run: |
+          GITROOT="${{ github.workspace }}/APP-android_arm64"
+          SO_FILE=$(find "$GITROOT/OBlender" -path "*/build/*" -name "libblender.so" -type f 2>/dev/null)
+          if [ -n "$SO_FILE" ]; then
+            SIZE=$(stat --format=%s "$SO_FILE")
+            SIZE_MB=$(echo "scale=1; $SIZE / 1048576" | bc)
+            echo "=== libblender.so: ${SIZE_MB} MB ($SIZE bytes) ==="
+            if [ "$(echo "$SIZE_MB < 80" | bc)" -eq 1 ]; then
+              echo "::warning::libblender.so is ${SIZE_MB} MB — below expected 85-96 MB. Verify linking."
+            else
+              echo "OK: within expected range (85-96 MB)"
+            fi
+          else
+            echo "::warning::libblender.so not found in build tree. APK may have failed."
+          fi
+
+      - name: Check APK exists and report size
+        run: |
+          GITROOT="${{ github.workspace }}/APP-android_arm64"
+          APK=$(ls "$GITROOT/OBlender/app/build/outputs/apk/release/"*.apk 2>/dev/null | head -1)
+          if [ -n "$APK" ]; then
+            SIZE=$(stat --format=%s "$APK")
+            SIZE_MB=$(echo "scale=1; $SIZE / 1048576" | bc)
+            echo "=== APK: $(basename "$APK") — ${SIZE_MB} MB ==="
+          else
+            echo "ERROR: No APK found at expected path!" >&2
+            exit 1
+          fi
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: blender-android-apk
+          path: ${{ github.workspace }}/APP-android_arm64/OBlender/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
