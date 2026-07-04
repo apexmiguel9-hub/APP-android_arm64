@@ -146,7 +146,32 @@ jobs:
           echo "=== After patching ==="
           grep -n 'D:/FreeProjects' "$CM" || echo "All patched ✓"
 
-      - name: Generate buildinfo.h
+       - name: Generate buildinfo_static.h
+         run: |
+           GITROOT="${{ github.workspace }}"
+           BLENDER_DIR="$GITROOT/Blender-android_arm64"
+           RELEASE_DIR="$GITROOT/OBlender/app/.cxx/blender-libs/release/arm64-v8a"
+           BUILDINFO_DIR="$RELEASE_DIR/source/creator"
+           mkdir -p "$BUILDINFO_DIR"
+ 
+           cat > gen_buildinfo_static.cmake << 'EOF'
+           set(BUILD_PLATFORM "Android")
+           set(BUILD_TYPE "Release")
+           set(BUILD_CFLAGS "NDK r21e arm64-v8a -O2")
+           set(BUILD_CXXFLAGS "NDK r21e arm64-v8a -O2")
+           set(BUILD_LINKFLAGS "Android NDK Linker")
+           set(BUILD_SYSTEM "CMake")
+ 
+           configure_file(
+             "${SOURCE_DIR}/build_files/cmake/buildinfo_static.h.in"
+             "${OUTPUT_DIR}/buildinfo_static.h"
+             ESCAPE_QUOTES
+             @ONLY
+           )
+           EOF
+           cmake -P gen_buildinfo_static.cmake -DSOURCE_DIR="$BLENDER_DIR" -DOUTPUT_DIR="$BUILDINFO_DIR"
+ 
+       - name: Generate buildinfo.h
         run: |
           GITROOT="${{ github.workspace }}"
           BLENDER_DIR="$GITROOT/Blender-android_arm64"
