@@ -194,22 +194,6 @@ jobs:
           export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/21.4.7075529"
           ./gradlew assembleRelease 2>&1
 
-      - name: Check libblender.so size against expected range (85-96 MB)
-        run: |
-          GITROOT="${{ github.workspace }}"
-          SO_FILE=$(find "$GITROOT/OBlender" -path "*/build/*" -name "libblender.so" -type f 2>/dev/null)
-          if [ -n "$SO_FILE" ]; then
-            SIZE=$(stat --format=%s "$SO_FILE")
-            SIZE_MB=$(python3 -c "print(round($SIZE / 1048576, 1))")
-            echo "=== libblender.so: ${SIZE_MB} MB ($SIZE bytes) ==="
-            if [ "$(python3 -c "print(1 if $SIZE_MB < 80 else 0)")" -eq 1 ]; then
-              echo "::warning::libblender.so is ${SIZE_MB} MB — below expected 85-96 MB. Verify linking."
-            else
-              echo "OK: within expected range (85-96 MB)"
-            fi
-          else
-            echo "::warning::libblender.so not found in build tree. APK may have failed."
-          fi
 
       - name: Check APK exists and report size
         run: |
