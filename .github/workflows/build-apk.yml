@@ -154,7 +154,7 @@ jobs:
           BUILDINFO_DIR="$RELEASE_DIR/source/creator"
           mkdir -p "$BUILDINFO_DIR"
 
-          cat > gen_buildinfo_static.cmake << 'EOF'
+          cat > gen_buildinfo_static.cmake << EOF
           set(BUILD_PLATFORM "Android")
           set(BUILD_TYPE "Release")
           set(BUILD_CFLAGS "NDK r21e arm64-v8a -O2")
@@ -163,13 +163,13 @@ jobs:
           set(BUILD_SYSTEM "CMake")
 
           configure_file(
-            "${SOURCE_DIR}/build_files/cmake/buildinfo_static.h.in"
-            "${OUTPUT_DIR}/buildinfo_static.h"
+            "$BLENDER_DIR/build_files/cmake/buildinfo_static.h.in"
+            "$BUILDINFO_DIR/buildinfo_static.h"
             ESCAPE_QUOTES
             @ONLY
           )
           EOF
-          cmake -P gen_buildinfo_static.cmake -DSOURCE_DIR="$BLENDER_DIR" -DOUTPUT_DIR="$BUILDINFO_DIR"
+          cmake -P gen_buildinfo_static.cmake
 
       - name: Generate buildinfo.h
         run: |
