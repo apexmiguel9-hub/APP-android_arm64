@@ -97,20 +97,33 @@ jobs:
           find "$GITROOT/OBlender" -name "*.a" -type f -delete
           echo "Old .a files cleaned ✓"
 
-      - name: Inspect artifact structure and flatten .a files
-        run: |
-          GITROOT="${{ github.workspace }}"
-          A_DIR="$GITROOT/OBlender/app/.cxx/blender-libs/release/arm64-v8a/lib"
-          mkdir -p "$A_DIR"
+       - name: Extract static libs zip
+         run: |
+           ZIP_FILE=$(find /tmp/blender-libs -name "*.zip" -type f | head -1)
+           if [ -z "$ZIP_FILE" ]; then
+             echo "ERROR: No .zip found in downloaded artifact"
+             find /tmp/blender-libs -type f
+             exit 1
+           fi
+           echo "Extracting $ZIP_FILE..."
+           unzip -q "$ZIP_FILE" -d /tmp/blender-libs/extracted
+           echo "=== .a files after extraction ==="
+           find /tmp/blender-libs/extracted -name "*.a" -type f | wc -l
 
-          echo "=== Estructura real del artifact ==="
-          find /tmp/blender-libs -name "*.a" -type f | head -5
-          find /tmp/blender-libs -name "*.a" -type f | wc -l
+       - name: Inspect artifact structure and flatten .a files
+         run: |
+           GITROOT="${{ github.workspace }}"
+           A_DIR="$GITROOT/OBlender/app/.cxx/blender-libs/release/arm64-v8a/lib"
+           mkdir -p "$A_DIR"
 
-          echo "=== Copiando .a a $A_DIR ==="
-          find /tmp/blender-libs -name "*.a" -type f -exec cp {} "$A_DIR/" \;
-          COUNT=$(ls "$A_DIR/" | wc -l)
-          echo "Deployed $COUNT .a files"
+           echo "=== Estructura real del artifact ==="
+           find /tmp/blender-libs/extracted -name "*.a" -type f | head -5
+           find /tmp/blender-libs/extracted -name "*.a" -type f | wc -l
+
+           echo "=== Copiando .a a $A_DIR ==="
+           find /tmp/blender-libs/extracted -name "*.a" -type f -exec cp {} "$A_DIR/" \;
+           COUNT=$(ls "$A_DIR/" | wc -l)
+           echo "Deployed $COUNT .a files"
 
       - name: Patch hardcoded Windows paths in CMakeLists.txt
         run: |
