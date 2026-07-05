@@ -665,6 +665,8 @@ valuesInt.reserve(values.size());
         valuesInt.push_back(atoi(value.c_str()));
     }
     if(!valuesInt.empty()){
+        __android_log_print(ANDROID_LOG_INFO, "OBL.DIAG",
+            "oblSetValue JNI: sending %d values [0]=%d", (int)valuesInt.size(), valuesInt[0]);
         oblSetValue(&(valuesInt[0]),valuesInt.size());
     }
 }
@@ -682,6 +684,8 @@ extern "C" JNIEXPORT void JNICALL Java_com_epai_oblender_OBLNativeActivity_oblSe
         valuesInt.push_back(atoi(value.c_str()));
     }
     if(!valuesInt.empty()){
+        __android_log_print(ANDROID_LOG_INFO, "OBL.DIAG",
+            "oblSetValueOn JNI: sending %d values [0]=%d", (int)valuesInt.size(), valuesInt[0]);
         oblSetValueOn(&(valuesInt[0]),valuesInt.size());
     }
 }
@@ -699,6 +703,8 @@ extern "C" JNIEXPORT void JNICALL Java_com_epai_oblender_OBLNativeActivity_oblSe
         valuesInt.push_back(atoi(value.c_str()));
     }
     if(!valuesInt.empty()){
+        __android_log_print(ANDROID_LOG_INFO, "OBL.DIAG",
+            "oblSetValueOff JNI: sending %d values [0]=%d", (int)valuesInt.size(), valuesInt[0]);
         oblSetValueOff(&(valuesInt[0]),valuesInt.size());
     }
 }

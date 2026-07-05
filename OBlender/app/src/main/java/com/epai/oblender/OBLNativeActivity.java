@@ -164,7 +164,9 @@ public class OBLNativeActivity extends NativeActivity
                                 for (int i = 0; i < keys.length; i++) {
                                     strings.add(String.valueOf(keys[i]));
                                 }
-                                oblSetValue(String.join(",", strings));
+                                String joined = String.join(",", strings);
+                                Log.d("OBL.DIAG", "enterKey sending: " + joined);
+                                oblSetValue(joined);
                             }
 
                             @Override
@@ -173,7 +175,9 @@ public class OBLNativeActivity extends NativeActivity
                                 for (int i = 0; i < keys.length; i++) {
                                     strings.add(String.valueOf(keys[i]));
                                 }
-                                oblSetValueOff(String.join(",", strings));
+                                String joined = String.join(",", strings);
+                                Log.d("OBL.DIAG", "enterKeyOff sending: " + joined);
+                                oblSetValueOff(joined);
                             }
 
                             @Override
@@ -182,7 +186,9 @@ public class OBLNativeActivity extends NativeActivity
                                 for (int i = 0; i < keys.length; i++) {
                                     strings.add(String.valueOf(keys[i]));
                                 }
-                                oblSetValueOn(String.join(",", strings));
+                                String joined = String.join(",", strings);
+                                Log.d("OBL.DIAG", "enterKeyOn sending: " + joined);
+                                oblSetValueOn(joined);
                             }
 
                             @Override
