@@ -43,9 +43,18 @@ struct appUserData{
 
 bool isInitial= false;
 
+bool hasWindow = false;
+
 static int engine_init_display_reinit(struct android_app*app){
     mainBlenderInitial_reinit(((appUserData*)(app->userData))->pContext);
     return 0;
+}
+
+static void engine_term_display(struct android_app *app) {
+    EGLDisplay display = eglGetCurrentDisplay();
+    if (display != EGL_NO_DISPLAY) {
+        eglMakeCurrent(display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+    }
 }
 /**
  * Initialize an EGL context for the current display.
@@ -96,6 +105,7 @@ static int engine_init_display(struct android_app *app) {
     const char *argv[2] = {argv1,"-d"};
     userData->pContext=mainBlenderInitial(2, (const char **) (argv));
     isInitial=true;
+    hasWindow=true;
     return 0;
 }
 
@@ -103,6 +113,7 @@ static int engine_init_display(struct android_app *app) {
  * Just the current frame in the display.
  */
 static void engine_draw_frame(struct android_app *app) {
+    if (!hasWindow) return;
     mainBlenderLoop(((appUserData*)(app->userData))->pContext);
 }
 
@@ -116,6 +127,7 @@ static void engine_handle_cmd(struct android_app *app, int32_t cmd) {
             break;
         case APP_CMD_INIT_WINDOW:
             // The window is being shown, get it ready.
+            hasWindow = true;
             if (!isInitial){
                 engine_init_display(app);
             }else{
@@ -124,6 +136,8 @@ static void engine_handle_cmd(struct android_app *app, int32_t cmd) {
             break;
         case APP_CMD_TERM_WINDOW:
             // The window is being hidden or closed, clean it up.
+            hasWindow = false;
+            engine_term_display(app);
             break;
         case APP_CMD_GAINED_FOCUS:
             // When our app gains focus, we start monitoring the accelerometer.
@@ -158,7 +172,7 @@ void android_main(struct android_app *state) {
 
     while (true) {
         // Read all pending events.
-        if(isInitial){
+        if(isInitial && hasWindow){
             engine_draw_frame(state);
         }else{
             int ident;
