@@ -64,9 +64,9 @@ public class StartupActivity extends AppCompatActivity {
         @Override
         public boolean handleMessage(@NonNull Message msg) {
             if (msg.what == MSG_ID.MSG_ID_PERMISSION.ordinal()) {
-                //  获取外部文件读取权限
+                //  Request external file read permission
                 if (!checkWriteExternalFilePermission()) {
-                    //  获取外部文件读取权限
+                    //  Request external file read permission
                     showAskExternalFileWritePermissionDlg();
                 } else {
                     mHandler.sendEmptyMessage(MSG_ID.MSG_ID_INTERNETPERMISSION.ordinal());
@@ -78,7 +78,7 @@ public class StartupActivity extends AppCompatActivity {
                     mHandler.sendEmptyMessage(MSG_ID.MSG_ID_COPYFILE.ordinal());
                 }
             }else if (msg.what == MSG_ID.MSG_ID_COPYFILE.ordinal()) {
-                //  复制文件
+                //  Copy files
                 Intent currentitent = getIntent();
                 String action = currentitent.getAction();
                 if (!Intent.ACTION_SEND.equals(action)) {
@@ -89,7 +89,7 @@ public class StartupActivity extends AppCompatActivity {
                 }
                 mHandler.sendEmptyMessage(MSG_ID.MSG_ID_STARTACTIVITY.ordinal());
             } else if (msg.what == MSG_ID.MSG_ID_STARTACTIVITY.ordinal()) {
-                //  打开建模页面
+                //  Open modeling activity
                 Intent intent = new Intent(StartupActivity.this, OBLNativeActivity.class);
                 intent.putExtra("HomePath",stringHomePath);
                 intent.putExtra("ConfigPath",stringConfigPath);
@@ -100,10 +100,10 @@ public class StartupActivity extends AppCompatActivity {
         }
     });
 
-    //  检查是否有往外部写文件权限
+    //  Check external file write permission
     private boolean checkWriteExternalFilePermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            // 先判断有没有权限
+            //  First check if permission is granted
             return Environment.isExternalStorageManager();
         } else {
             return ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) ==
@@ -111,16 +111,16 @@ public class StartupActivity extends AppCompatActivity {
         }
     }
 
-    //  提示获取往外部写入文件权限
+    //  Prompt to obtain external write permission
     private void showAskExternalFileWritePermissionDlg() {
         AlertDialog.Builder normalDialog = new AlertDialog.Builder(this);
-        normalDialog.setTitle("获取读写文件权限");
-        normalDialog.setMessage("获取读写文件权限");
-        normalDialog.setPositiveButton("确定",
+        normalDialog.setTitle("Storage Permission Required");
+        normalDialog.setMessage("This app needs storage access to read and save files.");
+        normalDialog.setPositiveButton("Allow",
                 new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialog, int which) {
-                        //  允许获取往外部写入文件权限
+                        //  Allow external write permission
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                             Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
                             intent.setData(Uri.parse("package:" + StartupActivity.this.getPackageName()));
@@ -131,13 +131,13 @@ public class StartupActivity extends AppCompatActivity {
                         }
                     }
                 });
-        normalDialog.setNegativeButton("取消",
+        normalDialog.setNegativeButton("Deny",
                 new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialog, int which) {
-                        //  不允许获取外部文件权限
+                        //  Deny external file permission
                         Toast.makeText(StartupActivity.this,
-                                "存储权限获取失败,不能保存文件",
+                                "Storage permission denied. Cannot save files.",
                                 Toast.LENGTH_LONG).show();
                         mHandler.sendEmptyMessage(MSG_ID.MSG_ID_INTERNETPERMISSION.ordinal());
                     }
@@ -148,7 +148,7 @@ public class StartupActivity extends AppCompatActivity {
         button.setTextColor(Color.BLUE);
     }
 
-    //  获取权限结果
+    //  Permission request result
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
@@ -169,7 +169,7 @@ public class StartupActivity extends AppCompatActivity {
         }
     }
 
-    //  强制退出APP
+    //  Force exit app
     private void exitApp() {
         android.os.Process.killProcess(android.os.Process.myPid());
         System.exit(0);
