@@ -616,7 +616,7 @@ void main_python_exit(void)
 /** \} */
 
 void mainBlenderInitial_reinit(void*pContext){
-//  blenderWMInitReinit();
+  blenderWMInitReinit();
   WM_check((bContext*)pContext,true);
 }
 
