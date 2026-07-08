@@ -35,7 +35,7 @@ public class OblSettingFragment extends View {
     private int mAddBgPress = Color.parseColor("#27AE60");
     private int mHeaderBg = Color.parseColor("#16162A");
     private int mCloseBg = Color.parseColor("#7A2A2A");
-    private int mRadius = 10f;
+    private int mRadius = 10;
     private int mBorderW = 1;
 
     private Paint mPaint, mBorderPaint;
