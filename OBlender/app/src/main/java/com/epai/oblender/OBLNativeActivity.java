@@ -413,6 +413,7 @@ public class OBLNativeActivity extends NativeActivity
         lp.height = 120;
         lp.x = 10;
         lp.y = 10;
+        lp.flags = LayoutParams.FLAG_NOT_FOCUSABLE | LayoutParams.FLAG_NOT_TOUCH_MODAL;
 
         toggleBtn.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -444,6 +445,7 @@ public class OBLNativeActivity extends NativeActivity
         slp.height = 120;
         slp.x = 10;
         slp.y = 140;
+        slp.flags = LayoutParams.FLAG_NOT_FOCUSABLE | LayoutParams.FLAG_NOT_TOUCH_MODAL;
 
         shortcutsBtn.setOnClickListener(new View.OnClickListener() {
             @Override
