@@ -24,25 +24,31 @@ public class OblSettingFragment extends View {
     private static final String PREFS_NAME = "obl_shortcuts";
     private static final String PREFS_JSON = "shortcuts";
 
-    private int mBg = Color.parseColor("#2B2B2B");
-    private int mBtnBg = Color.parseColor("#505050");
-    private int mBtnTxt = Color.WHITE;
-    private int mAccent = Color.parseColor("#E67E22");
-    private int mAddBg = Color.parseColor("#27AE60");
-    private int mCtrlBg = Color.parseColor("#444444");
-    private int mCtrlTxt = Color.parseColor("#AAAAAA");
-    private float mRadius = 8f;
+    private int mCols = 4, mRows = 5;
+    private int mBg = Color.parseColor("#1A1A2E");
+    private int mBtnBg = Color.parseColor("#2D2D44");
+    private int mBtnBgPress = Color.parseColor("#3D3D5C");
+    private int mBtnBorder = Color.parseColor("#4A4A6A");
+    private int mBtnTxt = Color.parseColor("#E8E8F0");
+    private int mComboTxt = Color.parseColor("#8888AA");
+    private int mAddBg = Color.parseColor("#2ECC71");
+    private int mAddBgPress = Color.parseColor("#27AE60");
+    private int mHeaderBg = Color.parseColor("#16162A");
+    private int mCloseBg = Color.parseColor("#7A2A2A");
+    private int mRadius = 10f;
+    private int mBorderW = 1;
 
-    private Paint mPaint;
+    private Paint mPaint, mBorderPaint;
     private int mW, mH;
-    private int mGridRows = 5, mGridCols = 6;
+    private int mPressedIdx = -1;
+    private long mPressTime = 0;
 
     private ArrayList<ShortcutItem> mShortcuts = new ArrayList<>();
     private OBLSettingFragmentListener mListener;
 
-    private Rect mCloseRect = null, mMoveRect = null;
-    private RectF[] mBtnRects = null;
-    private RectF mAddRect = null;
+    private Rect mCloseRect, mMoveRect;
+    private int mGridTop, mGridBot;
+    private float mCellW, mCellH;
 
     private class ShortcutItem {
         String name;
@@ -60,6 +66,11 @@ public class OblSettingFragment extends View {
         mPaint.setAntiAlias(true);
         mPaint.setDither(true);
         mPaint.setTextAlign(Paint.Align.CENTER);
+
+        mBorderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        mBorderPaint.setStyle(Paint.Style.STROKE);
+        mBorderPaint.setStrokeWidth(mBorderW);
+
         loadShortcuts();
     }
 
@@ -72,121 +83,147 @@ public class OblSettingFragment extends View {
         mPaint.setColor(mBg);
         canvas.drawRect(0, 0, mW, mH, mPaint);
 
-        recomputeLayout();
-        drawShortcuts(canvas);
-        drawControls(canvas);
+        int headerH = (int) (mH * 0.07f);
+        int ctrlH = (int) (mH * 0.09f);
+        mGridTop = headerH;
+        mGridBot = mH - ctrlH;
+        int gridH = mGridBot - mGridTop;
+
+        drawHeader(canvas, headerH);
+        drawGrid(canvas, mGridTop, gridH);
+        drawControls(canvas, mGridBot, ctrlH);
+
+        if (mPressedIdx >= 0 && System.currentTimeMillis() - mPressTime > 120) {
+            mPressedIdx = -1;
+            invalidate();
+        }
     }
 
-    private void recomputeLayout() {
-        int cells = mGridRows * mGridCols;
-        int botH = mH / (mGridRows + 1);
-        int gridH = mH - botH;
-        float cw = (float) mW / mGridCols;
-        float ch = (float) gridH / mGridRows;
-
-        mBtnRects = new RectF[cells];
-        for (int i = 0; i < cells; i++) {
-            int r = i / mGridCols, c = i % mGridCols;
-            mBtnRects[i] = new RectF(c * cw + 3, r * ch + 3, (c + 1) * cw - 3, (r + 1) * ch - 3);
-        }
-
-        int scCount = mShortcuts.size();
-        int addIdx = Math.min(scCount, cells - 1);
-        if (addIdx < cells) {
-            int r = addIdx / mGridCols, c = addIdx % mGridCols;
-            mAddRect = new RectF(c * cw + 3, r * ch + 3, (c + 1) * cw - 3, (r + 1) * ch - 3);
-        } else {
-            mAddRect = null;
-        }
-
-        float ctrlW = mW / 3f;
-        mCloseRect = new Rect(mW - (int) ctrlW, gridH, mW, mH);
-        mMoveRect = new Rect(0, gridH, (int) ctrlW, mH);
+    private void drawHeader(Canvas c, int h) {
+        mPaint.setColor(mHeaderBg);
+        c.drawRect(0, 0, mW, h, mPaint);
+        mPaint.setColor(mBtnTxt);
+        mPaint.setTextSize(h * 0.4f);
+        Paint.FontMetrics fm = mPaint.getFontMetrics();
+        float y = h / 2f + (fm.bottom - fm.top) / 2f - fm.bottom;
+        c.drawText("SHORTCUTS  (" + mShortcuts.size() + ")", mW / 2f, y, mPaint);
     }
 
-    private void drawShortcuts(Canvas canvas) {
-        int cells = mGridRows * mGridCols;
-        if (mBtnRects == null) return;
+    private void drawGrid(Canvas c, int top, int gridH) {
+        mCellW = (float) mW / mCols;
+        mCellH = (float) gridH / mRows;
+        float pad = 4f;
 
         int idx = 0;
-        for (int i = 0; i < mShortcuts.size() && idx < cells; i++, idx++) {
-            drawRoundedBtn(canvas, mBtnRects[idx], mBtnBg, mBtnTxt, mShortcuts.get(i).name,
-                comboDisplay(mShortcuts.get(i)));
+        for (int i = 0; i < mShortcuts.size() && idx < mRows * mCols; i++, idx++) {
+            int r = idx / mCols, col = idx % mCols;
+            RectF rect = new RectF(col * mCellW + pad, top + r * mCellH + pad,
+                                   (col + 1) * mCellW - pad, top + (r + 1) * mCellH - pad);
+            boolean pressed = (mPressedIdx == i);
+            drawBtn(c, rect, pressed ? mBtnBgPress : mBtnBg, mBtnTxt,
+                    mShortcuts.get(i).name, comboDisplay(mShortcuts.get(i)));
         }
 
-        if (idx < cells && mAddRect != null) {
-            drawRoundedBtn(canvas, mAddRect, mAddBg, Color.WHITE, "+", "Add");
+        if (idx < mRows * mCols) {
+            int r = idx / mCols, col = idx % mCols;
+            RectF rect = new RectF(col * mCellW + pad, top + r * mCellH + pad,
+                                   (col + 1) * mCellW - pad, top + (r + 1) * mCellH - pad);
+            boolean pressed = (mPressedIdx == -2);
+            drawBtn(c, rect, pressed ? mAddBgPress : mAddBg, Color.WHITE, "+ Add", "");
         }
     }
 
-    private void drawRoundedBtn(Canvas c, RectF r, int bg, int txtColor, String line1, String line2) {
+    private void drawBtn(Canvas c, RectF r, int bg, int txtCol, String line1, String line2) {
         mPaint.setColor(bg);
         c.drawRoundRect(r, mRadius, mRadius, mPaint);
+        mBorderPaint.setColor(mBtnBorder);
+        c.drawRoundRect(r, mRadius, mRadius, mBorderPaint);
 
         float h = r.height();
-        float sz1 = Math.min(36f, h * 0.32f);
-        float sz2 = Math.min(18f, h * 0.18f);
+        float sz1 = Math.min(32f, h * 0.3f);
+        float sz2 = Math.min(15f, h * 0.16f);
 
-        mPaint.setColor(txtColor);
+        mPaint.setColor(txtCol);
         mPaint.setTextSize(sz1);
         Paint.FontMetrics fm = mPaint.getFontMetrics();
-        float y1 = r.centerY() - sz1 * 0.15f;
+        float y1 = r.centerY() - (line2.isEmpty() ? 0 : sz1 * 0.08f);
         c.drawText(line1, r.centerX(), y1, mPaint);
 
-        mPaint.setTextSize(sz2);
-        mPaint.setColor(Color.parseColor("#CCCCCC"));
-        c.drawText(line2, r.centerX(), y1 + sz1 * 0.5f + sz2 * 0.2f, mPaint);
+        if (!line2.isEmpty()) {
+            mPaint.setTextSize(sz2);
+            mPaint.setColor(mComboTxt);
+            c.drawText(line2, r.centerX(), y1 + sz1 * 0.5f + sz2 * 0.2f, mPaint);
+        }
     }
 
-    private void drawControls(Canvas canvas) {
-        if (mMoveRect != null) {
-            mPaint.setColor(mCtrlBg);
-            canvas.drawRect(mMoveRect, mPaint);
-            mPaint.setColor(mCtrlTxt);
-            mPaint.setTextSize(28f);
-            Paint.FontMetrics fm = mPaint.getFontMetrics();
-            float d = (fm.bottom - fm.top) / 2f - fm.bottom;
-            canvas.drawText("↕", mMoveRect.exactCenterX(), mMoveRect.exactCenterY() + d, mPaint);
-        }
-        if (mCloseRect != null) {
-            mPaint.setColor(0xFF7A2A2A);
-            canvas.drawRect(mCloseRect, mPaint);
-            mPaint.setColor(Color.WHITE);
-            mPaint.setTextSize(30f);
-            Paint.FontMetrics fm = mPaint.getFontMetrics();
-            float d = (fm.bottom - fm.top) / 2f - fm.bottom;
-            canvas.drawText("✕", mCloseRect.exactCenterX(), mCloseRect.exactCenterY() + d, mPaint);
-        }
+    private void drawControls(Canvas c, int top, int h) {
+        mPaint.setColor(mHeaderBg);
+        c.drawRect(0, top, mW, top + h, mPaint);
+
+        float bw = mW / 5f;
+        mCloseRect = new Rect((int) (mW - bw * 1.5f), top, mW, top + h);
+        mMoveRect = new Rect(0, top, (int) (bw * 1.5f), top + h);
+
+        float textSize = h * 0.4f;
+
+        mPaint.setColor(mCloseBg);
+        c.drawRoundRect(new RectF(mCloseRect), 6, 6, mPaint);
+        mPaint.setColor(Color.WHITE);
+        mPaint.setTextSize(textSize);
+        Paint.FontMetrics fm = mPaint.getFontMetrics();
+        float d = (fm.bottom - fm.top) / 2f - fm.bottom;
+        c.drawText("✕  Close", mCloseRect.exactCenterX(), mCloseRect.exactCenterY() + d, mPaint);
+
+        mPaint.setColor(mBtnBorder);
+        c.drawRoundRect(new RectF(mMoveRect), 6, 6, mPaint);
+        mPaint.setColor(mCtrlTxt);
+        c.drawText("↕  Move", mMoveRect.exactCenterX(), mMoveRect.exactCenterY() + d, mPaint);
     }
+
+    private int mCtrlTxt = Color.parseColor("#9999AA");
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
-        if (event.getAction() != MotionEvent.ACTION_DOWN) return super.onTouchEvent(event);
         float x = event.getX(), y = event.getY();
 
-        if (mCloseRect != null && mCloseRect.contains((int) x, (int) y)) {
-            if (mListener != null) mListener.closeFragment();
-            return true;
-        }
-        if (mMoveRect != null && mMoveRect.contains((int) x, (int) y)) {
-            if (mListener != null) mListener.enterKey(new int[]{10000});
-            return true;
-        }
-
-        if (mBtnRects != null) {
-            int idx = 0;
-            for (int i = 0; i < mShortcuts.size() && idx < mBtnRects.length; i++, idx++) {
-                if (mBtnRects[idx].contains(x, y)) {
-                    executeShortcut(i);
-                    return true;
-                }
+        if (event.getAction() == MotionEvent.ACTION_DOWN) {
+            if (mCloseRect != null && mCloseRect.contains((int) x, (int) y)) {
+                if (mListener != null) mListener.closeFragment();
+                return true;
             }
-            if (mAddRect != null && mAddRect.contains(x, y)) {
+            if (mMoveRect != null && mMoveRect.contains((int) x, (int) y)) {
+                if (mListener != null) mListener.enterKey(new int[]{10000});
+                return true;
+            }
+            if (mCellW <= 0) return true;
+
+            int col = (int) (x / mCellW);
+            int row = (int) ((y - mGridTop) / mCellH);
+            if (row < 0 || row >= mRows || col < 0 || col >= mCols) return true;
+
+            int idx = row * mCols + col;
+            if (idx < mShortcuts.size()) {
+                mPressedIdx = idx;
+                mPressTime = System.currentTimeMillis();
+                invalidate();
+                performHapticFeedback(0);
+                postDelayed(() -> { executeShortcut(idx); mPressedIdx = -1; }, 80);
+                return true;
+            }
+            if (idx == mShortcuts.size() && idx < mRows * mCols) {
+                mPressedIdx = -2;
+                mPressTime = System.currentTimeMillis();
+                invalidate();
                 startAddShortcut();
                 return true;
             }
         }
-        return super.onTouchEvent(event);
+        if (event.getAction() == MotionEvent.ACTION_UP) {
+            mPressedIdx = -1;
+            invalidate();
+            performClick();
+        }
+        return true;
     }
 
     private void executeShortcut(int index) {
@@ -278,13 +315,11 @@ public class OblSettingFragment extends View {
         EditText input = new EditText(ctx);
         input.setHint("e.g. Subdivide");
         b.setView(input);
-
         StringBuilder preview = new StringBuilder();
         if (modSelected[0]) preview.append("Shift+");
         if (modSelected[1]) preview.append("Ctrl+");
         if (modSelected[2]) preview.append("Alt+");
         preview.append(keyName(actionOrd));
-
         b.setMessage("Combo: " + preview);
         b.setPositiveButton("Confirm", (dialog, which) -> {
             String name = input.getText().toString().trim();
