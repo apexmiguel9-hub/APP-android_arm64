@@ -150,11 +150,11 @@ public class OBLNativeActivity extends NativeActivity
                         lp.flags|= LayoutParams.FLAG_LAYOUT_INSET_DECOR;
                         lp.flags|= LayoutParams.FLAG_NOT_TOUCH_MODAL;
 
-                        lp.gravity = Gravity.LEFT | Gravity.BOTTOM;
+                        lp.gravity = Gravity.RIGHT | Gravity.BOTTOM;
                         lp.width = 400;
                         lp.height = 400;
-                        lp.x = 80;
-                        lp.y = 80;
+                        lp.x = 20;
+                        lp.y = 180;
                         getWindowManager().addView(mOblSettingFragment, lp);
 
                         mOblSettingFragment.setOBLSettingFragmentListener(new OblSettingFragment.OBLSettingFragmentListener() {
@@ -301,6 +301,7 @@ public class OBLNativeActivity extends NativeActivity
         hideToolbar();
 
         initialEditText();
+        initialKeyboardToggle();
 
         // Example of a call to a native method
 
@@ -396,6 +397,62 @@ public class OBLNativeActivity extends NativeActivity
 
             mGodotEditText.setVisibility(View.GONE);
         }
+    }
+
+    private void initialKeyboardToggle() {
+        Button toggleBtn = new Button(OBLNativeActivity.this);
+        toggleBtn.setText("⌨");
+        toggleBtn.setTextSize(18);
+        toggleBtn.setTextColor(Color.WHITE);
+        toggleBtn.setAlpha(0.5f);
+        toggleBtn.setBackgroundResource(android.R.color.transparent);
+
+        LayoutParams lp = new LayoutParams();
+        lp.gravity = Gravity.RIGHT | Gravity.BOTTOM;
+        lp.width = 120;
+        lp.height = 120;
+        lp.x = 10;
+        lp.y = 10;
+
+        toggleBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (mOblSettingFragment == null) {
+                    showWindow(0, 0, 0, 0, 1001, "");
+                } else {
+                    if (mOblSettingFragment.getVisibility() == View.VISIBLE) {
+                        mOblSettingFragment.setVisibility(View.INVISIBLE);
+                    } else {
+                        mOblSettingFragment.setVisibility(View.VISIBLE);
+                    }
+                }
+            }
+        });
+
+        getWindowManager().addView(toggleBtn, lp);
+
+        Button shortcutsBtn = new Button(OBLNativeActivity.this);
+        shortcutsBtn.setText("S");
+        shortcutsBtn.setTextSize(18);
+        shortcutsBtn.setTextColor(Color.WHITE);
+        shortcutsBtn.setAlpha(0.5f);
+        shortcutsBtn.setBackgroundResource(android.R.color.transparent);
+
+        LayoutParams slp = new LayoutParams();
+        slp.gravity = Gravity.RIGHT | Gravity.BOTTOM;
+        slp.width = 120;
+        slp.height = 120;
+        slp.x = 10;
+        slp.y = 140;
+
+        shortcutsBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                oblSetValue("9999");
+            }
+        });
+
+        getWindowManager().addView(shortcutsBtn, slp);
     }
 
     public void showKeyboardApp(String p_existing_text, int p_type, int p_max_input_length, int p_cursor_start, int p_cursor_end) {

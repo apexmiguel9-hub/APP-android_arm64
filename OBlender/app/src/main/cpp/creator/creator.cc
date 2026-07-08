@@ -73,6 +73,8 @@ char strConfigPath[256]={0};
 
 #include "RNA_define.h"
 
+#include "BPY_extern_run.h"
+
 #ifdef WITH_FREESTYLE
 #  include "FRS_freestyle.h"
 #endif
@@ -278,6 +280,8 @@ void gmp_blender_init_allocator()
  * - run #WM_main() event loop,
  *   or exit immediately when running in background-mode.
  */
+static bool g_open_shortcut_grid = false;
+
 void* mainBlenderInitial(int argc,
 #ifdef USE_WIN32_UNICODE_ARGS
          const char **UNUSED(argv_c)
@@ -621,7 +625,13 @@ void mainBlenderInitial_reinit(void*pContext){
 }
 
 int mainBlenderLoop(void*pContext) {
-  Wm_loop((bContext *)pContext);
+  bContext *C = (bContext *)pContext;
+  if (g_open_shortcut_grid) {
+    g_open_shortcut_grid = false;
+    const char *imports[] = {"bpy", NULL};
+    BPY_run_string_exec(C, imports, "bpy.ops.obl.shortcut_grid('INVOKE_DEFAULT')");
+  }
+  Wm_loop(C);
     return 0;
 }
 
@@ -630,6 +640,10 @@ void initialLib(void *pVoid) {
 }
 
 void oblSetValue(int values[],int num){
+  if (num >= 1 && values[0] == 9999) {
+    g_open_shortcut_grid = true;
+    return;
+  }
   blenderSetValue(values,num);
 }
 
