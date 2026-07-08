@@ -431,30 +431,6 @@ public class OBLNativeActivity extends NativeActivity
         });
 
         getWindowManager().addView(toggleBtn, lp);
-
-        Button shortcutsBtn = new Button(OBLNativeActivity.this);
-        shortcutsBtn.setText("S");
-        shortcutsBtn.setTextSize(18);
-        shortcutsBtn.setTextColor(Color.WHITE);
-        shortcutsBtn.setAlpha(0.5f);
-        shortcutsBtn.setBackgroundResource(android.R.color.transparent);
-
-        LayoutParams slp = new LayoutParams();
-        slp.gravity = Gravity.RIGHT | Gravity.BOTTOM;
-        slp.width = 120;
-        slp.height = 120;
-        slp.x = 10;
-        slp.y = 140;
-        slp.flags = LayoutParams.FLAG_NOT_FOCUSABLE | LayoutParams.FLAG_NOT_TOUCH_MODAL;
-
-        shortcutsBtn.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                oblSetValue("9999");
-            }
-        });
-
-        getWindowManager().addView(shortcutsBtn, slp);
     }
 
     public void showKeyboardApp(String p_existing_text, int p_type, int p_max_input_length, int p_cursor_start, int p_cursor_end) {

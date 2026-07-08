@@ -1,6 +1,8 @@
 package com.epai.oblender;
 
+import android.app.AlertDialog;
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
@@ -9,8 +11,12 @@ import android.util.AttributeSet;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
+import android.widget.EditText;
 
 import androidx.annotation.Nullable;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 import java.util.ArrayList;
 
@@ -29,13 +35,14 @@ public class OblSettingFragment extends View {
     private Paint mPaint;
     private int mIntWidth = 0;
     private int mIntHeight = 0;
-    private int mIntCurrentPage = 0;//    当前页
+    private int mIntCurrentPage = 0;
     private int mIntTotalRow = 5;
     private int mIntTotalColumn = 6;
     private ArrayList<OBLBtn> mOBLBtns = null;
     OBLControlBtn mOBLControlBtnPage1 = null;
     OBLControlBtn mOBLControlBtnPage2 = null;
     OBLControlBtn mOBLControlBtnPage3 = null;
+    OBLControlBtn mOBLControlBtnPage4 = null;
     OBLControlBtn mOBLControlBtnMove=null;
     OBLControlBtn mOBLControlBtnClose = null;
     private OBLBtn mOBLBtnCtrl = null;
@@ -44,10 +51,28 @@ public class OblSettingFragment extends View {
     private OBLBtn mOBLBtnMMB = null;
     private OBLBtn mOBLBtnRMB = null;
 
+    private static final int PAGE_SHORTCUTS = 3;
+    private static final int MODE_NORMAL = 0;
+    private static final int MODE_ADD_SHORTCUT = 1;
+    private static final String PREFS_NAME = "obl_shortcuts";
+    private static final String PREFS_JSON = "shortcuts";
+
+    private int mMode = MODE_NORMAL;
+    private ArrayList<ShortcutItem> mShortcuts = new ArrayList<>();
+    private ArrayList<Integer> mSelModifiers = new ArrayList<>();
+    private String mSelDisplay = "";
+
+    private class ShortcutItem {
+        String name;
+        ArrayList<Integer> keyOrdinals;
+        ShortcutItem(String n, ArrayList<Integer> k) { name = n; keyOrdinals = k; }
+    }
+
     private enum OBLControlBtnID {
         OBL_CONTROL_BTN_ID_PAGE1,
         OBL_CONTROL_BTN_ID_PAGE2,
         OBL_CONTROL_BTN_ID_PAGE3,
+        OBL_CONTROL_BTN_ID_PAGE4,
         OBL_CONTROL_BTN_ID_MOVE,
         OBL_CONTROL_BTN_ID_CLOSE
     }
@@ -348,15 +373,16 @@ public class OblSettingFragment extends View {
             mOBLBtns.get(i).setPosition(index / mIntTotalColumn, index % mIntTotalColumn,pageIndex);
         }
 
-        mOBLControlBtnPage1 = new OBLControlBtn(OBLControlBtnID.OBL_CONTROL_BTN_ID_PAGE1, "Page 1");
-        mOBLControlBtnPage2 = new OBLControlBtn(OBLControlBtnID.OBL_CONTROL_BTN_ID_PAGE2, "Page 2");
-        mOBLControlBtnPage3 = new OBLControlBtn(OBLControlBtnID.OBL_CONTROL_BTN_ID_PAGE3, "Page 3");
+        mOBLControlBtnPage1 = new OBLControlBtn(OBLControlBtnID.OBL_CONTROL_BTN_ID_PAGE1, "P1");
+        mOBLControlBtnPage2 = new OBLControlBtn(OBLControlBtnID.OBL_CONTROL_BTN_ID_PAGE2, "P2");
+        mOBLControlBtnPage3 = new OBLControlBtn(OBLControlBtnID.OBL_CONTROL_BTN_ID_PAGE3, "P3");
+        mOBLControlBtnPage4 = new OBLControlBtn(OBLControlBtnID.OBL_CONTROL_BTN_ID_PAGE4, "SC");
         mOBLControlBtnMove=new OBLControlBtn(OBLControlBtnID.OBL_CONTROL_BTN_ID_MOVE,"Move");
         mOBLControlBtnClose = new OBLControlBtn(OBLControlBtnID.OBL_CONTROL_BTN_ID_CLOSE, "Close");
 
         mOBLControlBtnPage1.setSelected(true);
-        mOBLControlBtnPage2.setSelected(false);
-        mOBLControlBtnPage3.setSelected(false);
+
+        loadShortcuts();
     }
 
     @Override
@@ -364,7 +390,6 @@ public class OblSettingFragment extends View {
         Log.i(TAG, "绘制 1");
         super.onDraw(canvas);
         Log.i(TAG, "绘制 2");
-        //  绘制键盘按钮
         int getWidthValue = getWidth();
         Log.i(TAG, "绘制 3");
         if ((mIntWidth <= 0) && (getWidthValue > 0)) {
@@ -392,6 +417,7 @@ public class OblSettingFragment extends View {
         mOBLControlBtnPage1.setGeometry(0 * widthInternal, topPos, 1 * widthInternal, mIntHeight);
         mOBLControlBtnPage2.setGeometry(1 * widthInternal, topPos, 2 * widthInternal, mIntHeight);
         mOBLControlBtnPage3.setGeometry(2 * widthInternal, topPos, 3 * widthInternal, mIntHeight);
+        mOBLControlBtnPage4.setGeometry(3 * widthInternal, topPos, 4 * widthInternal, mIntHeight);
         mOBLControlBtnMove.setGeometry((mIntTotalColumn - 2) * widthInternal, topPos, (mIntTotalColumn - 1) * widthInternal, mIntHeight);
         mOBLControlBtnClose.setGeometry((mIntTotalColumn - 1) * widthInternal, topPos, mIntTotalColumn * widthInternal, mIntHeight);
         for (OBLBtn btn : mOBLBtns) {
@@ -400,16 +426,101 @@ public class OblSettingFragment extends View {
     }
 
     private void renderOBLBtns(Canvas canvas, Paint paint) {
-        for (OBLBtn btn : mOBLBtns) {
-            if (btn.getIntPageIndex() == mIntCurrentPage) {
-                btn.draw(canvas, paint);
+        if (mIntCurrentPage == PAGE_SHORTCUTS) {
+            renderShortcutsPage(canvas, paint);
+        } else {
+            for (OBLBtn btn : mOBLBtns) {
+                if (btn.getIntPageIndex() == mIntCurrentPage) {
+                    btn.draw(canvas, paint);
+                }
             }
         }
         mOBLControlBtnPage1.draw(canvas, paint);
         mOBLControlBtnPage2.draw(canvas, paint);
         mOBLControlBtnPage3.draw(canvas, paint);
+        mOBLControlBtnPage4.draw(canvas, paint);
         mOBLControlBtnMove.draw(canvas, paint);
         mOBLControlBtnClose.draw(canvas, paint);
+    }
+
+    private void renderShortcutsPage(Canvas canvas, Paint paint) {
+        int totalCells = mIntTotalRow * mIntTotalColumn;
+        int cellW = mIntWidth / mIntTotalColumn;
+        int cellH = (mIntHeight * mIntTotalRow / (mIntTotalRow + 1)) / mIntTotalRow;
+
+        int idx = 0;
+        for (ShortcutItem sc : mShortcuts) {
+            if (idx >= totalCells) break;
+            int row = idx / mIntTotalColumn;
+            int col = idx % mIntTotalColumn;
+            int x1 = col * cellW;
+            int y1 = row * cellH;
+            int x2 = (col + 1) * cellW;
+            int y2 = (row + 1) * cellH;
+
+            mPaint.setColor(mColorBtnBG);
+            canvas.drawRect(x1 + mIntOffset, y1 + mIntOffset, x2 - mIntOffset, y2 - mIntOffset, paint);
+            mPaint.setColor(mColorBtnTxt);
+            float fontSize = Math.min(cellW, cellH) * 0.22f;
+            mPaint.setTextSize(fontSize);
+            Paint.FontMetrics fm = mPaint.getFontMetrics();
+            float dist = (fm.bottom - fm.top) / 2 - fm.bottom;
+            String label = sc.name.length() > 8 ? sc.name.substring(0, 7) + "…" : sc.name;
+            canvas.drawText(label, (x1 + x2) / 2f, (y1 + y2) / 2f - fontSize * 0.3f + dist, mPaint);
+            // Draw combo hint below name
+            String combo = comboDisplay(sc);
+            mPaint.setTextSize(fontSize * 0.6f);
+            canvas.drawText(combo, (x1 + x2) / 2f, (y1 + y2) / 2f + fontSize * 0.5f, mPaint);
+            idx++;
+        }
+
+        if (idx < totalCells) {
+            int row = idx / mIntTotalColumn;
+            int col = idx % mIntTotalColumn;
+            int x1 = col * cellW;
+            int y1 = row * cellH;
+            int x2 = (col + 1) * cellW;
+            int y2 = (row + 1) * cellH;
+            mPaint.setColor(mColorClickEffect);
+            canvas.drawRect(x1 + mIntOffset, y1 + mIntOffset, x2 - mIntOffset, y2 - mIntOffset, paint);
+            mPaint.setColor(mColorBtnTxt);
+            float fontSize = Math.min(cellW, cellH) * 0.25f;
+            mPaint.setTextSize(fontSize);
+            Paint.FontMetrics fm = mPaint.getFontMetrics();
+            float dist = (fm.bottom - fm.top) / 2 - fm.bottom;
+            canvas.drawText("+", (x1 + x2) / 2f, (y1 + y2) / 2f + dist, mPaint);
+            mPaint.setTextSize(fontSize * 0.5f);
+            canvas.drawText("Add", (x1 + x2) / 2f, (y1 + y2) / 2f + fontSize * 0.6f, mPaint);
+        }
+    }
+
+    private String comboDisplay(ShortcutItem sc) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < sc.keyOrdinals.size(); i++) {
+            if (i > 0) sb.append("+");
+            sb.append(keyDisplayName(sc.keyOrdinals.get(i)));
+        }
+        return sb.toString();
+    }
+
+    private String keyDisplayName(int ordinal) {
+        if (ordinal >= 0 && ordinal < OBLButtonID.values().length) {
+            String raw = OBLButtonID.values()[ordinal].name();
+            String name = raw.replace("OBLButtonID_", "");
+            if (name.equals("Shift") || name.equals("Ctrl") || name.equals("Alt")) return name;
+            if (name.equals("Space")) return "Space";
+            if (name.equals("Enter")) return "Enter";
+            if (name.equals("Esc")) return "Esc";
+            if (name.equals("Tab")) return "Tab";
+            if (name.equals("Delete")) return "Del";
+            if (name.startsWith("Num_")) return name.substring(4);
+            if (name.startsWith("UpArrow")) return "↑";
+            if (name.startsWith("DownArrow")) return "↓";
+            if (name.startsWith("LeftArrow")) return "←";
+            if (name.startsWith("RightArrow")) return "→";
+            return name;
+        }
+        return "?";
     }
 
     @Override
@@ -419,13 +530,20 @@ public class OblSettingFragment extends View {
             float posx = event.getX();
             float posy = event.getY();
             boolean hasHit = false;
-            for (OBLBtn oblBtn : mOBLBtns) {
-                if (oblBtn.hitTest(posx, posy) && (oblBtn.getIntPageIndex() == mIntCurrentPage)) {
-                    clearClickEffect();
-                    oblBtn.addClickEffect();
-                    clickOBLBtn(oblBtn);
-                    hasHit = true;
-                    break;
+
+            if (mIntCurrentPage == PAGE_SHORTCUTS && mMode == MODE_NORMAL) {
+                if (handleShortcutsPageTouch(posx, posy)) return true;
+            }
+
+            if (mMode == MODE_NORMAL) {
+                for (OBLBtn oblBtn : mOBLBtns) {
+                    if (oblBtn.hitTest(posx, posy) && (oblBtn.getIntPageIndex() == mIntCurrentPage)) {
+                        clearClickEffect();
+                        oblBtn.addClickEffect();
+                        clickOBLBtn(oblBtn);
+                        hasHit = true;
+                        break;
+                    }
                 }
             }
             if (!hasHit) {
@@ -453,9 +571,11 @@ public class OblSettingFragment extends View {
                         clearClickEffect();
                         mOBLControlBtnPage1.addClickEffect();
                         mIntCurrentPage = 0;
+                        mMode = MODE_NORMAL;
                         mOBLControlBtnPage1.setSelected(true);
                         mOBLControlBtnPage2.setSelected(false);
                         mOBLControlBtnPage3.setSelected(false);
+                        mOBLControlBtnPage4.setSelected(false);
                         invalidate();
                     }
                 } else if (mOBLControlBtnPage2.hitTest(posx, posy)) {
@@ -463,9 +583,11 @@ public class OblSettingFragment extends View {
                         clearClickEffect();
                         mOBLControlBtnPage2.addClickEffect();
                         mIntCurrentPage = 1;
+                        mMode = MODE_NORMAL;
                         mOBLControlBtnPage1.setSelected(false);
                         mOBLControlBtnPage2.setSelected(true);
                         mOBLControlBtnPage3.setSelected(false);
+                        mOBLControlBtnPage4.setSelected(false);
                         invalidate();
                     }
                 } else if (mOBLControlBtnPage3.hitTest(posx, posy)) {
@@ -473,9 +595,23 @@ public class OblSettingFragment extends View {
                         clearClickEffect();
                         mOBLControlBtnPage3.addClickEffect();
                         mIntCurrentPage = 2;
+                        mMode = MODE_NORMAL;
                         mOBLControlBtnPage1.setSelected(false);
                         mOBLControlBtnPage2.setSelected(false);
                         mOBLControlBtnPage3.setSelected(true);
+                        mOBLControlBtnPage4.setSelected(false);
+                        invalidate();
+                    }
+                } else if (mOBLControlBtnPage4.hitTest(posx, posy)) {
+                    if (mIntCurrentPage != PAGE_SHORTCUTS) {
+                        clearClickEffect();
+                        mOBLControlBtnPage4.addClickEffect();
+                        mIntCurrentPage = PAGE_SHORTCUTS;
+                        mMode = MODE_NORMAL;
+                        mOBLControlBtnPage1.setSelected(false);
+                        mOBLControlBtnPage2.setSelected(false);
+                        mOBLControlBtnPage3.setSelected(false);
+                        mOBLControlBtnPage4.setSelected(true);
                         invalidate();
                     }
                 }
@@ -488,6 +624,204 @@ public class OblSettingFragment extends View {
         return super.onTouchEvent(event);
     }
 
+    private boolean handleShortcutsPageTouch(float x, float y) {
+        int totalCells = mIntTotalRow * mIntTotalColumn;
+        int cellW = mIntWidth / mIntTotalColumn;
+        int cellH = (mIntHeight * mIntTotalRow / (mIntTotalRow + 1)) / mIntTotalRow;
+
+        // Check shortcut buttons
+        int idx = 0;
+        for (int i = 0; i < mShortcuts.size(); i++) {
+            if (idx >= totalCells) break;
+            int row = idx / mIntTotalColumn;
+            int col = idx % mIntTotalColumn;
+            int x1 = col * cellW;
+            int y1 = row * cellH;
+            int x2 = (col + 1) * cellW;
+            int y2 = (row + 1) * cellH;
+            Rect r = new Rect(x1 + mIntOffset, y1 + mIntOffset, x2 - mIntOffset, y2 - mIntOffset);
+            if (r.contains((int) x, (int) y)) {
+                executeShortcut(i);
+                return true;
+            }
+            idx++;
+        }
+
+        // Check "Add Shortcut" button
+        if (idx < totalCells) {
+            int row = idx / mIntTotalColumn;
+            int col = idx % mIntTotalColumn;
+            int x1 = col * cellW;
+            int y1 = row * cellH;
+            int x2 = (col + 1) * cellW;
+            int y2 = (row + 1) * cellH;
+            Rect r = new Rect(x1 + mIntOffset, y1 + mIntOffset, x2 - mIntOffset, y2 - mIntOffset);
+            if (r.contains((int) x, (int) y)) {
+                startAddShortcut();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void startAddShortcut() {
+        Context ctx = getContext();
+        if (ctx == null) return;
+        showModifierDialog(ctx);
+    }
+
+    private void showModifierDialog(final Context ctx) {
+        AlertDialog.Builder b = new AlertDialog.Builder(ctx);
+        b.setTitle("Step 1/3: Hold keys (optional)");
+        final String[] items = {"Shift", "Ctrl", "Alt"};
+        final boolean[] checked = new boolean[3];
+        b.setMultiChoiceItems(items, null, (d, w, isChecked) -> checked[w] = isChecked);
+        b.setPositiveButton("Next", (d, w) -> showKeyCategoryDialog(ctx, checked));
+        b.setNegativeButton("Cancel", null);
+        b.show();
+    }
+
+    private void showKeyCategoryDialog(final Context ctx, final boolean[] mods) {
+        final String[] cats = {"Letters", "Numbers", "F-Keys", "Special"};
+        AlertDialog.Builder b = new AlertDialog.Builder(ctx);
+        b.setTitle("Step 2/3: Pick a key");
+        b.setItems(cats, (d, w) -> {
+            switch (w) {
+                case 0: showKeyListDialog(ctx, mods, new String[]{"A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y","Z"}, new int[]{25,52,29,48,51,53,45,46,23,49,71,72,31,30,24,73,20,43,44,22,74,50,21,27,28,26}); break;
+                case 1: showKeyListDialog(ctx, mods, new String[]{"1","2","3","4","5","6","7","8","9","0"}, new int[]{15,16,17,18,19,67,68,69,70,66}); break;
+                case 2: showKeyListDialog(ctx, mods, new String[]{"F1","F2","F3","F4","F5","F6","F7","F8","F9","F10","F11","F12"}, new int[]{75,8,9,10,76,77,78,79,80,81,82,11}); break;
+                case 3: showKeyListDialog(ctx, mods, new String[]{"Esc","Tab","Space","Enter","Delete","Home","End","Ins.","PgUp.","PgDn.","[","]","-","=",";","'","`",",",".","/","↑","↓","←","→"}, new int[]{7,41,34,13,42,12,90,89,35,36,85,86,83,84,87,88,14,32,33,47,37,38,39,40}); break;
+            }
+        });
+        b.setNegativeButton("Cancel", null);
+        b.show();
+    }
+
+    private void showKeyListDialog(final Context ctx, final boolean[] mods, String[] keys, int[] ordinals) {
+        AlertDialog.Builder b = new AlertDialog.Builder(ctx);
+        b.setTitle("Select key");
+        b.setItems(keys, (d, w) -> showNameDialog(ctx, mods, ordinals[w]));
+        b.setNegativeButton("Back", (d, w) -> showKeyCategoryDialog(ctx, mods));
+        b.show();
+    }
+
+    private void showNameDialog(Context ctx, boolean[] modSelected, int actionKeyOrdinal) {
+        AlertDialog.Builder b = new AlertDialog.Builder(ctx);
+        b.setTitle("Step 3/3: Name your shortcut");
+
+        final EditText input = new EditText(ctx);
+        input.setHint("e.g. Subdivide");
+        b.setView(input);
+
+        StringBuilder preview = new StringBuilder();
+        if (modSelected[0]) preview.append("Shift+");
+        if (modSelected[1]) preview.append("Ctrl+");
+        if (modSelected[2]) preview.append("Alt+");
+        preview.append(keyDisplayName(actionKeyOrdinal));
+
+        b.setMessage("Combo: " + preview);
+
+        b.setPositiveButton("Confirm", (dialog, which) -> {
+            String name = input.getText().toString().trim();
+            if (name.isEmpty()) name = preview.toString();
+            saveShortcut(name, modSelected, actionKeyOrdinal);
+        });
+        b.setNegativeButton("Cancel", null);
+        b.show();
+    }
+
+    private void saveShortcut(String name, boolean[] modSelected, int actionKeyOrdinal) {
+        ArrayList<Integer> keys = new ArrayList<>();
+        if (modSelected[0]) keys.add(0); // Shift
+        if (modSelected[1]) keys.add(1); // Ctrl
+        if (modSelected[2]) keys.add(2); // Alt
+        keys.add(actionKeyOrdinal);
+
+        mShortcuts.add(new ShortcutItem(name, keys));
+        persistShortcuts();
+        invalidate();
+    }
+
+    private void executeShortcut(int index) {
+        if (index < 0 || index >= mShortcuts.size()) return;
+        ShortcutItem sc = mShortcuts.get(index);
+        if (mOBLSettingFragmentListener == null) return;
+
+        ArrayList<Integer> mods = new ArrayList<>();
+        int actionKey = -1;
+        for (int ord : sc.keyOrdinals) {
+            if (ord == 0 || ord == 1 || ord == 2) {
+                mods.add(ord);
+            } else {
+                actionKey = ord;
+            }
+        }
+
+        for (int m : mods) {
+            mOBLSettingFragmentListener.enterKeyOn(new int[]{m});
+        }
+        if (actionKey >= 0) {
+            mOBLSettingFragmentListener.enterKey(new int[]{actionKey});
+        }
+        for (int m : mods) {
+            mOBLSettingFragmentListener.enterKeyOff(new int[]{m});
+        }
+
+        // Close keyboard after executing shortcut
+        mOBLSettingFragmentListener.closeFragment();
+        mOBLBtnShift.setSelected(false);
+        mOBLBtnCtrl.setSelected(false);
+        mOBLBtnAlt.setSelected(false);
+        mOBLBtnMMB.setSelected(false);
+        mOBLBtnRMB.setSelected(false);
+        mOBLControlBtnMove.setSelected(false);
+    }
+
+    private void loadShortcuts() {
+        mShortcuts.clear();
+        try {
+            Context ctx = getContext();
+            if (ctx == null) return;
+            SharedPreferences prefs = ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+            String json = prefs.getString(PREFS_JSON, "[]");
+            JSONArray arr = new JSONArray(json);
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject obj = arr.getJSONObject(i);
+                String name = obj.getString("n");
+                JSONArray keyArr = obj.getJSONArray("k");
+                ArrayList<Integer> keys = new ArrayList<>();
+                for (int j = 0; j < keyArr.length(); j++) {
+                    keys.add(keyArr.getInt(j));
+                }
+                mShortcuts.add(new ShortcutItem(name, keys));
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "loadShortcuts failed", e);
+        }
+    }
+
+    private void persistShortcuts() {
+        try {
+            Context ctx = getContext();
+            if (ctx == null) return;
+            JSONArray arr = new JSONArray();
+            for (ShortcutItem sc : mShortcuts) {
+                JSONObject obj = new JSONObject();
+                obj.put("n", sc.name);
+                JSONArray keyArr = new JSONArray();
+                for (int k : sc.keyOrdinals) {
+                    keyArr.put(k);
+                }
+                obj.put("k", keyArr);
+                arr.put(obj);
+            }
+            SharedPreferences prefs = ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+            prefs.edit().putString(PREFS_JSON, arr.toString()).apply();
+        } catch (Exception e) {
+            Log.e(TAG, "persistShortcuts failed", e);
+        }
+    }
+
     private void clearClickEffect() {
         for (OBLBtn oblBtn : mOBLBtns) {
             oblBtn.clearClickEffect();
@@ -495,6 +829,7 @@ public class OblSettingFragment extends View {
         mOBLControlBtnPage1.clearClickEffect();
         mOBLControlBtnPage2.clearClickEffect();
         mOBLControlBtnPage3.clearClickEffect();
+        mOBLControlBtnPage4.clearClickEffect();
         mOBLControlBtnClose.clearClickEffect();
         mOBLControlBtnMove.clearClickEffect();
         invalidate();
@@ -504,7 +839,6 @@ public class OblSettingFragment extends View {
         if (oblBtn.getIntSelected() != 0) {
             oblBtn.setSelected(!oblBtn.isSelected());
         }
-        //  没有状态按钮被选中，则点击的按钮立即发送
         int[] keys = new int[1];
         keys[0] = oblBtn.getOBLButtonID().ordinal();
         if (oblBtn.getIntSelected()!=0){
@@ -544,19 +878,14 @@ public class OblSettingFragment extends View {
 
     int GetAsyncKeyState(int type) {
         if (type == 0) {
-            //  shift
             return mOBLBtnShift.isSelected() ? 1 : 0;
         } else if (type == 1) {
-            //  alt
             return mOBLBtnAlt.isSelected() ? 1 : 0;
         } else if (type == 2) {
-            // ctrl
             return mOBLBtnCtrl.isSelected() ? 1 : 0;
         } else if (type == 3) {
-            //  MMB
             return mOBLBtnMMB.isSelected() ? 1 : 0;
         } else if (type == 4) {
-            //  RMB
             return mOBLBtnRMB.isSelected() ? 1 : 0;
         } else if(type==100) {
             return getVisibility()==VISIBLE?1:0;
@@ -571,11 +900,8 @@ public class OblSettingFragment extends View {
 
     public interface OBLSettingFragmentListener {
         public void enterKeyOn(int keys[]);
-
         public void enterKeyOff(int keys[]);
-
         public void enterKey(int keys[]);
-
         public void closeFragment();
     }
 }

@@ -1,16 +1,14 @@
 bl_info = {
     "name": "OBL Mobile Shortcuts",
-    "author": "dexapex377-coder",
-    "version": (1, 1, 0),
+    "author": "apexmiguel9-hub",
+    "version": (1, 2, 0),
     "blender": (3, 6, 0),
     "location": "3D View > Sidebar > OBL",
-    "description": "Touch-friendly shortcut grid for Blender on Android",
+    "description": "Configurable shortcut grid for Blender on Android",
     "category": "Interface",
 }
 
 import bpy
-import blf
-import math
 from bpy.types import (
     Operator,
     PropertyGroup,
@@ -26,7 +24,6 @@ from bpy.props import (
 )
 
 DEFAULT_SHORTCUTS = [
-    # (name, idname, icon, category)
     ("Add Cube", "mesh.primitive_cube_add", "MESH_CUBE", "Mesh"),
     ("Add Sphere", "mesh.primitive_uv_sphere_add", "MESH_UVSPHERE", "Mesh"),
     ("Add Cylinder", "mesh.primitive_cylinder_add", "MESH_CYLINDER", "Mesh"),
@@ -64,13 +61,6 @@ DEFAULT_SHORTCUTS = [
     ("Object Mode", "object.mode_set", "OBJECT_DATAMODE", "Mode"),
     ("Edit Mode", "object.mode_set", "EDITMODE_HLT", "Mode"),
     ("Sculpt Mode", "object.mode_set", "SCULPTMODE_HLT", "Mode"),
-    ("Shade Smooth", "object.shade_smooth", "MOD_SMOOTH", "Edit"),
-    ("Shade Flat", "object.shade_flat", "MOD_FLATSKIN", "Edit"),
-    ("Apply Scale", "object.transform_apply", "CHECKBOX_HLT", "Edit"),
-    ("Subdivide 1", "object.subdivision_set", "MOD_SUBSURF", "Edit"),
-    ("Triangulate", "object.quick_edit", "MOD_TRIANGULATE", "Edit"),
-    ("Parent", "object.parent_set", "CONSTRAINT", "Edit"),
-    ("Clear Parent", "object.parent_clear", "CONSTRAINT", "Edit"),
 ]
 
 OP_PARAMS = {
@@ -78,7 +68,6 @@ OP_PARAMS = {
     "mesh.select_all": {"action": "SELECT"},
     "mesh.select_inverse": {"action": "INVERT"},
     "view3d.toggle_shading": {"type": "SOLID"},
-    "view3d.snap_selected_to_cursor": {"factor": 1.0},
     "object.subdivision_set": {"level": 1, "relative": False},
 }
 
@@ -86,9 +75,6 @@ MODE_MAP = {
     "Object Mode": "OBJECT",
     "Edit Mode": "EDIT",
     "Sculpt Mode": "SCULPT",
-    "Vertex Paint": "VERTEX_PAINT",
-    "Weight Paint": "WEIGHT_PAINT",
-    "Texture Paint": "TEXTURE_PAINT",
 }
 
 
@@ -102,7 +88,6 @@ class OBL_ShortcutItem(PropertyGroup):
 class OBL_OT_execute_shortcut(Operator):
     bl_idname = "obl.execute_shortcut"
     bl_label = "Execute"
-    bl_description = "Execute this shortcut"
 
     index: IntProperty(default=0)
 
@@ -150,7 +135,6 @@ class OBL_OT_execute_shortcut(Operator):
 class OBL_OT_shortcut_grid(Operator):
     bl_idname = "obl.shortcut_grid"
     bl_label = "OBL Shortcuts"
-    bl_description = "Show the shortcut grid"
 
     def invoke(self, context, event):
         return context.window_manager.invoke_props_dialog(self, width=900)
@@ -190,7 +174,6 @@ class OBL_OT_shortcut_grid(Operator):
 class OBL_OT_add_shortcut(Operator):
     bl_idname = "obl.add_shortcut"
     bl_label = "Add Shortcut"
-    bl_description = "Browse operators and add as shortcut"
 
     def invoke(self, context, event):
         return context.window_manager.invoke_props_dialog(self, width=700)
@@ -342,21 +325,9 @@ class OBL_AddonPreferences(AddonPreferences):
 
     shortcuts: CollectionProperty(type=OBL_ShortcutItem)
     index: IntProperty(default=0)
-    show_floating_button: BoolProperty(
-        name="Show Floating Button",
-        default=True,
-    )
-    btn_size: IntProperty(
-        name="Button Size",
-        default=44,
-        min=24, max=80,
-    )
 
     def draw(self, context):
         layout = self.layout
-        layout.prop(self, "show_floating_button")
-        layout.prop(self, "btn_size")
-        layout.separator()
         row = layout.row()
         row.operator("obl.reset_shortcuts", text="Reset Defaults")
         row.operator("obl.add_shortcut", text="Add New")
@@ -372,72 +343,6 @@ def _init_defaults():
         s.idname = idname
         s.icon = icon
         s.category = cat
-
-
-# OpenGL floating button
-_btn = {"visible": True, "x_ratio": 0.88, "y_ratio": 0.08, "cx": 0, "cy": 0, "size": 44}
-
-def _draw_floating():
-    if not _btn["visible"]:
-        return
-    prefs = bpy.context.preferences.addons.get(__name__)
-    if not prefs:
-        return
-
-    show = getattr(prefs.preferences, "show_floating_button", True)
-    if not show:
-        return
-
-    region = bpy.context.region
-    if not region or region.type != 'WINDOW':
-        return
-
-    w, h = region.width, region.height
-    size = getattr(prefs.preferences, "btn_size", 44)
-    cx, cy = int(w * _btn["x_ratio"]), int(h * _btn["y_ratio"])
-
-    import gpu
-    from gpu_extras.batch import batch_for_shader
-    import bgl
-
-    verts = []
-    segs = 20
-    for i in range(segs):
-        a = 2 * math.pi * i / segs
-        verts.append((cx + size * math.cos(a), cy + size * math.sin(a)))
-    tris = [(0, i, i + 1) for i in range(1, segs - 1)]
-
-    shader = gpu.shader.from_builtin('UNIFORM_COLOR')
-    bgl.glEnable(bgl.GL_BLEND)
-
-    batch = batch_for_shader(shader, 'TRIS', {"pos": verts}, indices=tris)
-    shader.bind()
-    shader.uniform_float("color", (0.15, 0.5, 0.75, 0.8))
-    batch.draw(shader)
-
-    bgl.glDisable(bgl.GL_BLEND)
-
-    blf.size(0, max(12, size // 2))
-    blf.color(0, 1, 1, 1, 1)
-    blf.position(0, cx - 5, cy - 7, 0)
-    blf.draw(0, "S")
-
-    _btn["cx"], _btn["cy"] = cx, cy
-    _btn["size"] = size
-
-
-_handle = None
-
-def _register_draw():
-    global _handle
-    if _handle is None:
-        _handle = bpy.types.SpaceView3D.draw_handler_add(_draw_floating, (), 'WINDOW', 'POST_PIXEL')
-
-def _unregister_draw():
-    global _handle
-    if _handle is not None:
-        bpy.types.SpaceView3D.draw_handler_remove(_handle, 'WINDOW')
-        _handle = None
 
 
 classes = (
@@ -463,9 +368,7 @@ def _menu_func(self, context):
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
-
     bpy.app.timers.register(_init_defaults, first_interval=0.5)
-    _register_draw()
     for m in _menus_hooked:
         try:
             getattr(bpy.types, m).append(_menu_func)
@@ -474,7 +377,6 @@ def register():
 
 
 def unregister():
-    _unregister_draw()
     for m in _menus_hooked:
         try:
             getattr(bpy.types, m).remove(_menu_func)
