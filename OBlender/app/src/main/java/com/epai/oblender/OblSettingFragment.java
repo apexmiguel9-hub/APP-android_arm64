@@ -201,7 +201,7 @@ public class OblSettingFragment extends View {
         for (int m : mods) mListener.enterKeyOn(new int[]{m});
         if (actionKey >= 0) mListener.enterKey(new int[]{actionKey});
         for (int m : mods) mListener.enterKeyOff(new int[]{m});
-        mListener.closeFragment();
+        postDelayed(() -> mListener.closeFragment(), 100);
     }
 
     private String comboDisplay(ShortcutItem sc) {
