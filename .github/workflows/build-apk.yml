@@ -51,28 +51,16 @@ jobs:
           distribution: 'temurin'
           java-version: '11'
 
-      - name: Get latest successful Blender CI run
+      - name: Get Blender CI run ID
         id: get-run
-        env:
-          GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
+          LATEST_BLENDER_RUN="28984086908"
           if [ -n "${{ inputs.blender_run_id }}" ]; then
             echo "run_id=${{ inputs.blender_run_id }}" >> $GITHUB_OUTPUT
             echo "Using specified run: ${{ inputs.blender_run_id }}"
           else
-            RUN_ID=$(gh run list \
-              --repo apexmiguel9-hub/Blender-android_arm64 \
-              --workflow build-static-libs.yml \
-              --status success \
-              --json databaseId \
-              --jq '.[0].databaseId' \
-              --limit 1)
-            if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
-              echo "ERROR: No successful Blender CI run found. Trigger a Blender build first." >&2
-              exit 1
-            fi
-            echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
-            echo "Using latest successful Blender run: $RUN_ID"
+            echo "run_id=$LATEST_BLENDER_RUN" >> $GITHUB_OUTPUT
+            echo "Using hardcoded latest Blender run: $LATEST_BLENDER_RUN"
           fi
 
       - name: Download Blender static libs artifact

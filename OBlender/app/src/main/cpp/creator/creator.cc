@@ -633,7 +633,7 @@ int mainBlenderLoop(void*pContext) {
     g_dpi_initialized = true;
     __android_log_print(ANDROID_LOG_INFO, "OBL.DPI", "Applying DPI scale: %.2f", g_dpi_scale);
     char python_cmd[256];
-    SNPRINTF(python_cmd, sizeof(python_cmd),
+    SNPRINTF(python_cmd,
       "import bpy\nbpy.context.preferences.view.ui_scale = %.2f", g_dpi_scale);
     const char *imports[] = {"bpy", NULL};
     BPY_run_string_exec(C, imports, python_cmd);
