@@ -13,6 +13,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.AttributeSet;
+import android.util.DisplayMetrics;
 import android.util.Log;
 import android.util.Xml;
 import android.view.Gravity;
@@ -313,6 +314,13 @@ public class OBLNativeActivity extends NativeActivity
             strHomePath=intent.getStringExtra("HomePath");
             strConfigPath=intent.getStringExtra("ConfigPath");
         }
+        // Detect DPI and pass scale factor to native before Blender starts
+        DisplayMetrics metrics = new DisplayMetrics();
+        getWindowManager().getDefaultDisplay().getMetrics(metrics);
+        int scaleFixed = Math.round(metrics.density * 100);
+        Log.d("OBL.DPI", "density=" + metrics.density + " densityDpi=" + metrics.densityDpi + " scaleFixed=" + scaleFixed);
+        oblSetValue("9998," + scaleFixed);
+
         initial(strHomePath,strConfigPath);
 
         //  监听键盘弹出和隐藏

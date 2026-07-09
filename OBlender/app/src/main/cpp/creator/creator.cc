@@ -7,10 +7,13 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <android/log.h>
 #include "creator.h"
 
 char strHomePath[256]={0};
 char strConfigPath[256]={0};
+static float g_dpi_scale = 1.0f;
+static bool g_dpi_initialized = false;
 
 #ifdef WIN32
 #  include "utfconv.h"
@@ -626,6 +629,15 @@ void mainBlenderInitial_reinit(void*pContext){
 
 int mainBlenderLoop(void*pContext) {
   bContext *C = (bContext *)pContext;
+  if (!g_dpi_initialized && g_dpi_scale > 1.01f) {
+    g_dpi_initialized = true;
+    __android_log_print(ANDROID_LOG_INFO, "OBL.DPI", "Applying DPI scale: %.2f", g_dpi_scale);
+    char python_cmd[256];
+    SNPRINTF(python_cmd, sizeof(python_cmd),
+      "import bpy\nbpy.context.preferences.view.ui_scale = %.2f", g_dpi_scale);
+    const char *imports[] = {"bpy", NULL};
+    BPY_run_string_exec(C, imports, python_cmd);
+  }
   if (g_open_shortcut_grid) {
     g_open_shortcut_grid = false;
     const char *imports[] = {"bpy", NULL};
@@ -640,6 +652,11 @@ void initialLib(void *pVoid) {
 }
 
 void oblSetValue(int values[],int num){
+  if (num >= 2 && values[0] == 9998) {
+    g_dpi_scale = values[1] / 100.0f;
+    __android_log_print(ANDROID_LOG_INFO, "OBL.DPI", "DPI scale set to %.2f", g_dpi_scale);
+    return;
+  }
   if (num >= 1 && values[0] == 9999) {
     g_open_shortcut_grid = true;
     return;
