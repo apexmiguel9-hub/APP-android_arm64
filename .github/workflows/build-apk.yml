@@ -1,5 +1,7 @@
 name: Build Blender Android APK
 
+# Diagnostic build with logging commit 400951b
+
 on:
   workflow_dispatch:
     inputs:
