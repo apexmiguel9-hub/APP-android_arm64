@@ -33,6 +33,7 @@ static bool g_dpi_initialized = false;
 
 #include "BLI_string.h"
 #include "BLI_system.h"
+#include "DNA_userdef_types.h"
 #include "BLI_task.h"
 #include "BLI_threads.h"
 #include "BLI_utildefines.h"
@@ -634,9 +635,21 @@ int mainBlenderLoop(void*pContext) {
     __android_log_print(ANDROID_LOG_INFO, "OBL.DPI", "Applying DPI scale: %.2f", g_dpi_scale);
     char python_cmd[256];
     SNPRINTF(python_cmd,
-      "import bpy\nbpy.context.preferences.view.ui_scale = %.2f", g_dpi_scale);
+      "import bpy\n"
+      "bpy.context.preferences.view.ui_scale = %.2f", g_dpi_scale);
     const char *imports[] = {"bpy", NULL};
     BPY_run_string_exec(C, imports, python_cmd);
+
+    __android_log_print(ANDROID_LOG_INFO, "OBL.DPI",
+        "DIAG: ui_scale=%.2f dpi=%d pixelsize=%.1f scale_factor=%.4f widget_unit=%d",
+        U.ui_scale, U.dpi, U.pixelsize, U.scale_factor, U.widget_unit);
+    {
+      wmWindow *win = CTX_wm_window(C);
+      if (win) {
+        __android_log_print(ANDROID_LOG_INFO, "OBL.DPI",
+            "DIAG: win_sizex=%d win_sizey=%d", win->sizex, win->sizey);
+      }
+    }
   }
   if (g_open_shortcut_grid) {
     g_open_shortcut_grid = false;
