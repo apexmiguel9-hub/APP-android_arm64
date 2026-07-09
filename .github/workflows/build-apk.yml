@@ -18,7 +18,7 @@ jobs:
       - name: Checkout Blender-android_arm64 (headers for includes)
         uses: actions/checkout@v4
         with:
-          repository: dexapex377-coder/Blender-android_arm64
+          repository: apexmiguel9-hub/Blender-android_arm64
           ref: blender-v3.6-release
           path: Blender-android_arm64
           fetch-depth: 1
@@ -26,7 +26,7 @@ jobs:
       - name: Checkout lib-android_arm64 (third-party headers + .a files)
         uses: actions/checkout@v4
         with:
-          repository: dexapex377-coder/lib-android_arm64
+          repository: apexmiguel9-hub/lib-android_arm64
           path: lib-android_arm64
           fetch-depth: 1
 
@@ -61,7 +61,7 @@ jobs:
             echo "Using specified run: ${{ inputs.blender_run_id }}"
           else
             RUN_ID=$(gh run list \
-              --repo dexapex377-coder/Blender-android_arm64 \
+              --repo apexmiguel9-hub/Blender-android_arm64 \
               --workflow build-static-libs.yml \
               --status success \
               --json databaseId \
@@ -79,7 +79,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: blender-android-arm64-static-libs
-          repository: dexapex377-coder/Blender-android_arm64
+          repository: apexmiguel9-hub/Blender-android_arm64
           run-id: ${{ steps.get-run.outputs.run_id }}
           github-token: ${{ secrets.GH_PAT }}
           path: /tmp/blender-libs
