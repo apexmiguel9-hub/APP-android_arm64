@@ -3,6 +3,8 @@ name: Build Blender Android APK
 # Diagnostic build with logging commit 400951b
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       blender_run_id:
