@@ -1,0 +1,204 @@
+name: Build Blender Android APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      blender_run_id:
+        description: 'Blender CI run ID (optional, defaults to latest successful)'
+        required: false
+        type: string
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout APP-android_arm64
+        uses: actions/checkout@v4
+
+      - name: Checkout Blender-android_arm64 (headers for includes)
+        uses: actions/checkout@v4
+        with:
+          repository: apexmiguel9-hub/Blender-android_arm64
+          ref: blender-v3.6-release
+          path: Blender-android_arm64
+          fetch-depth: 1
+
+      - name: Checkout lib-android_arm64 (third-party headers + .a files)
+        uses: actions/checkout@v4
+        with:
+          repository: apexmiguel9-hub/lib-android_arm64
+          path: lib-android_arm64
+          fetch-depth: 1
+
+      - name: Setup Java 17 (for sdkmanager)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install SDK platform, build-tools, NDK, CMake
+        run: |
+          yes | sdkmanager "platforms;android-30" "build-tools;30.0.3" "cmake;3.10.2.4988404" "ndk;21.4.7075529" > /dev/null 2>&1
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          ls "$ANDROID_HOME/ndk/21.4.7075529" > /dev/null && echo "NDK 21.4.7075529 installed ✓"
+
+      - name: Switch to Java 11 (for Gradle 6.5)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '11'
+
+      - name: Get Blender CI run ID
+        id: get-run
+        run: |
+          LATEST_BLENDER_RUN="29014287000"
+          if [ -n "${{ inputs.blender_run_id }}" ]; then
+            echo "run_id=${{ inputs.blender_run_id }}" >> $GITHUB_OUTPUT
+            echo "Using specified run: ${{ inputs.blender_run_id }}"
+          else
+            echo "run_id=$LATEST_BLENDER_RUN" >> $GITHUB_OUTPUT
+            echo "Using hardcoded latest Blender run: $LATEST_BLENDER_RUN"
+          fi
+
+      - name: Download Blender static libs artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: blender-android-arm64-static-libs
+          repository: apexmiguel9-hub/Blender-android_arm64
+          run-id: ${{ steps.get-run.outputs.run_id }}
+          github-token: ${{ secrets.GH_PAT }}
+          path: /tmp/blender-libs
+
+      - name: Count .a files received
+        run: |
+          echo "=== .a files from Blender CI ==="
+          find /tmp/blender-libs -name "*.a" -type f | wc -l
+
+      - name: Clean old Blender .a files from APP repo
+        run: |
+          GITROOT="${{ github.workspace }}"
+          echo "=== .a viejas encontradas en el repo (antes de reemplazar) ==="
+          find "$GITROOT/OBlender" -name "*.a" -type f
+          find "$GITROOT/OBlender" -name "*.a" -type f -delete
+          echo "Old .a files cleaned ✓"
+
+      - name: Extract static libs zip
+        run: |
+          ZIP_FILE=$(find /tmp/blender-libs -name "*.zip" -type f | head -1)
+          if [ -z "$ZIP_FILE" ]; then
+            echo "ERROR: No .zip found in downloaded artifact"
+            find /tmp/blender-libs -type f
+            exit 1
+          fi
+          echo "Extracting $ZIP_FILE..."
+          unzip -q "$ZIP_FILE" -d /tmp/blender-libs/extracted
+          echo "=== .a files after extraction ==="
+          find /tmp/blender-libs/extracted -name "*.a" -type f | wc -l
+
+      - name: Inspect artifact structure and flatten .a files
+        run: |
+          GITROOT="${{ github.workspace }}"
+          A_DIR="$GITROOT/OBlender/app/.cxx/blender-libs/release/arm64-v8a/lib"
+          mkdir -p "$A_DIR"
+
+          echo "=== Estructura real del artifact ==="
+          find /tmp/blender-libs/extracted -name "*.a" -type f | head -5
+          find /tmp/blender-libs/extracted -name "*.a" -type f | wc -l
+
+          echo "=== Copiando .a a $A_DIR ==="
+          find /tmp/blender-libs/extracted -name "*.a" -type f -exec cp {} "$A_DIR/" \;
+          COUNT=$(ls "$A_DIR/" | wc -l)
+          echo "Deployed $COUNT .a files"
+
+      - name: Patch hardcoded Windows paths in CMakeLists.txt
+        run: |
+          GITROOT="${{ github.workspace }}"
+          BLENDER_DIR="$GITROOT/Blender-android_arm64"
+          LIB_ABS="$GITROOT/lib-android_arm64"
+          RELEASE_DIR="$GITROOT/OBlender/app/.cxx/blender-libs/release/arm64-v8a"
+          CM="$GITROOT/OBlender/app/src/main/cpp/CMakeLists.txt"
+
+          echo "=== Before patching ==="
+          grep -n 'D:/FreeProjects' "$CM" || echo "(none found)"
+
+          sed -i \
+            -e "s|D:/FreeProjects/Blender/Blender/lib-android_arm64|${LIB_ABS}|g" \
+            -e "s|D:/FreeProjects/Blender/Blender/Blender-android_arm64|${BLENDER_DIR}|g" \
+            -e "s|D:/FreeProjects/Blender/Blender/Utilities-android_arm64/MakeBlender/app/\.cxx/cmake/release/arm64-v8a|${RELEASE_DIR}|g" \
+            -e "s|D:/FreeProjects/Blender/Blender/Utilities-android_arm64/MakeBlender/app/\.cxx/cmake/debug/arm64-v8a|${RELEASE_DIR}|g" \
+            "$CM"
+
+          echo "=== After patching ==="
+          grep -n 'D:/FreeProjects' "$CM" || echo "All patched ✓"
+
+      - name: Generate buildinfo_static.h
+        run: |
+          GITROOT="${{ github.workspace }}"
+          BLENDER_DIR="$GITROOT/Blender-android_arm64"
+          RELEASE_DIR="$GITROOT/OBlender/app/.cxx/blender-libs/release/arm64-v8a"
+          BUILDINFO_DIR="$RELEASE_DIR/source/creator"
+          mkdir -p "$BUILDINFO_DIR"
+
+          cat > gen_buildinfo_static.cmake << EOF
+          set(BUILD_PLATFORM "Android")
+          set(BUILD_TYPE "Release")
+          set(BUILD_CFLAGS "NDK r21e arm64-v8a -O2")
+          set(BUILD_CXXFLAGS "NDK r21e arm64-v8a -O2")
+          set(BUILD_LINKFLAGS "Android NDK Linker")
+          set(BUILD_SYSTEM "CMake")
+
+          configure_file(
+            "$BLENDER_DIR/build_files/cmake/buildinfo_static.h.in"
+            "$BUILDINFO_DIR/buildinfo_static.h"
+            ESCAPE_QUOTES
+            @ONLY
+          )
+          EOF
+          cmake -P gen_buildinfo_static.cmake
+
+      - name: Generate buildinfo.h
+        run: |
+          GITROOT="${{ github.workspace }}"
+          BLENDER_DIR="$GITROOT/Blender-android_arm64"
+          RELEASE_DIR="$GITROOT/OBlender/app/.cxx/blender-libs/release/arm64-v8a"
+          BUILDINFO_DIR="$RELEASE_DIR/source/creator"
+          mkdir -p "$BUILDINFO_DIR"
+
+          cd "$BUILDINFO_DIR"
+          cmake -DSOURCE_DIR="$BLENDER_DIR" \
+            -P "$BLENDER_DIR/build_files/cmake/buildinfo.cmake"
+          echo "=== buildinfo.h generated ==="
+          head -10 buildinfo.h
+
+      - name: Build APK via Gradle
+        run: |
+          GITROOT="${{ github.workspace }}"
+          cd "$GITROOT/OBlender"
+          chmod +x gradlew
+          export ANDROID_SDK_ROOT="$ANDROID_HOME"
+          export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/21.4.7075529"
+          ./gradlew assembleRelease 2>&1
+
+
+      - name: Check APK exists and report size
+        run: |
+          GITROOT="${{ github.workspace }}"
+          APK=$(ls "$GITROOT/OBlender/app/build/outputs/apk/release/"*.apk 2>/dev/null | head -1)
+          if [ -n "$APK" ]; then
+            SIZE=$(stat --format=%s "$APK")
+            SIZE_MB=$(echo "scale=1; $SIZE / 1048576" | bc)
+            echo "=== APK: $(basename "$APK") — ${SIZE_MB} MB ==="
+          else
+            echo "ERROR: No APK found at expected path!" >&2
+            exit 1
+          fi
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: blender-android-apk
+          path: ${{ github.workspace }}/OBlender/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
