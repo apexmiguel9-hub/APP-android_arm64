@@ -360,6 +360,16 @@ public class OblSettingFragment extends View {
         } catch (Exception e) {
             Log.e(TAG, "load", e);
         }
+        /* Add built-in Undo/Redo buttons at the end. */
+        ArrayList<Integer> undoKeys = new ArrayList<>();
+        undoKeys.add(1);  /* Ctrl */
+        undoKeys.add(26); /* Z */
+        mShortcuts.add(new ShortcutItem("\u21A9 Undo", undoKeys));
+        ArrayList<Integer> redoKeys = new ArrayList<>();
+        redoKeys.add(0);  /* Shift */
+        redoKeys.add(1);  /* Ctrl */
+        redoKeys.add(26); /* Z */
+        mShortcuts.add(new ShortcutItem("\u21AA Redo", redoKeys));
     }
 
     private void persistShortcuts() {
