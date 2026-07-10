@@ -26,6 +26,7 @@ import android.view.SurfaceView;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewGroup.MarginLayoutParams;
+import android.widget.Button;
 import android.view.WindowManager;
 import android.view.WindowManager.LayoutParams;
 import android.Manifest;
@@ -303,6 +304,7 @@ public class OBLNativeActivity extends NativeActivity
 
         initialEditText();
         initialKeyboardToggle();
+        initialUndoRedoButtons();
 
         // Example of a call to a native method
 
@@ -439,6 +441,46 @@ public class OBLNativeActivity extends NativeActivity
         });
 
         getWindowManager().addView(toggleBtn, lp);
+    }
+
+    private void initialUndoRedoButtons() {
+        /* Undo button — positioned to the left of the grid toggle. */
+        Button undoBtn = new Button(OBLNativeActivity.this);
+        undoBtn.setText("\u21A9");
+        undoBtn.setTextSize(18);
+        undoBtn.setTextColor(Color.WHITE);
+        undoBtn.setAlpha(0.5f);
+        undoBtn.setBackgroundResource(android.R.color.transparent);
+
+        LayoutParams undoLP = new LayoutParams();
+        undoLP.gravity = Gravity.RIGHT | Gravity.BOTTOM;
+        undoLP.width = 90;
+        undoLP.height = 90;
+        undoLP.x = 10 + 120 + 4;
+        undoLP.y = 10;
+        undoLP.flags = LayoutParams.FLAG_NOT_FOCUSABLE | LayoutParams.FLAG_NOT_TOUCH_MODAL;
+
+        undoBtn.setOnClickListener(v -> oblSetValue("10004,"));
+        getWindowManager().addView(undoBtn, undoLP);
+
+        /* Redo button — to the left of the undo button. */
+        Button redoBtn = new Button(OBLNativeActivity.this);
+        redoBtn.setText("\u21AA");
+        redoBtn.setTextSize(18);
+        redoBtn.setTextColor(Color.WHITE);
+        redoBtn.setAlpha(0.5f);
+        redoBtn.setBackgroundResource(android.R.color.transparent);
+
+        LayoutParams redoLP = new LayoutParams();
+        redoLP.gravity = Gravity.RIGHT | Gravity.BOTTOM;
+        redoLP.width = 90;
+        redoLP.height = 90;
+        redoLP.x = 10 + 120 + 4 + 90 + 4;
+        redoLP.y = 10;
+        redoLP.flags = LayoutParams.FLAG_NOT_FOCUSABLE | LayoutParams.FLAG_NOT_TOUCH_MODAL;
+
+        redoBtn.setOnClickListener(v -> oblSetValue("10005,"));
+        getWindowManager().addView(redoBtn, redoLP);
     }
 
     public void showKeyboardApp(String p_existing_text, int p_type, int p_max_input_length, int p_cursor_start, int p_cursor_end) {
