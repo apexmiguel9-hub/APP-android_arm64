@@ -481,6 +481,25 @@ public class OBLNativeActivity extends NativeActivity
 
         redoBtn.setOnClickListener(v -> oblSetValue("10005,"));
         getWindowManager().addView(redoBtn, redoLP);
+
+        /* Right-click button — to the left of redo. */
+        Button rightClickBtn = new Button(OBLNativeActivity.this);
+        rightClickBtn.setText("R");
+        rightClickBtn.setTextSize(18);
+        rightClickBtn.setTextColor(Color.WHITE);
+        rightClickBtn.setAlpha(0.5f);
+        rightClickBtn.setBackgroundResource(android.R.color.transparent);
+
+        LayoutParams rightClickLP = new LayoutParams();
+        rightClickLP.gravity = Gravity.RIGHT | Gravity.BOTTOM;
+        rightClickLP.width = 90;
+        rightClickLP.height = 90;
+        rightClickLP.x = 10 + 120 + 4 + 90 + 4 + 90 + 4;
+        rightClickLP.y = 10;
+        rightClickLP.flags = LayoutParams.FLAG_NOT_FOCUSABLE | LayoutParams.FLAG_NOT_TOUCH_MODAL;
+
+        rightClickBtn.setOnClickListener(v -> oblSetValue("10001,"));
+        getWindowManager().addView(rightClickBtn, rightClickLP);
     }
 
     public void showKeyboardApp(String p_existing_text, int p_type, int p_max_input_length, int p_cursor_start, int p_cursor_end) {
