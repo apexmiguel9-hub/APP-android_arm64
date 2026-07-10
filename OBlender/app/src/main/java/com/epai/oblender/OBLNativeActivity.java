@@ -484,15 +484,15 @@ public class OBLNativeActivity extends NativeActivity
 
         /* Right-click button — to the left of redo. */
         Button rightClickBtn = new Button(OBLNativeActivity.this);
-        rightClickBtn.setText("R");
-        rightClickBtn.setTextSize(18);
+        rightClickBtn.setText("Right");
+        rightClickBtn.setTextSize(14);
         rightClickBtn.setTextColor(Color.WHITE);
         rightClickBtn.setAlpha(0.5f);
         rightClickBtn.setBackgroundResource(android.R.color.transparent);
 
         LayoutParams rightClickLP = new LayoutParams();
         rightClickLP.gravity = Gravity.RIGHT | Gravity.BOTTOM;
-        rightClickLP.width = 90;
+        rightClickLP.width = 120;
         rightClickLP.height = 90;
         rightClickLP.x = 10 + 120 + 4 + 90 + 4 + 90 + 4;
         rightClickLP.y = 10;
@@ -500,6 +500,34 @@ public class OBLNativeActivity extends NativeActivity
 
         rightClickBtn.setOnClickListener(v -> oblSetValue("10001,"));
         getWindowManager().addView(rightClickBtn, rightClickLP);
+
+        /* Scroll mode toggle — to the left of Right-click. */
+        Button scrollBtn = new Button(OBLNativeActivity.this);
+        scrollBtn.setText("Scroll");
+        scrollBtn.setTextSize(14);
+        scrollBtn.setTextColor(Color.WHITE);
+        scrollBtn.setAlpha(0.5f);
+        scrollBtn.setBackgroundResource(android.R.color.transparent);
+
+        LayoutParams scrollLP = new LayoutParams();
+        scrollLP.gravity = Gravity.RIGHT | Gravity.BOTTOM;
+        scrollLP.width = 120;
+        scrollLP.height = 90;
+        scrollLP.x = 10 + 120 + 4 + 90 + 4 + 90 + 4 + 120 + 4;
+        scrollLP.y = 10;
+        scrollLP.flags = LayoutParams.FLAG_NOT_FOCUSABLE | LayoutParams.FLAG_NOT_TOUCH_MODAL;
+
+        scrollBtn.setOnClickListener(new View.OnClickListener() {
+            private boolean scrollMode = false;
+            @Override
+            public void onClick(View v) {
+                scrollMode = !scrollMode;
+                scrollBtn.setText(scrollMode ? "Scroll✓" : "Scroll");
+                scrollBtn.setAlpha(scrollMode ? 0.8f : 0.5f);
+                oblSetValue("10006,");
+            }
+        });
+        getWindowManager().addView(scrollBtn, scrollLP);
     }
 
     public void showKeyboardApp(String p_existing_text, int p_type, int p_max_input_length, int p_cursor_start, int p_cursor_end) {
