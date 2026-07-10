@@ -495,6 +495,14 @@ public class OBLNativeActivity extends NativeActivity
     }
 
     @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        if (inputHandler != null && inputHandler.onTouchEvent(event)) {
+            return true;
+        }
+        return super.onTouchEvent(event);
+    }
+
+    @Override
     public GodotInputHandler getInputHandler() {
         return inputHandler;
     }

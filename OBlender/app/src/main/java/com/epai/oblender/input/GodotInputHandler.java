@@ -300,7 +300,7 @@ public class GodotInputHandler implements InputManager.InputDeviceListener {
 
 		/* Single-finger: original behavior (pass through to NativeActivity). */
 		if (action == MotionEvent.ACTION_MOVE) {
-			return true;
+			return false;
 		}
 
 		if (isMouseEvent(event)) {
@@ -328,19 +328,17 @@ public class GodotInputHandler implements InputManager.InputDeviceListener {
 	}
 
 	private void sendUndo() {
-		GodotLib.key(KeyEvent.KEYCODE_CTRL_LEFT, 0, 0, true, false);
-		GodotLib.key(KeyEvent.KEYCODE_Z, 0, 0, true, false);
-		GodotLib.key(KeyEvent.KEYCODE_Z, 0, 0, false, false);
-		GodotLib.key(KeyEvent.KEYCODE_CTRL_LEFT, 0, 0, false, false);
+		Context ctx = mRenderView.getView().getContext();
+		if (ctx instanceof OBLNativeActivity) {
+			((OBLNativeActivity) ctx).oblSetValue("10004,");
+		}
 	}
 
 	private void sendRedo() {
-		GodotLib.key(KeyEvent.KEYCODE_CTRL_LEFT, 0, 0, true, false);
-		GodotLib.key(KeyEvent.KEYCODE_SHIFT_LEFT, 0, 0, true, false);
-		GodotLib.key(KeyEvent.KEYCODE_Z, 0, 0, true, false);
-		GodotLib.key(KeyEvent.KEYCODE_Z, 0, 0, false, false);
-		GodotLib.key(KeyEvent.KEYCODE_SHIFT_LEFT, 0, 0, false, false);
-		GodotLib.key(KeyEvent.KEYCODE_CTRL_LEFT, 0, 0, false, false);
+		Context ctx = mRenderView.getView().getContext();
+		if (ctx instanceof OBLNativeActivity) {
+			((OBLNativeActivity) ctx).oblSetValue("10005,");
+		}
 	}
 
 	private void sendRightClick() {
