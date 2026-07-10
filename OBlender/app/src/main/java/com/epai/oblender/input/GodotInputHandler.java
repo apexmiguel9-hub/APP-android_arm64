@@ -35,6 +35,7 @@ package com.epai.oblender.input;
 //import com.epai.oblender.GodotLib;
 import com.epai.oblender.GodotLib;
 import com.epai.oblender.GodotRenderView;
+import com.epai.oblender.OBLNativeActivity;
 //import com.epai.oblender.input.GodotGestureHandler;
 
 import android.content.Context;
@@ -68,6 +69,11 @@ public class GodotInputHandler implements InputManager.InputDeviceListener {
 
 	private final GodotRenderView mRenderView;
 	private final InputManager mInputManager;
+
+	/* Multi-touch gesture state */
+	private boolean twoFingerActive = false;
+	private long twoFingerStartTime = 0;
+	private boolean twoFingerHandled = false;
 //	private final GestureDetector gestureDetector;
 //	private final ScaleGestureDetector scaleGestureDetector;
 //	private final GodotGestureHandler godotGestureHandler;
@@ -202,20 +208,46 @@ public class GodotInputHandler implements InputManager.InputDeviceListener {
 
 	public boolean onTouchEvent(final MotionEvent event) {
 		lastSeenToolType = getEventToolType(event);
+		int action = event.getActionMasked();
+		int pointerCount = event.getPointerCount();
 
-//		this.scaleGestureDetector.onTouchEvent(event);
-//		if (this.gestureDetector.onTouchEvent(event)) {
-//			// The gesture detector has handled the event.
-//			return true;
-//		}
+		/* Track 2-finger gestures.
+		 * ACTION_DOWN fires on first finger, ACTION_POINTER_DOWN on subsequent ones.
+		 * When pointerCount reaches 2, start the gesture timer.
+		 * When it drops below 2, check the duration and fire the appropriate action. */
+		if (pointerCount >= 2 && !twoFingerActive) {
+			twoFingerActive = true;
+			twoFingerStartTime = System.currentTimeMillis();
+			twoFingerHandled = false;
+		}
 
-//		if (godotGestureHandler.onMotionEvent(event)) {
-//			// The gesture handler has handled the event.
-//			return true;
-//		}
+		if (twoFingerActive && pointerCount < 2) {
+			long duration = System.currentTimeMillis() - twoFingerStartTime;
+			if (duration < 300) {
+				/* Quick 2-finger tap → Undo (Ctrl+Z) */
+				sendUndo();
+			} else if (duration >= 1000) {
+				/* Long 2-finger press → Right click */
+				sendRightClick();
+			}
+			twoFingerActive = false;
+			twoFingerHandled = false;
+		}
 
-		// Drag events are handled by the [GodotGestureHandler]
-		if (event.getActionMasked() == MotionEvent.ACTION_MOVE) {
+		/* For long press held beyond 1s, fire right click immediately. */
+		if (twoFingerActive && !twoFingerHandled &&
+			(System.currentTimeMillis() - twoFingerStartTime >= 1000)) {
+			sendRightClick();
+			twoFingerHandled = true;
+		}
+
+		/* Consume multi-touch events so Blender doesn't receive 2 pointers. */
+		if (pointerCount >= 2) {
+			return true;
+		}
+
+		/* Single-finger: original behavior (pass through to NativeActivity). */
+		if (action == MotionEvent.ACTION_MOVE) {
 			return true;
 		}
 
@@ -224,6 +256,20 @@ public class GodotInputHandler implements InputManager.InputDeviceListener {
 		}
 
 		return handleTouchEvent(event);
+	}
+
+	private void sendUndo() {
+		GodotLib.key(KeyEvent.KEYCODE_CTRL_LEFT, 0, 0, true, false);  /* Ctrl down */
+		GodotLib.key(KeyEvent.KEYCODE_Z, 0, 0, true, false);          /* Z down */
+		GodotLib.key(KeyEvent.KEYCODE_Z, 0, 0, false, false);         /* Z up */
+		GodotLib.key(KeyEvent.KEYCODE_CTRL_LEFT, 0, 0, false, false); /* Ctrl up */
+	}
+
+	private void sendRightClick() {
+		Context ctx = mRenderView.getView().getContext();
+		if (ctx instanceof OBLNativeActivity) {
+			((OBLNativeActivity) ctx).oblSetValue("10001,");
+		}
 	}
 
 	public boolean onGenericMotionEvent(MotionEvent event) {
