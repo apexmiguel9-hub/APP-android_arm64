@@ -71,9 +71,17 @@ public class GodotInputHandler implements InputManager.InputDeviceListener {
 	private final InputManager mInputManager;
 
 	/* Multi-touch gesture state */
-	private boolean twoFingerActive = false;
-	private long twoFingerStartTime = 0;
-	private boolean twoFingerHandled = false;
+	private boolean multiTouchActive = false;
+	private int gestureFingerCount = 0;
+	private long gestureStartTime = 0;
+	private boolean gestureHandled = false;
+	private boolean consumeFinalUp = false;
+	private float gestureStartDist = 0f;
+	private float gesturePrevDist = 0f;
+
+	private static final long TAP_MS = 300;
+	private static final long HOLD_MS = 1000;
+	private static final float PINCH_STEP_PX = 30f;
 //	private final GestureDetector gestureDetector;
 //	private final ScaleGestureDetector scaleGestureDetector;
 //	private final GodotGestureHandler godotGestureHandler;
@@ -211,38 +219,82 @@ public class GodotInputHandler implements InputManager.InputDeviceListener {
 		int action = event.getActionMasked();
 		int pointerCount = event.getPointerCount();
 
-		/* Track 2-finger gestures.
-		 * ACTION_DOWN fires on first finger, ACTION_POINTER_DOWN on subsequent ones.
-		 * When pointerCount reaches 2, start the gesture timer.
-		 * When it drops below 2, check the duration and fire the appropriate action. */
-		if (pointerCount >= 2 && !twoFingerActive) {
-			twoFingerActive = true;
-			twoFingerStartTime = System.currentTimeMillis();
-			twoFingerHandled = false;
+		/* Start tracking when 2+ fingers touch down. */
+		if (!multiTouchActive && pointerCount >= 2) {
+			multiTouchActive = true;
+			gestureFingerCount = pointerCount;
+			gestureStartTime = System.currentTimeMillis();
+			gestureHandled = false;
+			gestureStartDist = fingerDistance(event);
+			gesturePrevDist = gestureStartDist;
 		}
 
-		if (twoFingerActive && pointerCount < 2) {
-			long duration = System.currentTimeMillis() - twoFingerStartTime;
-			if (duration < 300) {
-				/* Quick 2-finger tap → Undo (Ctrl+Z) */
-				sendUndo();
-			} else if (duration >= 1000) {
-				/* Long 2-finger press → Right click */
-				sendRightClick();
+		if (multiTouchActive) {
+			/* Update finger count if more fingers are added (e.g., 2→3). */
+			if (pointerCount > gestureFingerCount) {
+				gestureFingerCount = pointerCount;
 			}
-			twoFingerActive = false;
-			twoFingerHandled = false;
+
+			long duration = System.currentTimeMillis() - gestureStartTime;
+			boolean moved = fingersMoved(event);
+			float dist = fingerDistance(event);
+
+			/* 2-finger pinch → zoom (scroll). Fire continuously as distance changes. */
+			if (gestureFingerCount == 2 && moved && event.getPointerCount() >= 2) {
+				float diff = dist - gesturePrevDist;
+				if (Math.abs(diff) >= PINCH_STEP_PX) {
+					int steps = (int)(Math.abs(diff) / PINCH_STEP_PX);
+					steps = Math.min(steps, 3);
+					if (diff > 0) {
+						for (int i = 0; i < steps; i++) sendScrollUp();
+					} else {
+						for (int i = 0; i < steps; i++) sendScrollDown();
+					}
+					gesturePrevDist = dist;
+				}
+				gestureHandled = true;
+			}
+
+			/* 2-finger hold >=300ms (no movement) → right click. */
+			if (gestureFingerCount == 2 && !moved && duration >= 300 && !gestureHandled) {
+				sendRightClick();
+				gestureHandled = true;
+			}
+
+			/* 3-finger hold >=1s (no movement) → redo (Shift+Ctrl+Z). */
+			if (gestureFingerCount >= 3 && !moved && duration >= HOLD_MS && !gestureHandled) {
+				sendRedo();
+				gestureHandled = true;
+			}
 		}
 
-		/* For long press held beyond 1s, fire right click immediately. */
-		if (twoFingerActive && !twoFingerHandled &&
-			(System.currentTimeMillis() - twoFingerStartTime >= 1000)) {
-			sendRightClick();
-			twoFingerHandled = true;
+		/* Finger lifted: gesture might be ending. */
+		if (multiTouchActive && (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_POINTER_UP)) {
+			int remaining = event.getPointerCount();
+			if (action == MotionEvent.ACTION_POINTER_UP) {
+				remaining--;
+			}
+			if (remaining < 2) {
+				if (!gestureHandled) {
+					long duration = System.currentTimeMillis() - gestureStartTime;
+					if (gestureFingerCount >= 3 && duration < TAP_MS) {
+						/* Quick 3-finger tap → Undo (Ctrl+Z). */
+						sendUndo();
+					}
+				}
+				consumeFinalUp = true;
+				multiTouchActive = false;
+			}
 		}
 
-		/* Consume multi-touch events so Blender doesn't receive 2 pointers. */
+		/* Consume multi-touch; don't let Blender see 2+ pointers. */
 		if (pointerCount >= 2) {
+			return true;
+		}
+
+		/* Consume the final up event so Blender doesn't get a stale touch-up. */
+		if (consumeFinalUp) {
+			consumeFinalUp = false;
 			return true;
 		}
 
@@ -258,17 +310,57 @@ public class GodotInputHandler implements InputManager.InputDeviceListener {
 		return handleTouchEvent(event);
 	}
 
+	private static float fingerDistance(MotionEvent e) {
+		if (e.getPointerCount() < 2) return 0f;
+		float dx = e.getX(0) - e.getX(1);
+		float dy = e.getY(0) - e.getY(1);
+		return (float)Math.sqrt(dx * dx + dy * dy);
+	}
+
+	private static boolean fingersMoved(MotionEvent e) {
+		if (e.getPointerCount() < 2 || e.getHistorySize() == 0) return false;
+		for (int i = 0; i < e.getPointerCount(); i++) {
+			float dx = e.getX(i) - e.getHistoricalX(i, 0);
+			float dy = e.getY(i) - e.getHistoricalY(i, 0);
+			if (dx * dx + dy * dy > 100f) return true;
+		}
+		return false;
+	}
+
 	private void sendUndo() {
-		GodotLib.key(KeyEvent.KEYCODE_CTRL_LEFT, 0, 0, true, false);  /* Ctrl down */
-		GodotLib.key(KeyEvent.KEYCODE_Z, 0, 0, true, false);          /* Z down */
-		GodotLib.key(KeyEvent.KEYCODE_Z, 0, 0, false, false);         /* Z up */
-		GodotLib.key(KeyEvent.KEYCODE_CTRL_LEFT, 0, 0, false, false); /* Ctrl up */
+		GodotLib.key(KeyEvent.KEYCODE_CTRL_LEFT, 0, 0, true, false);
+		GodotLib.key(KeyEvent.KEYCODE_Z, 0, 0, true, false);
+		GodotLib.key(KeyEvent.KEYCODE_Z, 0, 0, false, false);
+		GodotLib.key(KeyEvent.KEYCODE_CTRL_LEFT, 0, 0, false, false);
+	}
+
+	private void sendRedo() {
+		GodotLib.key(KeyEvent.KEYCODE_CTRL_LEFT, 0, 0, true, false);
+		GodotLib.key(KeyEvent.KEYCODE_SHIFT_LEFT, 0, 0, true, false);
+		GodotLib.key(KeyEvent.KEYCODE_Z, 0, 0, true, false);
+		GodotLib.key(KeyEvent.KEYCODE_Z, 0, 0, false, false);
+		GodotLib.key(KeyEvent.KEYCODE_SHIFT_LEFT, 0, 0, false, false);
+		GodotLib.key(KeyEvent.KEYCODE_CTRL_LEFT, 0, 0, false, false);
 	}
 
 	private void sendRightClick() {
 		Context ctx = mRenderView.getView().getContext();
 		if (ctx instanceof OBLNativeActivity) {
 			((OBLNativeActivity) ctx).oblSetValue("10001,");
+		}
+	}
+
+	private void sendScrollUp() {
+		Context ctx = mRenderView.getView().getContext();
+		if (ctx instanceof OBLNativeActivity) {
+			((OBLNativeActivity) ctx).oblSetValue("10002,");
+		}
+	}
+
+	private void sendScrollDown() {
+		Context ctx = mRenderView.getView().getContext();
+		if (ctx instanceof OBLNativeActivity) {
+			((OBLNativeActivity) ctx).oblSetValue("10003,");
 		}
 	}
 
