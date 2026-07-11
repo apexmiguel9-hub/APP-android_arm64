@@ -406,37 +406,82 @@ public class OblSettingFragment extends View {
         return "?";
     }
 
-    /* ─── Add shortcut dialogs ─── */
+    /* ─── Add shortcut dialogs (3-slot system) ─── */
 
     private void startAddShortcut() {
         Context ctx = getContext();
         if (ctx == null) return;
-        showModifierDialog(ctx);
+        showShortcutEditor(ctx);
     }
 
-    private void showModifierDialog(final Context ctx) {
+    private void showShortcutEditor(final Context ctx) {
         LinearLayout layout = new LinearLayout(ctx);
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setPadding(30, 10, 30, 10);
-        final boolean[] checked = new boolean[3];
-        String[] labels = {"Shift", "Ctrl", "Alt"};
+
+        final EditText nameInput = new EditText(ctx);
+        nameInput.setHint("Name (e.g. Subdivide)");
+        nameInput.setTextColor(0xFFE8E8F0);
+        nameInput.setHintTextColor(0xFF666688);
+        nameInput.setBackgroundColor(0xFF2D2D50);
+        nameInput.setPadding(12, 8, 12, 8);
+        layout.addView(nameInput);
+
+        final int[] slotOrds = {-1, -1, -1};
+        final TextView[] slotViews = new TextView[3];
+        LinearLayout slotsRow = new LinearLayout(ctx);
+        slotsRow.setOrientation(LinearLayout.HORIZONTAL);
+        slotsRow.setPadding(0, 10, 0, 10);
+
         for (int i = 0; i < 3; i++) {
-            CheckBox cb = new CheckBox(ctx);
-            cb.setText(labels[i]);
-            cb.setTextColor(0xFFE8E8F0);
             final int fi = i;
-            cb.setOnCheckedChangeListener((b, is) -> checked[fi] = is);
-            layout.addView(cb);
+            TextView tv = new TextView(ctx);
+            tv.setText("Empty");
+            tv.setTextColor(0xFF8888AA);
+            tv.setTextSize(13);
+            tv.setGravity(Gravity.CENTER);
+            tv.setBackgroundColor(0xFF2D2D50);
+            tv.setPadding(8, 16, 8, 16);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1);
+            lp.setMargins(3, 0, 3, 0);
+            tv.setLayoutParams(lp);
+            tv.setOnClickListener(v -> showSlotCategoryPicker(ctx, fi, slotOrds, slotViews));
+            slotsRow.addView(tv);
+            slotViews[i] = tv;
         }
+        layout.addView(slotsRow);
+
+        final CheckBox toggleCheck = new CheckBox(ctx);
+        toggleCheck.setText("\u21BB Hold mode (stays pressed)");
+        toggleCheck.setTextColor(0xFFB388FF);
+        layout.addView(toggleCheck);
+
         AlertDialog.Builder b = new AlertDialog.Builder(ctx);
-        b.setCustomTitle(makeTitle(ctx, "Hold modifiers (optional)"));
+        b.setCustomTitle(makeTitle(ctx, "Name + keys"));
         b.setView(layout);
-        b.setPositiveButton("Next", (d, w) -> showCategoryDialog(ctx, checked, -1, false));
+        b.setPositiveButton("Confirm", (d, w) -> {
+            String name = nameInput.getText().toString().trim();
+            ArrayList<Integer> keys = new ArrayList<>();
+            for (int ord : slotOrds) {
+                if (ord >= 0) keys.add(ord);
+            }
+            if (keys.isEmpty()) return;
+            if (name.isEmpty()) {
+                StringBuilder sb = new StringBuilder();
+                for (int i = 0; i < keys.size(); i++) {
+                    if (i > 0) sb.append("+");
+                    sb.append(keyName(keys.get(i)));
+                }
+                name = sb.toString();
+            }
+            mShortcuts.add(new ShortcutItem(name, keys, toggleCheck.isChecked()));
+            persistShortcuts(); invalidate();
+        });
         b.setNegativeButton("Cancel", null);
         styleDialog(b.show());
     }
 
-    private void showCategoryDialog(final Context ctx, final boolean[] mods, final int firstOrd, final boolean isSecond) {
+    private void showSlotCategoryPicker(final Context ctx, final int slotIdx, final int[] slotOrds, final TextView[] slotViews) {
         String[] cats = {"Letters", "Numbers", "F-Keys", "Special", "Mouse / Virtual"};
         String[] descs = {"A-Z", "0-9", "F1-F12", "Tab Spc Ent Esc \u2191\u2193\u2190\u2192 Shift Ctrl Alt ...", "Mouse, Scroll, Undo, Redo"};
         LinearLayout layout = new LinearLayout(ctx);
@@ -446,19 +491,19 @@ public class OblSettingFragment extends View {
             final int fi = i;
             View card = makeCard(ctx, cats[i], descs[i], v -> {
                 switch (fi) {
-                    case 0: showKeyDialog(ctx, mods, firstOrd, isSecond,
+                    case 0: showSlotKeyPicker(ctx, slotIdx, slotOrds, slotViews,
                         new String[]{"A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y","Z"},
                         new int[]{25,52,29,48,51,53,45,46,23,49,71,72,31,30,24,73,20,43,44,22,74,50,21,27,28,26}); break;
-                    case 1: showKeyDialog(ctx, mods, firstOrd, isSecond,
+                    case 1: showSlotKeyPicker(ctx, slotIdx, slotOrds, slotViews,
                         new String[]{"1","2","3","4","5","6","7","8","9","0"},
                         new int[]{15,16,17,18,19,67,68,69,70,66}); break;
-                    case 2: showKeyDialog(ctx, mods, firstOrd, isSecond,
+                    case 2: showSlotKeyPicker(ctx, slotIdx, slotOrds, slotViews,
                         new String[]{"F1","F2","F3","F4","F5","F6","F7","F8","F9","F10","F11","F12"},
                         new int[]{75,8,9,10,76,77,78,79,80,81,82,11}); break;
-                    case 3: showKeyDialog(ctx, mods, firstOrd, isSecond,
+                    case 3: showSlotKeyPicker(ctx, slotIdx, slotOrds, slotViews,
                         new String[]{"Esc","Tab","Space","Enter","Delete","Home","End","Ins.","PgUp.","PgDn.","[","]","-","=",";","'","`",",",".","/","\u2191","\u2193","\u2190","\u2192","Shift","Ctrl","Alt"},
                         new int[]{7,41,34,13,42,12,90,89,35,36,85,86,83,84,87,88,14,32,33,47,37,38,39,40,0,1,2}); break;
-                    case 4: showKeyDialog(ctx, mods, firstOrd, isSecond,
+                    case 4: showSlotKeyPicker(ctx, slotIdx, slotOrds, slotViews,
                         new String[]{"Left Mouse","Right Mouse","Scroll Up","Scroll Down","Undo","Redo","Scroll Toggle"},
                         new int[]{10000,10001,10002,10003,10004,10005,10006}); break;
                 }
@@ -466,15 +511,13 @@ public class OblSettingFragment extends View {
             layout.addView(card);
         }
         AlertDialog.Builder b = new AlertDialog.Builder(ctx);
-        b.setCustomTitle(makeTitle(ctx, isSecond ? "Pick second key" : "Pick a key"));
+        b.setCustomTitle(makeTitle(ctx, "Pick a key for slot " + (slotIdx + 1)));
         b.setView(layout);
-        b.setNegativeButton(isSecond ? "Skip \u2192 Name" : "Cancel", (d, w) -> {
-            if (isSecond) finishAdd(ctx, mods, firstOrd, -1);
-        });
+        b.setNegativeButton("Back", null);
         styleDialog(b.show());
     }
 
-    private void showKeyDialog(final Context ctx, final boolean[] mods, final int firstOrd, final boolean isSecond, final String[] keys, final int[] ords) {
+    private void showSlotKeyPicker(final Context ctx, final int slotIdx, final int[] slotOrds, final TextView[] slotViews, final String[] keys, final int[] ords) {
         LinearLayout layout = new LinearLayout(ctx);
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setPadding(20, 10, 20, 10);
@@ -493,76 +536,18 @@ public class OblSettingFragment extends View {
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1);
             lp.setMargins(3, 3, 3, 3);
             row.addView(tv, lp);
-            tv.setOnClickListener(v -> onKeyPicked(ctx, mods, firstOrd, isSecond, ord));
+            tv.setOnClickListener(v -> {
+                slotOrds[slotIdx] = ord;
+                slotViews[slotIdx].setText(keyName(ord));
+                slotViews[slotIdx].setTextColor(0xFFE8E8F0);
+            });
         }
         ScrollView sv = new ScrollView(ctx);
         sv.addView(layout);
         AlertDialog.Builder b = new AlertDialog.Builder(ctx);
-        b.setCustomTitle(makeTitle(ctx, isSecond ? "Second key" : "Select key"));
+        b.setCustomTitle(makeTitle(ctx, "Slot " + (slotIdx + 1)));
         b.setView(sv);
-        b.setNegativeButton(isSecond ? "Skip \u2192 Name" : "Back", (d, w) -> {
-            if (isSecond) finishAdd(ctx, mods, firstOrd, -1);
-            else showCategoryDialog(ctx, mods, -1, false);
-        });
-        styleDialog(b.show());
-    }
-
-    private void onKeyPicked(Context ctx, boolean[] mods, int firstOrd, boolean isSecond, int pickedOrd) {
-        if (!isSecond) {
-            showCategoryDialog(ctx, mods, pickedOrd, true);
-        } else {
-            finishAdd(ctx, mods, firstOrd, pickedOrd);
-        }
-    }
-
-    private void finishAdd(Context ctx, boolean[] mods, int firstOrd, int secondOrd) {
-        StringBuilder preview = new StringBuilder();
-        if (mods[0]) preview.append("Shift+");
-        if (mods[1]) preview.append("Ctrl+");
-        if (mods[2]) preview.append("Alt+");
-        preview.append(keyName(firstOrd));
-        if (secondOrd >= 0) preview.append("+").append(keyName(secondOrd));
-        showNameDialog(ctx, mods, firstOrd, secondOrd, preview.toString());
-    }
-
-    private void showNameDialog(final Context ctx, final boolean[] mods, final int firstOrd, final int secondOrd, final String preview) {
-        LinearLayout layout = new LinearLayout(ctx);
-        layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setPadding(30, 15, 30, 15);
-        final EditText input = new EditText(ctx);
-        input.setHint("e.g. Subdivide");
-        input.setTextColor(0xFFE8E8F0);
-        input.setHintTextColor(0xFF666688);
-        input.setBackgroundColor(0xFF2D2D50);
-        input.setPadding(12, 8, 12, 8);
-        layout.addView(input);
-        final CheckBox toggleCheck = new CheckBox(ctx);
-        toggleCheck.setText("\u21BB Hold mode (stays pressed)");
-        toggleCheck.setTextColor(0xFFB388FF);
-        layout.addView(toggleCheck);
-        TextView comboView = new TextView(ctx);
-        comboView.setText("Combo: " + preview);
-        comboView.setTextColor(0xFF9999BB);
-        comboView.setTextSize(16);
-        comboView.setPadding(0, 8, 0, 0);
-        layout.addView(comboView);
-
-        AlertDialog.Builder b = new AlertDialog.Builder(ctx);
-        b.setCustomTitle(makeTitle(ctx, "Name your shortcut"));
-        b.setView(layout);
-        b.setPositiveButton("Confirm", (dialog, which) -> {
-            String name = input.getText().toString().trim();
-            if (name.isEmpty()) name = preview;
-            ArrayList<Integer> keys = new ArrayList<>();
-            if (mods[0]) keys.add(0);
-            if (mods[1]) keys.add(1);
-            if (mods[2]) keys.add(2);
-            keys.add(firstOrd);
-            if (secondOrd >= 0) keys.add(secondOrd);
-            mShortcuts.add(new ShortcutItem(name, keys, toggleCheck.isChecked()));
-            persistShortcuts(); invalidate();
-        });
-        b.setNegativeButton("Cancel", null);
+        b.setNegativeButton("Back", null);
         styleDialog(b.show());
     }
 
