@@ -153,8 +153,8 @@ public class OBLNativeActivity extends NativeActivity
                         lp.flags|= LayoutParams.FLAG_NOT_TOUCH_MODAL;
 
                         lp.gravity = Gravity.RIGHT | Gravity.BOTTOM;
-                        lp.width = 400;
-                        lp.height = 400;
+                        lp.width = 500;
+                        lp.height = 500;
                         lp.x = 20;
                         lp.y = 180;
                         getWindowManager().addView(mOblSettingFragment, lp);
@@ -410,19 +410,21 @@ public class OBLNativeActivity extends NativeActivity
     }
 
     private void initialKeyboardToggle() {
+        int btnSz = 72;
+        int pad = 6;
         Button toggleBtn = new Button(OBLNativeActivity.this);
         toggleBtn.setText("⌨");
-        toggleBtn.setTextSize(18);
+        toggleBtn.setTextSize(16);
         toggleBtn.setTextColor(Color.WHITE);
         toggleBtn.setAlpha(0.5f);
         toggleBtn.setBackgroundResource(android.R.color.transparent);
 
         LayoutParams lp = new LayoutParams();
         lp.gravity = Gravity.RIGHT | Gravity.BOTTOM;
-        lp.width = 120;
-        lp.height = 120;
-        lp.x = 10;
-        lp.y = 10;
+        lp.width = btnSz;
+        lp.height = btnSz;
+        lp.x = pad;
+        lp.y = 6;
         lp.flags = LayoutParams.FLAG_NOT_FOCUSABLE | LayoutParams.FLAG_NOT_TOUCH_MODAL;
 
         toggleBtn.setOnClickListener(new View.OnClickListener() {
@@ -444,90 +446,7 @@ public class OBLNativeActivity extends NativeActivity
     }
 
     private void initialUndoRedoButtons() {
-        /* Undo button — positioned to the left of the grid toggle. */
-        Button undoBtn = new Button(OBLNativeActivity.this);
-        undoBtn.setText("\u21A9");
-        undoBtn.setTextSize(18);
-        undoBtn.setTextColor(Color.WHITE);
-        undoBtn.setAlpha(0.5f);
-        undoBtn.setBackgroundResource(android.R.color.transparent);
-
-        LayoutParams undoLP = new LayoutParams();
-        undoLP.gravity = Gravity.RIGHT | Gravity.BOTTOM;
-        undoLP.width = 90;
-        undoLP.height = 90;
-        undoLP.x = 10 + 120 + 4;
-        undoLP.y = 10;
-        undoLP.flags = LayoutParams.FLAG_NOT_FOCUSABLE | LayoutParams.FLAG_NOT_TOUCH_MODAL;
-
-        undoBtn.setOnClickListener(v -> oblSetValue("10004,"));
-        getWindowManager().addView(undoBtn, undoLP);
-
-        /* Redo button — to the left of the undo button. */
-        Button redoBtn = new Button(OBLNativeActivity.this);
-        redoBtn.setText("\u21AA");
-        redoBtn.setTextSize(18);
-        redoBtn.setTextColor(Color.WHITE);
-        redoBtn.setAlpha(0.5f);
-        redoBtn.setBackgroundResource(android.R.color.transparent);
-
-        LayoutParams redoLP = new LayoutParams();
-        redoLP.gravity = Gravity.RIGHT | Gravity.BOTTOM;
-        redoLP.width = 90;
-        redoLP.height = 90;
-        redoLP.x = 10 + 120 + 4 + 90 + 4;
-        redoLP.y = 10;
-        redoLP.flags = LayoutParams.FLAG_NOT_FOCUSABLE | LayoutParams.FLAG_NOT_TOUCH_MODAL;
-
-        redoBtn.setOnClickListener(v -> oblSetValue("10005,"));
-        getWindowManager().addView(redoBtn, redoLP);
-
-        /* Right-click button — to the left of redo. */
-        Button rightClickBtn = new Button(OBLNativeActivity.this);
-        rightClickBtn.setText("Right");
-        rightClickBtn.setTextSize(14);
-        rightClickBtn.setTextColor(Color.WHITE);
-        rightClickBtn.setAlpha(0.5f);
-        rightClickBtn.setBackgroundResource(android.R.color.transparent);
-
-        LayoutParams rightClickLP = new LayoutParams();
-        rightClickLP.gravity = Gravity.RIGHT | Gravity.BOTTOM;
-        rightClickLP.width = 120;
-        rightClickLP.height = 90;
-        rightClickLP.x = 10 + 120 + 4 + 90 + 4 + 90 + 4;
-        rightClickLP.y = 10;
-        rightClickLP.flags = LayoutParams.FLAG_NOT_FOCUSABLE | LayoutParams.FLAG_NOT_TOUCH_MODAL;
-
-        rightClickBtn.setOnClickListener(v -> oblSetValue("10001,"));
-        getWindowManager().addView(rightClickBtn, rightClickLP);
-
-        /* Scroll mode toggle — to the left of Right-click. */
-        Button scrollBtn = new Button(OBLNativeActivity.this);
-        scrollBtn.setText("Scroll");
-        scrollBtn.setTextSize(14);
-        scrollBtn.setTextColor(Color.WHITE);
-        scrollBtn.setAlpha(0.5f);
-        scrollBtn.setBackgroundResource(android.R.color.transparent);
-
-        LayoutParams scrollLP = new LayoutParams();
-        scrollLP.gravity = Gravity.RIGHT | Gravity.BOTTOM;
-        scrollLP.width = 120;
-        scrollLP.height = 90;
-        scrollLP.x = 10 + 120 + 4 + 90 + 4 + 90 + 4 + 120 + 4;
-        scrollLP.y = 10;
-        scrollLP.flags = LayoutParams.FLAG_NOT_FOCUSABLE | LayoutParams.FLAG_NOT_TOUCH_MODAL;
-
-        scrollBtn.setOnClickListener(new View.OnClickListener() {
-            private boolean scrollMode = false;
-            @Override
-            public void onClick(View v) {
-                scrollMode = !scrollMode;
-                scrollBtn.setText(scrollMode ? "Scroll✓" : "Scroll");
-                scrollBtn.setAlpha(scrollMode ? 0.8f : 0.5f);
-                oblSetValue("10006,");
-            }
-        });
-        getWindowManager().addView(scrollBtn, scrollLP);
+        /* All functionality moved to the shortcut grid — no overlay buttons needed. */
     }
 
     public void showKeyboardApp(String p_existing_text, int p_type, int p_max_input_length, int p_cursor_start, int p_cursor_end) {
