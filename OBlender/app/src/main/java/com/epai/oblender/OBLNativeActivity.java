@@ -332,6 +332,7 @@ public class OBLNativeActivity extends NativeActivity
                 if (mOblSettingFragment!=null){
                     mBooleanLastOblSettingFragmentVisible=mOblSettingFragment.getVisibility()==View.VISIBLE;
                     if (mBooleanLastOblSettingFragmentVisible){
+                        mOblSettingFragment.clearAllToggles();
                         mOblSettingFragment.setVisibility(View.INVISIBLE);
                     }
                 }else{
