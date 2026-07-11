@@ -66,7 +66,9 @@ public class OblSettingFragment extends View {
         String name;
         ArrayList<Integer> keyOrdinals;
         boolean toggleMode;
-        ShortcutItem(String n, ArrayList<Integer> k, boolean t) { name = n; keyOrdinals = k; toggleMode = t; }
+        boolean builtin;
+        ShortcutItem(String n, ArrayList<Integer> k, boolean t) { name = n; keyOrdinals = k; toggleMode = t; builtin = false; }
+        ShortcutItem(String n, ArrayList<Integer> k, boolean t, boolean b) { name = n; keyOrdinals = k; toggleMode = t; builtin = b; }
     }
 
     public OblSettingFragment(Context context) { super(context); init(); }
@@ -608,6 +610,23 @@ public class OblSettingFragment extends View {
 
     /* ─── Persistence ─── */
 
+    private static final int[][] BUILTIN_KEYS = {
+        {10004}, {10005}, {10006}, {10001}, {0}, {1}, {2}
+    };
+
+    private boolean isBuiltinKeySet(ArrayList<Integer> keys) {
+        for (int[] bk : BUILTIN_KEYS) {
+            if (keys.size() == bk.length) {
+                boolean match = true;
+                for (int i = 0; i < bk.length; i++) {
+                    if (keys.get(i) != bk[i]) { match = false; break; }
+                }
+                if (match) return true;
+            }
+        }
+        return false;
+    }
+
     private void loadShortcuts() {
         mShortcuts.clear();
         mToggleActive.clear();
@@ -623,6 +642,8 @@ public class OblSettingFragment extends View {
                 JSONArray ka = o.getJSONArray("k");
                 ArrayList<Integer> k = new ArrayList<>();
                 for (int j = 0; j < ka.length(); j++) k.add(ka.getInt(j));
+                /* Skip if this matches a built-in (prevents duplication from old saves). */
+                if (isBuiltinKeySet(k)) continue;
                 boolean t = o.has("t") && o.getBoolean("t");
                 mShortcuts.add(new ShortcutItem(n, k, t));
             }
@@ -639,13 +660,14 @@ public class OblSettingFragment extends View {
     private void addBuiltin(String name, int[] ords) {
         ArrayList<Integer> k = new ArrayList<>();
         for (int o : ords) k.add(o);
-        mShortcuts.add(new ShortcutItem(name, k, false));
+        mShortcuts.add(new ShortcutItem(name, k, false, true));
     }
 
     private void persistShortcuts() {
         try {
             JSONArray arr = new JSONArray();
             for (ShortcutItem s : mShortcuts) {
+                if (s.builtin) continue;
                 JSONObject o = new JSONObject();
                 o.put("n", s.name);
                 JSONArray ka = new JSONArray();
