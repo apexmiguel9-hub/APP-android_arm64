@@ -444,11 +444,21 @@ public class OblSettingFragment extends View {
             final int fi = i;
             View card = makeCard(ctx, cats[i], descs[i], v -> {
                 switch (fi) {
-                    case 0: showKeyDialog(ctx, mods, firstOrd, isSecond, "A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y","Z", new int[]{25,52,29,48,51,53,45,46,23,49,71,72,31,30,24,73,20,43,44,22,74,50,21,27,28,26}); break;
-                    case 1: showKeyDialog(ctx, mods, firstOrd, isSecond, "1","2","3","4","5","6","7","8","9","0", new int[]{15,16,17,18,19,67,68,69,70,66}); break;
-                    case 2: showKeyDialog(ctx, mods, firstOrd, isSecond, "F1","F2","F3","F4","F5","F6","F7","F8","F9","F10","F11","F12", new int[]{75,8,9,10,76,77,78,79,80,81,82,11}); break;
-                    case 3: showKeyDialog(ctx, mods, firstOrd, isSecond, "Esc","Tab","Space","Enter","Delete","Home","End","Ins.","PgUp.","PgDn.","[","]","-","=",";","'","`",",",".","/","\u2191","\u2193","\u2190","\u2192","Shift","Ctrl","Alt", new int[]{7,41,34,13,42,12,90,89,35,36,85,86,83,84,87,88,14,32,33,47,37,38,39,40,0,1,2}); break;
-                    case 4: showKeyDialog(ctx, mods, firstOrd, isSecond, "Left Mouse","Right Mouse","Scroll Up","Scroll Down","Undo","Redo","Scroll Toggle", new int[]{10000,10001,10002,10003,10004,10005,10006}); break;
+                    case 0: showKeyDialog(ctx, mods, firstOrd, isSecond,
+                        new String[]{"A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y","Z"},
+                        new int[]{25,52,29,48,51,53,45,46,23,49,71,72,31,30,24,73,20,43,44,22,74,50,21,27,28,26}); break;
+                    case 1: showKeyDialog(ctx, mods, firstOrd, isSecond,
+                        new String[]{"1","2","3","4","5","6","7","8","9","0"},
+                        new int[]{15,16,17,18,19,67,68,69,70,66}); break;
+                    case 2: showKeyDialog(ctx, mods, firstOrd, isSecond,
+                        new String[]{"F1","F2","F3","F4","F5","F6","F7","F8","F9","F10","F11","F12"},
+                        new int[]{75,8,9,10,76,77,78,79,80,81,82,11}); break;
+                    case 3: showKeyDialog(ctx, mods, firstOrd, isSecond,
+                        new String[]{"Esc","Tab","Space","Enter","Delete","Home","End","Ins.","PgUp.","PgDn.","[","]","-","=",";","'","`",",",".","/","\u2191","\u2193","\u2190","\u2192","Shift","Ctrl","Alt"},
+                        new int[]{7,41,34,13,42,12,90,89,35,36,85,86,83,84,87,88,14,32,33,47,37,38,39,40,0,1,2}); break;
+                    case 4: showKeyDialog(ctx, mods, firstOrd, isSecond,
+                        new String[]{"Left Mouse","Right Mouse","Scroll Up","Scroll Down","Undo","Redo","Scroll Toggle"},
+                        new int[]{10000,10001,10002,10003,10004,10005,10006}); break;
                 }
             });
             layout.addView(card);
@@ -462,18 +472,13 @@ public class OblSettingFragment extends View {
         styleDialog(b.show());
     }
 
-    private void showKeyDialog(final Context ctx, final boolean[] mods, final int firstOrd, final boolean isSecond, final String... keysAndOrds) {
-        int n = keysAndOrds.length / 2;
-        final String[] keys = new String[n];
-        final int[] ords = new int[n];
-        for (int i = 0; i < n; i++) { keys[i] = keysAndOrds[i]; ords[i] = Integer.parseInt(keysAndOrds[n + i]); }
-
+    private void showKeyDialog(final Context ctx, final boolean[] mods, final int firstOrd, final boolean isSecond, final String[] keys, final int[] ords) {
         LinearLayout layout = new LinearLayout(ctx);
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setPadding(20, 10, 20, 10);
         LinearLayout row = null;
         int cols = 4;
-        for (int i = 0; i < n; i++) {
+        for (int i = 0; i < keys.length; i++) {
             if (i % cols == 0) { row = new LinearLayout(ctx); row.setOrientation(LinearLayout.HORIZONTAL); row.setGravity(Gravity.CENTER); layout.addView(row); }
             final int ord = ords[i];
             TextView tv = new TextView(ctx);
