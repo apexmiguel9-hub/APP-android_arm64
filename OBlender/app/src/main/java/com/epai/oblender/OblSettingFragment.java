@@ -487,9 +487,11 @@ public class OblSettingFragment extends View {
         LinearLayout layout = new LinearLayout(ctx);
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setPadding(20, 10, 20, 10);
+        final AlertDialog[] catDlg = new AlertDialog[1];
         for (int i = 0; i < cats.length; i++) {
             final int fi = i;
             View card = makeCard(ctx, cats[i], descs[i], v -> {
+                if (catDlg[0] != null) catDlg[0].dismiss();
                 switch (fi) {
                     case 0: showSlotKeyPicker(ctx, slotIdx, slotOrds, slotViews,
                         new String[]{"A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y","Z"},
@@ -514,10 +516,12 @@ public class OblSettingFragment extends View {
         b.setCustomTitle(makeTitle(ctx, "Pick a key for slot " + (slotIdx + 1)));
         b.setView(layout);
         b.setNegativeButton("Back", null);
-        styleDialog(b.show());
+        catDlg[0] = b.show();
+        styleDialog(catDlg[0]);
     }
 
     private void showSlotKeyPicker(final Context ctx, final int slotIdx, final int[] slotOrds, final TextView[] slotViews, final String[] keys, final int[] ords) {
+        final AlertDialog[] self = new AlertDialog[1];
         LinearLayout layout = new LinearLayout(ctx);
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setPadding(20, 10, 20, 10);
@@ -540,6 +544,7 @@ public class OblSettingFragment extends View {
                 slotOrds[slotIdx] = ord;
                 slotViews[slotIdx].setText(keyName(ord));
                 slotViews[slotIdx].setTextColor(0xFFE8E8F0);
+                if (self[0] != null) self[0].dismiss();
             });
         }
         ScrollView sv = new ScrollView(ctx);
@@ -548,7 +553,8 @@ public class OblSettingFragment extends View {
         b.setCustomTitle(makeTitle(ctx, "Slot " + (slotIdx + 1)));
         b.setView(sv);
         b.setNegativeButton("Back", null);
-        styleDialog(b.show());
+        self[0] = b.show();
+        styleDialog(self[0]);
     }
 
     /* ─── UI helpers ─── */
@@ -588,9 +594,11 @@ public class OblSettingFragment extends View {
 
     private void styleDialog(AlertDialog dlg) {
         if (dlg == null || dlg.getWindow() == null) return;
-        dlg.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
         dlg.getWindow().setLayout((int) (getResources().getDisplayMetrics().widthPixels * 0.85f), ViewGroup.LayoutParams.WRAP_CONTENT);
         dlg.getWindow().setGravity(Gravity.CENTER);
+        dlg.getWindow().setDimAmount(0.6f);
+        dlg.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+        dlg.getWindow().getDecorView().setBackgroundColor(0xFF1A1A2E);
     }
 
     /* ─── Persistence ─── */
