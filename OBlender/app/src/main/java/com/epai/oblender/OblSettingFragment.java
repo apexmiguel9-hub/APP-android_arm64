@@ -644,7 +644,6 @@ public class OblSettingFragment extends View {
         addBuiltin("\u21A9 Undo", new int[]{10004});
         addBuiltin("\u21AA Redo", new int[]{10005});
         addBuiltin("Scroll \u21C5", new int[]{10006});
-        addBuiltin("\uD83D\uDDB1 Cursor", new int[]{10007});
         addBuiltin("Right", new int[]{10001});
         addBuiltin("Shift", new int[]{0});
         addBuiltin("Ctrl", new int[]{1});
