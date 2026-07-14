@@ -1,19 +1,9 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-import os
 import bpy
 from bpy.types import Gizmo, GizmoGroup
 from mathutils import Matrix, Vector
 from bpy_extras.view3d_utils import location_3d_to_region_2d
-
-LOG_FILE = "/sdcard/com.epai.oblender/gp_cursor_gizmo.log"
-
-def _log(msg):
-    try:
-        with open(LOG_FILE, "a") as f:
-            f.write(msg + "\n")
-    except:
-        pass
 
 
 AXIS_VECS = {
@@ -72,34 +62,20 @@ class VIEW3D_GT_cursor_axis_arrow(Gizmo):
         self.draw_custom_shape(self.custom_shape, select_id=select_id)
 
     def invoke(self, context, event):
-        _log("INVOKE: axis=%s event.type=%s event.value=%s mouse=(%d,%d) loc=(%.4f,%.4f,%.4f)" %
-             (self.axis_name, event.type, event.value,
-              event.mouse_x, event.mouse_y,
-              context.scene.cursor.location[0],
-              context.scene.cursor.location[1],
-              context.scene.cursor.location[2]))
         self.init_mouse = Vector((event.mouse_x, event.mouse_y))
         self.init_loc = context.scene.cursor.location.copy()
         return {'RUNNING_MODAL'}
 
     def exit(self, context, cancel):
-        _log("EXIT: axis=%s cancel=%d loc=(%.4f,%.4f,%.4f)" %
-             (self.axis_name, cancel,
-              context.scene.cursor.location[0],
-              context.scene.cursor.location[1],
-              context.scene.cursor.location[2]))
         if cancel:
             context.scene.cursor.location = self.init_loc
 
     def modal(self, context, event, tweak):
-        if event.type == 'LEFTMOUSE' and event.value == 'RELEASE':
-            _log("MODAL RELEASE: axis=%s mouse=(%d,%d)" %
-                 (self.axis_name, event.mouse_x, event.mouse_y))
-            return {'FINISHED'}
-
-        if event.type not in {'MOUSEMOVE', 'INBETWEEN_MOUSEMOVE'}:
-            _log("MODAL SKIP: axis=%s event.type=%s" % (self.axis_name, event.type))
+        if event.type not in {'MOUSEMOVE', 'INBETWEEN_MOUSEMOVE', 'LEFTMOUSE'}:
             return {'PASS_THROUGH'}
+
+        if event.type == 'LEFTMOUSE':
+            return {'RUNNING_MODAL'}
 
         rv3d = context.space_data.region_3d
         region = context.region
@@ -125,9 +101,7 @@ class VIEW3D_GT_cursor_axis_arrow(Gizmo):
         proj = mouse_delta.dot(axis_dir)
         delta_3d = axis * (proj / axis_len)
 
-        new_loc = self.init_loc + delta_3d
-        context.scene.cursor.location = new_loc
-        self._last_moved_loc = new_loc
+        context.scene.cursor.location = self.init_loc + delta_3d
         return {'RUNNING_MODAL'}
 
 
@@ -164,7 +138,6 @@ class VIEW3D_GGT_cursor_indicator(GizmoGroup):
 
     def draw_prepare(self, context):
         loc = context.scene.cursor.location
-        _log("DRAW_PREPARE: loc=(%.4f,%.4f,%.4f)" % (loc[0], loc[1], loc[2]))
         for gz in self._arrows:
             mat = Matrix.Translation(loc)
             if gz.axis_name == 'X':
