@@ -60,6 +60,7 @@ _modules = [
     # Depends on DNA_WORKSPACE_TOOL (C define).
     "space_toolsystem_common",
     "space_toolsystem_toolbar",
+    "cursor_gizmo",
 
     "space_clip",
     "space_console",
