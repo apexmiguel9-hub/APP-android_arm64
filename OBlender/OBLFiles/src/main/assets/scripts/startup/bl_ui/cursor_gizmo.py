@@ -74,7 +74,15 @@ class VIEW3D_GT_cursor_axis_arrow(Gizmo):
         if event.type not in {'MOUSEMOVE', 'INBETWEEN_MOUSEMOVE', 'LEFTMOUSE'}:
             return {'PASS_THROUGH'}
 
+        if event.type == 'LEFTMOUSE' and event.value == 'PRESS':
+            self.init_mouse = Vector((event.mouse_x, event.mouse_y))
+            self.init_loc = context.scene.cursor.location.copy()
+            return {'RUNNING_MODAL'}
+
         if event.type == 'LEFTMOUSE':
+            return {'RUNNING_MODAL'}
+
+        if not hasattr(self, 'init_mouse'):
             return {'RUNNING_MODAL'}
 
         rv3d = context.space_data.region_3d
