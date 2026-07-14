@@ -3,7 +3,7 @@
 import bpy
 from bpy.types import Gizmo, GizmoGroup
 from mathutils import Matrix, Vector
-from bpy_extras.view3d_utils import region_2d_to_location_3d
+from bpy_extras.view3d_utils import location_3d_to_region_2d
 
 
 AXIS_VECS = {
@@ -71,24 +71,31 @@ class VIEW3D_GT_cursor_axis_arrow(Gizmo):
             context.scene.cursor.location = self.init_loc
 
     def modal(self, context, event, tweak):
-        region = context.region
         rv3d = context.space_data.region_3d
+        region = context.region
 
-        mouse_3d = region_2d_to_location_3d(
-            region, rv3d,
-            (event.mouse_x, event.mouse_y),
-            self.init_loc,
-        )
-        init_mouse_3d = region_2d_to_location_3d(
-            region, rv3d,
-            self.init_mouse,
-            self.init_loc,
-        )
-
-        delta = mouse_3d - init_mouse_3d
         axis = AXIS_VECS[self.axis_name]
-        proj = axis * delta.dot(axis)
-        context.scene.cursor.location = self.init_loc + proj
+
+        p1 = location_3d_to_region_2d(region, rv3d, self.init_loc)
+        p2 = location_3d_to_region_2d(region, rv3d, self.init_loc + axis)
+
+        if p1 is None or p2 is None:
+            return {'RUNNING_MODAL'}
+
+        axis_screen = Vector(p2) - Vector(p1)
+        axis_len = axis_screen.length
+        if axis_len < 1.0:
+            return {'RUNNING_MODAL'}
+
+        axis_dir = axis_screen / axis_len
+
+        mouse_delta = Vector((event.mouse_x - self.init_mouse.x,
+                              event.mouse_y - self.init_mouse.y))
+
+        proj = mouse_delta.dot(axis_dir)
+        delta_3d = axis * (proj / axis_len)
+
+        context.scene.cursor.location = self.init_loc + delta_3d
         return {'RUNNING_MODAL'}
 
 
@@ -101,8 +108,6 @@ class VIEW3D_GGT_cursor_indicator(GizmoGroup):
 
     @classmethod
     def poll(cls, context):
-        if context.mode not in {'PAINT_GPENCIL', 'SCULPT_GPENCIL'}:
-            return False
         space = context.space_data
         if space is None or space.type != 'VIEW_3D':
             return False
