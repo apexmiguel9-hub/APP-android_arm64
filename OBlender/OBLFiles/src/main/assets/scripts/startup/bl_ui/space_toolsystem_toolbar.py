@@ -109,7 +109,6 @@ class _defs_view3d_generic:
                 "Set the cursor location, drag to transform"
             ),
             icon="ops.generic.cursor",
-            widget="VIEW3D_GGT_cursor_indicator",
             keymap="3D View Tool: Cursor",
             draw_settings=draw_settings,
         )
