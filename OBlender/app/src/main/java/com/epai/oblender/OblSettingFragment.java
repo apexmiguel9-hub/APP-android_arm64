@@ -1,8 +1,6 @@
 package com.epai.oblender;
 
 import android.app.AlertDialog;
-import android.content.ClipData;
-import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Canvas;
@@ -10,6 +8,7 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Rect;
 import android.graphics.RectF;
+import android.os.Environment;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.Gravity;
@@ -26,13 +25,21 @@ import android.widget.Toast;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
+import java.io.FileWriter;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashSet;
 
 public class OblSettingFragment extends View {
     private final String TAG = "OBL_Grid";
     private static final String PREFS_NAME = "obl_shortcuts";
     private static final String PREFS_JSON = "shortcuts";
+    private static final String PREFS_CUSTOM = "obl_custom";
+    private static final String KB_DIR_NAME = "keyboards";
 
     private enum Tab { SHORTCUTS, KEYBOARD, NUMPAD }
     private Tab mCurrentTab = Tab.SHORTCUTS;
@@ -71,6 +78,8 @@ public class OblSettingFragment extends View {
     private boolean mIsDragging = false;
     private boolean mDeleteMode = false;
     private int mCols = 4;
+    private float mKeySize = 1.0f;
+    private String mGridName = "";
 
     /* Keyboard tab state */
     private boolean mShiftActive = false;
@@ -100,6 +109,7 @@ public class OblSettingFragment extends View {
         mBorderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         mBorderPaint.setStyle(Paint.Style.STROKE);
         mBorderPaint.setStrokeWidth(1);
+        loadCustomization();
         loadShortcuts();
     }
 
@@ -228,7 +238,7 @@ public class OblSettingFragment extends View {
     private void drawShortcutsGrid(Canvas c, int top, int gridH) {
         int rows = Math.max(1, (int) Math.ceil((float) mShortcuts.size() / mCols) + 1);
         float cellW = (float) mW / mCols;
-        float cellH = 66f;
+        float cellH = 66f * mKeySize;
         int totalH = (int) (rows * cellH);
         mMaxScrollY = Math.max(0, totalH - gridH + 10);
         if (mScrollY > mMaxScrollY) mScrollY = mMaxScrollY;
@@ -375,7 +385,7 @@ public class OblSettingFragment extends View {
 
         /* Calculate rows sizes */
         int rows = KB_ROWS.length;
-        float rowH = Math.min(52f, (gridH - pad * (rows + 1)) / rows);
+        float rowH = Math.min(52f * mKeySize, (gridH - pad * (rows + 1)) / rows);
         float ky0 = top + pad;
         if (mKbHitRects == null || mKbHitRects.length != rows) {
             mKbHitRects = new RectF[rows][];
@@ -452,7 +462,7 @@ public class OblSettingFragment extends View {
         int cols = 4;
         int rows = 4;
         float cellW = (float) mW / cols;
-        float cellH = Math.min(64f, (gridH - 10f) / rows);
+        float cellH = Math.min(64f * mKeySize, (gridH - 10f) / rows);
         float startY = top + (gridH - rows * cellH) / 2f;
 
         if (mNpHitRects == null) mNpHitRects = new RectF[NP_LABELS.length];
@@ -634,7 +644,7 @@ public class OblSettingFragment extends View {
     private int hitTest(float x, float y) {
         if (mCols <= 0) return -1;
         float cellW = (float) mW / mCols;
-        float cellH = 66f;
+        float cellH = 66f * mKeySize;
         int maxRows = Math.max(1, (int) Math.ceil((float) mShortcuts.size() / mCols) + 1);
         int col = (int) (x / cellW);
         if (col < 0 || col >= mCols) return -1;
@@ -780,66 +790,246 @@ public class OblSettingFragment extends View {
         Context ctx = getContext();
         if (ctx == null) return;
 
-        String[] items = {"Export shortcuts", "Import shortcuts", "Cancel"};
+        String[] items = {"Export to file", "Import from file", "Customize appearance", "Cancel"};
         new AlertDialog.Builder(ctx)
             .setCustomTitle(makeTitle(ctx, "Grid Settings"))
             .setItems(items, (d, w) -> {
-                if (w == 0) exportShortcuts();
-                else if (w == 1) importShortcuts();
+                if (w == 0) showExportDialog();
+                else if (w == 1) showFilePicker();
+                else if (w == 2) showCustomizeDialog();
             })
             .show();
     }
 
-    private void exportShortcuts() {
+    /* ─── Export ─── */
+
+    private void showExportDialog() {
         Context ctx = getContext();
         if (ctx == null) return;
+        final EditText input = new EditText(ctx);
+        input.setText(mGridName.isEmpty() ? "my_keyboard" : mGridName);
+        input.setHint("File name (without .json)");
+        input.setTextColor(0xFFE8E8F0);
+        input.setHintTextColor(0xFF666688);
+        input.setBackgroundColor(0xFF2D2D50);
+        input.setPadding(12, 8, 12, 8);
+        new AlertDialog.Builder(ctx)
+            .setCustomTitle(makeTitle(ctx, "Export to file"))
+            .setView(input)
+            .setPositiveButton("Export", (d, w) -> exportToFile(input.getText().toString().trim()))
+            .setNegativeButton("Cancel", null)
+            .show();
+    }
+
+    private void exportToFile(String name) {
+        Context ctx = getContext();
+        if (ctx == null) return;
+        if (name.isEmpty()) name = "my_keyboard";
+        if (!name.endsWith(".json")) name += ".json";
         try {
-            JSONArray arr = new JSONArray();
-            for (ShortcutItem s : mShortcuts) {
-                JSONObject o = new JSONObject();
-                o.put("n", s.name);
-                JSONArray ka = new JSONArray();
-                for (int k : s.keyOrdinals) ka.put(k);
-                o.put("k", ka);
-                o.put("t", s.toggleMode);
-                arr.put(o);
-            }
-            String json = arr.toString(2);
-            ClipboardManager clip = (ClipboardManager) ctx.getSystemService(Context.CLIPBOARD_SERVICE);
-            clip.setPrimaryClip(ClipData.newPlainText("obl_shortcuts", json));
-            Toast.makeText(ctx, "Exported " + mShortcuts.size() + " shortcuts to clipboard", Toast.LENGTH_SHORT).show();
+            JSONObject root = buildFullExportJSON();
+            if (root == null) { Toast.makeText(ctx, "Export failed", Toast.LENGTH_SHORT).show(); return; }
+            root.put("name", name.replace(".json", ""));
+            File dir = getKeyboardsDir();
+            File file = new File(dir, name);
+            FileWriter fw = new FileWriter(file);
+            fw.write(root.toString(2));
+            fw.close();
+            Toast.makeText(ctx, "Exported to " + file.getAbsolutePath(), Toast.LENGTH_LONG).show();
         } catch (Exception e) {
-            Toast.makeText(ctx, "Export failed: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            Toast.makeText(ctx, "Export failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
         }
     }
 
-    private void importShortcuts() {
+    /* ─── Import ─── */
+
+    private void showFilePicker() {
+        Context ctx = getContext();
+        if (ctx == null) return;
+        File dir = getKeyboardsDir();
+        File[] files = dir.listFiles((d, n) -> n.endsWith(".json"));
+        if (files == null || files.length == 0) {
+            Toast.makeText(ctx, "No .json files in " + dir.getAbsolutePath(), Toast.LENGTH_LONG).show();
+            return;
+        }
+        Arrays.sort(files, Comparator.comparingLong(File::lastModified).reversed());
+        final String[] names = new String[files.length];
+        final String[] paths = new String[files.length];
+        for (int i = 0; i < files.length; i++) {
+            names[i] = files[i].getName();
+            paths[i] = files[i].getAbsolutePath();
+        }
+        new AlertDialog.Builder(ctx)
+            .setCustomTitle(makeTitle(ctx, "Select file to import"))
+            .setItems(names, (d, w) -> importFromFile(paths[w]))
+            .setNegativeButton("Cancel", null)
+            .show();
+    }
+
+    private void importFromFile(String path) {
         Context ctx = getContext();
         if (ctx == null) return;
         try {
-            ClipboardManager clip = (ClipboardManager) ctx.getSystemService(Context.CLIPBOARD_SERVICE);
-            if (!clip.hasPrimaryClip()) { Toast.makeText(ctx, "Clipboard is empty", Toast.LENGTH_SHORT).show(); return; }
-            String json = clip.getPrimaryClip().getItemAt(0).getText().toString();
-            JSONArray arr = new JSONArray(json);
-            int imported = 0;
-            for (int i = 0; i < arr.length(); i++) {
-                JSONObject o = arr.getJSONObject(i);
-                String n = o.getString("n");
-                JSONArray ka = o.getJSONArray("k");
-                ArrayList<Integer> k = new ArrayList<>();
-                for (int j = 0; j < ka.length(); j++) k.add(ka.getInt(j));
-                boolean t = o.has("t") && o.getBoolean("t");
-                /* Skip if it matches a builtin */
-                if (isBuiltinKeySet(k)) continue;
-                mShortcuts.add(new ShortcutItem(n, k, t));
-                imported++;
+            BufferedReader br = new BufferedReader(new FileReader(path));
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = br.readLine()) != null) sb.append(line);
+            br.close();
+            JSONObject root = new JSONObject(sb.toString());
+
+            /* Load customization if present */
+            if (root.has("customization")) {
+                JSONObject cust = root.getJSONObject("customization");
+                mBg = cust.optInt("bg", mBg);
+                mBtnBg = cust.optInt("btnBg", mBtnBg);
+                mBtnBgPress = cust.optInt("btnBgPress", mBtnBgPress);
+                mBtnBorder = cust.optInt("btnBorder", mBtnBorder);
+                mBtnTxt = cust.optInt("btnTxt", mBtnTxt);
+                mComboTxt = cust.optInt("comboTxt", mComboTxt);
+                mToggleOnBg = cust.optInt("toggleOnBg", mToggleOnBg);
+                mToggleOnBorder = cust.optInt("toggleOnBorder", mToggleOnBorder);
+                mAddBg = cust.optInt("addBg", mAddBg);
+                mAddBgPress = cust.optInt("addBgPress", mAddBgPress);
+                mHeaderBg = cust.optInt("headerBg", mHeaderBg);
+                mCloseBg = cust.optInt("closeBg", mCloseBg);
+                mTabActiveBg = cust.optInt("tabActiveBg", mTabActiveBg);
+                mTabInactiveBg = cust.optInt("tabInactiveBg", mTabInactiveBg);
+                mRadius = cust.optInt("radius", mRadius);
+                mCols = cust.optInt("cols", mCols);
+                mKeySize = (float) cust.optDouble("keySize", mKeySize);
+                mGridName = root.optString("name", mGridName);
+                saveCustomization();
             }
-            persistShortcuts();
+
+            /* Load shortcuts */
+            if (root.has("shortcuts")) {
+                JSONArray arr = root.getJSONArray("shortcuts");
+                int imported = 0;
+                for (int i = 0; i < arr.length(); i++) {
+                    JSONObject o = arr.getJSONObject(i);
+                    String n = o.getString("n");
+                    JSONArray ka = o.getJSONArray("k");
+                    ArrayList<Integer> k = new ArrayList<>();
+                    for (int j = 0; j < ka.length(); j++) k.add(ka.getInt(j));
+                    if (isBuiltinKeySet(k)) continue;
+                    boolean t = o.optBoolean("t", false);
+                    mShortcuts.add(new ShortcutItem(n, k, t));
+                    imported++;
+                }
+                persistShortcuts();
+            }
+
             invalidate();
-            Toast.makeText(ctx, "Imported " + imported + " shortcuts", Toast.LENGTH_SHORT).show();
+            Toast.makeText(ctx, "Imported " + path.substring(path.lastIndexOf('/') + 1), Toast.LENGTH_SHORT).show();
         } catch (Exception e) {
-            Toast.makeText(ctx, "Import failed: invalid JSON", Toast.LENGTH_SHORT).show();
+            Toast.makeText(ctx, "Import failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
         }
+    }
+
+    /* ─── Customize dialog ─── */
+
+    private void showCustomizeDialog() {
+        Context ctx = getContext();
+        if (ctx == null) return;
+        LinearLayout layout = new LinearLayout(ctx);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(20, 10, 20, 10);
+
+        final EditText nameInput = makeEditField(ctx, "Grid name", mGridName);
+        layout.addView(label(ctx, "Name"));
+        layout.addView(nameInput);
+
+        final EditText colsInput = makeEditField(ctx, "2-6", String.valueOf(mCols));
+        layout.addView(label(ctx, "Columns (2-6)"));
+        layout.addView(colsInput);
+
+        final EditText sizeInput = makeEditField(ctx, "0.5-2.0", String.valueOf(mKeySize));
+        layout.addView(label(ctx, "Key size (0.5-2.0)"));
+        layout.addView(sizeInput);
+
+        final EditText bgInput = makeEditField(ctx, "e.g. FF1A1A2E", String.format("%08X", mBg));
+        layout.addView(label(ctx, "Background (ARGB hex)"));
+        layout.addView(bgInput);
+
+        final EditText btnBgInput = makeEditField(ctx, "e.g. FF2D2D50", String.format("%08X", mBtnBg));
+        layout.addView(label(ctx, "Button bg (ARGB hex)"));
+        layout.addView(btnBgInput);
+
+        final EditText btnTxtInput = makeEditField(ctx, "e.g. FFE8E8F0", String.format("%08X", mBtnTxt));
+        layout.addView(label(ctx, "Button text (ARGB hex)"));
+        layout.addView(btnTxtInput);
+
+        final EditText borderInput = makeEditField(ctx, "e.g. FF4A4A7A", String.format("%08X", mBtnBorder));
+        layout.addView(label(ctx, "Border (ARGB hex)"));
+        layout.addView(borderInput);
+
+        final EditText headerBgInput = makeEditField(ctx, "e.g. FF0F0F23", String.format("%08X", mHeaderBg));
+        layout.addView(label(ctx, "Header bg (ARGB hex)"));
+        layout.addView(headerBgInput);
+
+        final EditText radiusInput = makeEditField(ctx, "4-24", String.valueOf(mRadius));
+        layout.addView(label(ctx, "Corner radius (4-24)"));
+        layout.addView(radiusInput);
+
+        ScrollView sv = new ScrollView(ctx);
+        sv.addView(layout);
+        new AlertDialog.Builder(ctx)
+            .setCustomTitle(makeTitle(ctx, "Customize Appearance"))
+            .setView(sv)
+            .setPositiveButton("Apply", (d, w) -> {
+                try {
+                    int c = Integer.parseInt(colsInput.getText().toString().trim());
+                    if (c >= 2 && c <= 6) mCols = c;
+                } catch (Exception e) {}
+                try {
+                    float s = Float.parseFloat(sizeInput.getText().toString().trim());
+                    if (s >= 0.5f && s <= 2.0f) mKeySize = s;
+                } catch (Exception e) {}
+                mGridName = nameInput.getText().toString().trim();
+                mBg = parseHex(bgInput.getText().toString().trim(), mBg);
+                mBtnBg = parseHex(btnBgInput.getText().toString().trim(), mBtnBg);
+                mBtnTxt = parseHex(btnTxtInput.getText().toString().trim(), mBtnTxt);
+                mBtnBorder = parseHex(borderInput.getText().toString().trim(), mBtnBorder);
+                mHeaderBg = parseHex(headerBgInput.getText().toString().trim(), mHeaderBg);
+                try {
+                    int r = Integer.parseInt(radiusInput.getText().toString().trim());
+                    if (r >= 4 && r <= 24) mRadius = r;
+                } catch (Exception e) {}
+                saveCustomization();
+                invalidate();
+                Toast.makeText(ctx, "Customization applied", Toast.LENGTH_SHORT).show();
+            })
+            .setNegativeButton("Cancel", null)
+            .show();
+    }
+
+    private int parseHex(String s, int def) {
+        try {
+            if (s.startsWith("0x") || s.startsWith("0X")) s = s.substring(2);
+            if (s.startsWith("#")) s = s.substring(1);
+            if (s.length() == 6) s = "FF" + s;
+            return (int) Long.parseLong(s, 16);
+        } catch (Exception e) { return def; }
+    }
+
+    private View label(Context ctx, String text) {
+        TextView tv = new TextView(ctx);
+        tv.setText(text);
+        tv.setTextColor(0xFFB388FF);
+        tv.setTextSize(13);
+        tv.setPadding(0, 10, 0, 2);
+        return tv;
+    }
+
+    private EditText makeEditField(Context ctx, String hint, String value) {
+        EditText et = new EditText(ctx);
+        et.setText(value);
+        et.setHint(hint);
+        et.setTextColor(0xFFE8E8F0);
+        et.setHintTextColor(0xFF666688);
+        et.setBackgroundColor(0xFF2D2D50);
+        et.setPadding(12, 8, 12, 8);
+        return et;
     }
 
     /* ════════════════════════════════════════
@@ -1114,6 +1304,109 @@ public class OblSettingFragment extends View {
             getContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                 .edit().putString(PREFS_JSON, arr.toString()).apply();
         } catch (Exception e) { Log.e(TAG, "persist", e); }
+    }
+
+    /* ─── Customization persistence ─── */
+
+    private void loadCustomization() {
+        try {
+            Context ctx = getContext();
+            if (ctx == null) return;
+            SharedPreferences sp = ctx.getSharedPreferences(PREFS_CUSTOM, Context.MODE_PRIVATE);
+            mBg = sp.getInt("bg", 0xFF1A1A2E);
+            mBtnBg = sp.getInt("btnBg", 0xFF2D2D50);
+            mBtnBgPress = sp.getInt("btnBgPress", 0xFF3D3D6C);
+            mBtnBorder = sp.getInt("btnBorder", 0xFF4A4A7A);
+            mBtnTxt = sp.getInt("btnTxt", 0xFFE8E8F0);
+            mComboTxt = sp.getInt("comboTxt", 0xFF9999BB);
+            mToggleOnBg = sp.getInt("toggleOnBg", 0xFF1B5E20);
+            mToggleOnBorder = sp.getInt("toggleOnBorder", 0xFF4CAF50);
+            mAddBg = sp.getInt("addBg", 0xFF2ECC71);
+            mAddBgPress = sp.getInt("addBgPress", 0xFF27AE60);
+            mHeaderBg = sp.getInt("headerBg", 0xFF0F0F23);
+            mCloseBg = sp.getInt("closeBg", 0xFF7A2A2A);
+            mTabActiveBg = sp.getInt("tabActiveBg", 0xFF3D3D6C);
+            mTabInactiveBg = sp.getInt("tabInactiveBg", 0xFF1A1A2E);
+            mRadius = sp.getInt("radius", 12);
+            mCols = sp.getInt("cols", 4);
+            mKeySize = sp.getFloat("keySize", 1.0f);
+            mGridName = sp.getString("gridName", "");
+        } catch (Exception e) { Log.e(TAG, "loadCustomization", e); }
+    }
+
+    private void saveCustomization() {
+        try {
+            Context ctx = getContext();
+            if (ctx == null) return;
+            ctx.getSharedPreferences(PREFS_CUSTOM, Context.MODE_PRIVATE).edit()
+                .putInt("bg", mBg)
+                .putInt("btnBg", mBtnBg)
+                .putInt("btnBgPress", mBtnBgPress)
+                .putInt("btnBorder", mBtnBorder)
+                .putInt("btnTxt", mBtnTxt)
+                .putInt("comboTxt", mComboTxt)
+                .putInt("toggleOnBg", mToggleOnBg)
+                .putInt("toggleOnBorder", mToggleOnBorder)
+                .putInt("addBg", mAddBg)
+                .putInt("addBgPress", mAddBgPress)
+                .putInt("headerBg", mHeaderBg)
+                .putInt("closeBg", mCloseBg)
+                .putInt("tabActiveBg", mTabActiveBg)
+                .putInt("tabInactiveBg", mTabInactiveBg)
+                .putInt("radius", mRadius)
+                .putInt("cols", mCols)
+                .putFloat("keySize", mKeySize)
+                .putString("gridName", mGridName)
+                .apply();
+        } catch (Exception e) { Log.e(TAG, "saveCustomization", e); }
+    }
+
+    private File getKeyboardsDir() {
+        File dir = new File(Environment.getExternalStorageDirectory(), "com.epai.oblender/" + KB_DIR_NAME);
+        if (!dir.exists()) dir.mkdirs();
+        return dir;
+    }
+
+    private JSONObject buildFullExportJSON() {
+        try {
+            JSONObject root = new JSONObject();
+            root.put("format_version", 1);
+            root.put("name", mGridName.isEmpty() ? "My Grid" : mGridName);
+
+            JSONObject cust = new JSONObject();
+            cust.put("bg", mBg);
+            cust.put("btnBg", mBtnBg);
+            cust.put("btnBgPress", mBtnBgPress);
+            cust.put("btnBorder", mBtnBorder);
+            cust.put("btnTxt", mBtnTxt);
+            cust.put("comboTxt", mComboTxt);
+            cust.put("toggleOnBg", mToggleOnBg);
+            cust.put("toggleOnBorder", mToggleOnBorder);
+            cust.put("addBg", mAddBg);
+            cust.put("addBgPress", mAddBgPress);
+            cust.put("headerBg", mHeaderBg);
+            cust.put("closeBg", mCloseBg);
+            cust.put("tabActiveBg", mTabActiveBg);
+            cust.put("tabInactiveBg", mTabInactiveBg);
+            cust.put("radius", mRadius);
+            cust.put("cols", mCols);
+            cust.put("keySize", mKeySize);
+            root.put("customization", cust);
+
+            JSONArray arr = new JSONArray();
+            for (ShortcutItem s : mShortcuts) {
+                if (s.builtin) continue;
+                JSONObject o = new JSONObject();
+                o.put("n", s.name);
+                JSONArray ka = new JSONArray();
+                for (int k : s.keyOrdinals) ka.put(k);
+                o.put("k", ka);
+                o.put("t", s.toggleMode);
+                arr.put(o);
+            }
+            root.put("shortcuts", arr);
+            return root;
+        } catch (Exception e) { return null; }
     }
 
     void setOBLSettingFragmentListener(OBLSettingFragmentListener l) { mListener = l; }
