@@ -1,6 +1,8 @@
 package com.epai.oblender;
 
 import android.app.AlertDialog;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Canvas;
@@ -19,6 +21,7 @@ import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -31,7 +34,10 @@ public class OblSettingFragment extends View {
     private static final String PREFS_NAME = "obl_shortcuts";
     private static final String PREFS_JSON = "shortcuts";
 
-    private int mCols = 4;
+    private enum Tab { SHORTCUTS, KEYBOARD, NUMPAD }
+    private Tab mCurrentTab = Tab.SHORTCUTS;
+
+    /* Colors */
     private int mBg = 0xFF1A1A2E;
     private int mBtnBg = 0xFF2D2D50;
     private int mBtnBgPress = 0xFF3D3D6C;
@@ -45,22 +51,32 @@ public class OblSettingFragment extends View {
     private int mHeaderBg = 0xFF0F0F23;
     private int mCloseBg = 0xFF7A2A2A;
     private int mRadius = 12;
+    private int mTabActiveBg = 0xFF3D3D6C;
+    private int mTabInactiveBg = 0xFF1A1A2E;
 
     private Paint mPaint, mBorderPaint;
     private int mW, mH;
     private int mPressedIdx = -1;
     private long mPressTime = 0;
 
+    /* Shortcuts tab */
     private ArrayList<ShortcutItem> mShortcuts = new ArrayList<>();
     private HashSet<Integer> mToggleActive = new HashSet<>();
     private OBLSettingFragmentListener mListener;
 
-    private Rect mCloseRect, mMoveRect, mDelRect;
+    private Rect mCloseRect, mSettingsRect;
     private int mGridTop, mGridBot;
     private int mScrollY = 0, mMaxScrollY = 0;
     private float mLastTouchY = 0;
     private boolean mIsDragging = false;
     private boolean mDeleteMode = false;
+    private int mCols = 4;
+
+    /* Keyboard tab state */
+    private boolean mShiftActive = false;
+
+    /* Tab bar rects for touch */
+    private Rect mShortcutsTabRect, mKeyboardTabRect, mNumPadTabRect;
 
     private static class ShortcutItem {
         String name;
@@ -92,44 +108,124 @@ public class OblSettingFragment extends View {
         super.onDraw(canvas);
         mW = getWidth(); mH = getHeight();
         if (mW <= 0 || mH <= 0) return;
+
         mPaint.setColor(mBg);
         canvas.drawRoundRect(0, 0, mW, mH, 16, 16, mPaint);
-        int headerH = (int) (mH * 0.07f);
-        int ctrlH = (int) (mH * 0.09f);
-        mGridTop = headerH;
+
+        int tabH = (int) (mH * 0.08f);
+        int headerH = (int) (mH * 0.065f);
+        int ctrlH = (mCurrentTab == Tab.SHORTCUTS) ? (int) (mH * 0.09f) : 0;
+
+        int topBarH = tabH + headerH;
+        mGridTop = topBarH;
         mGridBot = mH - ctrlH;
-        drawHeader(canvas, headerH);
-        drawGrid(canvas, mGridTop, mGridBot - mGridTop);
-        drawControls(canvas, mGridBot, ctrlH);
+
+        drawTabBar(canvas, tabH);
+        drawHeader(canvas, tabH, headerH);
+
+        switch (mCurrentTab) {
+            case SHORTCUTS:
+                drawShortcutsGrid(canvas, mGridTop, mGridBot - mGridTop);
+                drawControls(canvas, mGridBot, ctrlH);
+                break;
+            case KEYBOARD:
+                drawKeyboard(canvas, mGridTop, mGridBot - mGridTop);
+                break;
+            case NUMPAD:
+                drawNumPad(canvas, mGridTop, mGridBot - mGridTop);
+                break;
+        }
+
         if (mPressedIdx >= 0 && System.currentTimeMillis() - mPressTime > 120) {
             mPressedIdx = -1; invalidate();
         }
     }
 
-    private void drawHeader(Canvas c, int h) {
+    /* ─── Tab Bar ─── */
+
+    private void drawTabBar(Canvas c, int h) {
         mPaint.setColor(mHeaderBg);
-        c.drawRoundRect(0, 0, mW, h + 8, 12, 12, mPaint);
-        mPaint.setColor(0xFF2A2A4A);
-        c.drawRect(0, h - 1, mW, h, mPaint);
-        mPaint.setColor(mBtnTxt);
-        mPaint.setTextSize(h * 0.38f);
+        c.drawRect(0, 0, mW, h, mPaint);
+
+        String[] tabs = { "Shortcuts", "Keyboard", "#NumPad" };
+        Tab[] values = { Tab.SHORTCUTS, Tab.KEYBOARD, Tab.NUMPAD };
+        float tw = mW / 3f;
+        mPaint.setTextSize(h * 0.42f);
         Paint.FontMetrics fm = mPaint.getFontMetrics();
-        float y = h / 2f + (fm.bottom - fm.top) / 2f - fm.bottom;
-        c.drawText("\u2328 SHORTCUTS  " + mShortcuts.size(), mW / 2f, y, mPaint);
-        if (!mToggleActive.isEmpty()) {
+        float ty = h / 2f + (fm.bottom - fm.top) / 2f - fm.bottom;
+
+        for (int i = 0; i < 3; i++) {
+            float lx = i * tw, rx = (i + 1) * tw;
+            boolean active = (mCurrentTab == values[i]);
+            mPaint.setColor(active ? mTabActiveBg : mTabInactiveBg);
+            c.drawRect(lx, 0, rx, h, mPaint);
+
+            if (active) {
+                mPaint.setColor(0xFF7C4DFF);
+                c.drawRect(lx, h - 3, rx, h, mPaint);
+            }
+
+            mPaint.setColor(active ? mBtnTxt : mComboTxt);
+            c.drawText(tabs[i], (lx + rx) / 2f, ty, mPaint);
+        }
+
+        /* Store tab hit rects */
+        mShortcutsTabRect = new Rect(0, 0, (int)(mW / 3f), h);
+        mKeyboardTabRect = new Rect((int)(mW / 3f), 0, (int)(2 * mW / 3f), h);
+        mNumPadTabRect = new Rect((int)(2 * mW / 3f), 0, mW, h);
+    }
+
+    /* ─── Header (gear + toggle badge) ─── */
+
+    private void drawHeader(Canvas c, int top, int h) {
+        float gy = top + 2;
+        mPaint.setColor(mHeaderBg);
+        c.drawRect(0, gy, mW, gy + h, mPaint);
+
+        mPaint.setColor(mBtnTxt);
+        mPaint.setTextSize(h * 0.4f);
+        Paint.FontMetrics fm = mPaint.getFontMetrics();
+        float y = gy + h / 2f + (fm.bottom - fm.top) / 2f - fm.bottom;
+
+        String title;
+        switch (mCurrentTab) {
+            case KEYBOARD: title = "QWERTY"; break;
+            case NUMPAD: title = "Numpad"; break;
+            default:
+                title = "Shortcuts  " + mShortcuts.size();
+                break;
+        }
+        c.drawText(title, mW / 2f, y, mPaint);
+
+        /* Settings gear */
+        float gearSize = h * 0.6f;
+        float gx = mW - gearSize - 16;
+        float gtx = gx + gearSize / 2f;
+        float gty = gy + h / 2f + (fm.bottom - fm.top) / 2f - fm.bottom;
+        mPaint.setTextSize(gearSize * 0.85f);
+        mPaint.setColor(0xFF9999BB);
+        c.drawText("\u2699", gtx, gty, mPaint);
+        mSettingsRect = new Rect((int)gx, (int)gy, (int)(gx + gearSize + 16), (int)(gy + h));
+
+        /* Toggle active badge for shortcuts tab */
+        if (mCurrentTab == Tab.SHORTCUTS && !mToggleActive.isEmpty()) {
             mPaint.setColor(0xFF7C4DFF);
-            mPaint.setTextSize(h * 0.28f);
+            mPaint.setTextSize(h * 0.3f);
             String badge = mToggleActive.size() + " held";
-            float bw = mPaint.measureText(badge) + 16;
-            float bx = mW - bw - 12;
-            float by = (h - mPaint.getTextSize()) / 2f;
+            float bw = mPaint.measureText(badge) + 12;
+            float bx = mW - bw - gearSize - 32;
+            float by = gy + (h - mPaint.getTextSize()) / 2f;
             c.drawRoundRect(bx, by, bx + bw, by + mPaint.getTextSize() + 6, 8, 8, mPaint);
             mPaint.setColor(Color.WHITE);
             c.drawText(badge, bx + bw / 2f, by + mPaint.getTextSize() + 2, mPaint);
         }
     }
 
-    private void drawGrid(Canvas c, int top, int gridH) {
+    /* ════════════════════════════════════════
+     * SHORTCUTS TAB
+     * ════════════════════════════════════════ */
+
+    private void drawShortcutsGrid(Canvas c, int top, int gridH) {
         int rows = Math.max(1, (int) Math.ceil((float) mShortcuts.size() / mCols) + 1);
         float cellW = (float) mW / mCols;
         float cellH = 66f;
@@ -144,7 +240,7 @@ public class OblSettingFragment extends View {
             float yy = top + r * cellH - mScrollY;
             if (yy + cellH < top || yy > mGridBot) continue;
             RectF rect = new RectF(col * cellW + 5, yy + 5, (col + 1) * cellW - 5, yy + cellH - 5);
-            drawBtn(c, rect, i, mShortcuts.get(i));
+            drawShortcutBtn(c, rect, i, mShortcuts.get(i));
         }
         int r = idx / mCols, col = idx % mCols;
         float yy = top + r * cellH - mScrollY;
@@ -160,7 +256,7 @@ public class OblSettingFragment extends View {
         }
     }
 
-    private void drawBtn(Canvas c, RectF r, int idx, ShortcutItem sc) {
+    private void drawShortcutBtn(Canvas c, RectF r, int idx, ShortcutItem sc) {
         boolean pressed = (mPressedIdx == idx);
         boolean toggleActive = mToggleActive.contains(idx);
         int bg, txtCol = mBtnTxt, borderCol = mBtnBorder;
@@ -203,12 +299,11 @@ public class OblSettingFragment extends View {
     }
 
     private void drawControls(Canvas c, int top, int h) {
+        if (mCurrentTab != Tab.SHORTCUTS) return;
         mPaint.setColor(mHeaderBg);
         c.drawRoundRect(0, top, mW, top + h + 8, 0, 0, mPaint);
         float bw = mW / 4f;
         mCloseRect = new Rect((int) (mW - bw * 1.2f), top, mW, top + h);
-        mMoveRect = new Rect((int) (bw * 0.1f), top, (int) (bw * 0.9f), top + h);
-        mDelRect = new Rect((int) (bw * 1.1f), top, (int) (bw * 1.9f), top + h);
         float textSize = h * 0.38f;
 
         mPaint.setColor(mCloseBg);
@@ -219,18 +314,175 @@ public class OblSettingFragment extends View {
         float d = (fm.bottom - fm.top) / 2f - fm.bottom;
         c.drawText("\u2716 Close", mCloseRect.exactCenterX(), mCloseRect.exactCenterY() + d, mPaint);
 
-        mPaint.setColor(mBtnBorder);
-        c.drawRoundRect(new RectF(mMoveRect), 8, 8, mPaint);
-        mPaint.setColor(0xFF9999AA);
-        mPaint.setTextSize(textSize);
-        c.drawText("\u2195 Move", mMoveRect.exactCenterX(), mMoveRect.exactCenterY() + d, mPaint);
-
         mPaint.setColor(mDeleteMode ? 0xFFB71C1C : mBtnBorder);
+        mDelRect = new Rect((int) (bw * 1.1f), top, (int) (bw * 1.9f), top + h);
         c.drawRoundRect(new RectF(mDelRect), 8, 8, mPaint);
         mPaint.setColor(mDeleteMode ? Color.WHITE : 0xFF9999AA);
         mPaint.setTextSize(textSize);
         c.drawText(mDeleteMode ? "\u2716 Del" : "Del", mDelRect.exactCenterX(), mDelRect.exactCenterY() + d, mPaint);
     }
+
+    /* ════════════════════════════════════════
+     * KEYBOARD TAB
+     * ════════════════════════════════════════ */
+
+    private static class KbKey {
+        String label;
+        int ordinal;
+        float w; /* relative width weight (1.0 = standard) */
+        boolean isSpecial;
+        KbKey(String lbl, int ord, float w) { this(lbl, ord, w, false); }
+        KbKey(String lbl, int ord, float w, boolean sp) { label = lbl; ordinal = ord; this.w = w; isSpecial = sp; }
+    }
+
+    /* Row definitions: each element = {label, ordinal, width_weight} */
+    private static final KbKey[][] KB_ROWS = {
+        /* Row 0: Q W E R T Y U I O P */
+        new KbKey[]{
+            new KbKey("Q",20,1), new KbKey("W",21,1), new KbKey("E",51,1), new KbKey("R",43,1),
+            new KbKey("T",22,1), new KbKey("Y",28,1), new KbKey("U",74,1), new KbKey("I",23,1),
+            new KbKey("O",24,1), new KbKey("P",73,1)
+        },
+        /* Row 1: A S D F G H J K L \n */
+        new KbKey[]{
+            new KbKey("A",25,1), new KbKey("S",44,1), new KbKey("D",48,1), new KbKey("F",53,1),
+            new KbKey("G",45,1), new KbKey("H",46,1), new KbKey("J",49,1), new KbKey("K",71,1),
+            new KbKey("L",72,1), new KbKey("\u21B2",42,1.3f,true) /* Delete */
+        },
+        /* Row 2: Z X C V B N M , . */
+        new KbKey[]{
+            new KbKey("Z",26,1), new KbKey("X",27,1), new KbKey("C",29,1), new KbKey("V",50,1),
+            new KbKey("B",52,1), new KbKey("N",30,1), new KbKey("M",31,1),
+            new KbKey(",",32,1), new KbKey(".",33,1)
+        },
+        /* Row 3: Shift Ctrl Alt Space Enter */
+        new KbKey[]{
+            new KbKey("\u21E7",0,1.5f,true), /* Shift */
+            new KbKey("Ctrl",1,1.2f,true),
+            new KbKey("Alt",2,1.2f,true),
+            new KbKey("Space",34,4f),
+            new KbKey("\u23CE",13,1.5f,true) /* Enter */
+        }
+    };
+
+    private RectF[][] mKbHitRects = null; /* lazily created on draw */
+
+    private void drawKeyboard(Canvas c, int top, int gridH) {
+        float cellW = mW;
+        float pad = 4;
+        float totalPad = pad * 2;
+        float usableW = cellW - totalPad;
+
+        /* Calculate rows sizes */
+        int rows = KB_ROWS.length;
+        float rowH = Math.min(52f, (gridH - pad * (rows + 1)) / rows);
+        float ky0 = top + pad;
+        if (mKbHitRects == null || mKbHitRects.length != rows) {
+            mKbHitRects = new RectF[rows][];
+        }
+
+        for (int ri = 0; ri < rows; ri++) {
+            KbKey[] row = KB_ROWS[ri];
+            float totalW = 0;
+            for (KbKey k : row) totalW += k.w;
+            float kx0 = pad;
+            float ky = ky0 + ri * (rowH + pad);
+
+            if (mKbHitRects[ri] == null || mKbHitRects[ri].length != row.length) {
+                mKbHitRects[ri] = new RectF[row.length];
+            }
+
+            for (int ki = 0; ki < row.length; ki++) {
+                KbKey k = row[ki];
+                float kw = (usableW * k.w / totalW);
+                RectF kr = new RectF(kx0, ky, kx0 + kw, ky + rowH);
+
+                /* Draw key */
+                mPaint.setColor(mBtnBg);
+                c.drawRoundRect(kr, 8, 8, mPaint);
+                mBorderPaint.setColor(mBtnBorder);
+                mBorderPaint.setStrokeWidth(1);
+                c.drawRoundRect(kr, 8, 8, mBorderPaint);
+
+                /* Label */
+                mPaint.setColor(k.isSpecial ? 0xFFB388FF : mBtnTxt);
+                float sz = Math.min(20f, rowH * 0.45f);
+                if (k.isSpecial && k.label.length() > 3) sz *= 0.85f;
+                mPaint.setTextSize(sz);
+                Paint.FontMetrics fm = mPaint.getFontMetrics();
+                float lx = (kr.left + kr.right) / 2f;
+                float ly = (kr.top + kr.bottom) / 2f + (fm.bottom - fm.top) / 2f - fm.bottom;
+
+                /* Shift highlight */
+                if (k.ordinal == 0 && mShiftActive) {
+                    mPaint.setColor(mToggleOnBg);
+                    c.drawRoundRect(kr, 8, 8, mPaint);
+                    mPaint.setColor(0xFFA5D6A7);
+                }
+
+                c.drawText(k.label, lx, ly, mPaint);
+
+                mKbHitRects[ri][ki] = kr;
+                kx0 += kw + pad;
+            }
+        }
+    }
+
+    /* ════════════════════════════════════════
+     * NUMPAD TAB
+     * ════════════════════════════════════════ */
+
+    private static final String[] NP_LABELS = {
+        "7","8","9","/",
+        "4","5","6","*",
+        "1","2","3","-",
+        "0",".","Ent","+"
+    };
+    /* ordinals for numpad keys — use Num_* where available, regular keys for 6-9 */
+    private static final int[] NP_ORDS = {
+        68,69,70,63,  /* 7, 8, 9, / */
+        58,59,67,62,  /* 4, 5, 6, * */
+        55,56,57,61,  /* 1, 2, 3, - */
+        54,64,65,60   /* 0, ., Ent, + */
+    };
+    private RectF[] mNpHitRects = null;
+
+    private void drawNumPad(Canvas c, int top, int gridH) {
+        int cols = 4;
+        int rows = 4;
+        float cellW = (float) mW / cols;
+        float cellH = Math.min(64f, (gridH - 10f) / rows);
+        float startY = top + (gridH - rows * cellH) / 2f;
+
+        if (mNpHitRects == null) mNpHitRects = new RectF[NP_LABELS.length];
+
+        for (int i = 0; i < NP_LABELS.length; i++) {
+            int r = i / cols, col = i % cols;
+            RectF kr = new RectF(col * cellW + 5, startY + r * cellH + 5,
+                                  (col + 1) * cellW - 5, startY + (r + 1) * cellH - 5);
+            mNpHitRects[i] = kr;
+
+            boolean isOp = NP_LABELS[i].equals("/") || NP_LABELS[i].equals("*") ||
+                           NP_LABELS[i].equals("-") || NP_LABELS[i].equals("+");
+            mPaint.setColor(isOp ? 0xFF3D3D6C : mBtnBg);
+            c.drawRoundRect(kr, mRadius, mRadius, mPaint);
+            mBorderPaint.setColor(mBtnBorder);
+            mBorderPaint.setStrokeWidth(1);
+            c.drawRoundRect(kr, mRadius, mRadius, mBorderPaint);
+
+            mPaint.setColor(isOp ? 0xFFB388FF : mBtnTxt);
+            float sz = Math.min(26f, cellH * 0.4f);
+            mPaint.setTextSize(sz);
+            Paint.FontMetrics fm = mPaint.getFontMetrics();
+            float lx = (kr.left + kr.right) / 2f;
+            float ly = (kr.top + kr.bottom) / 2f + (fm.bottom - fm.top) / 2f - fm.bottom;
+            c.drawText(NP_LABELS[i], lx, ly, mPaint);
+        }
+    }
+
+    /* ════════════════════════════════════════
+     * TOUCH HANDLING
+     * ════════════════════════════════════════ */
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
@@ -238,48 +490,45 @@ public class OblSettingFragment extends View {
         switch (event.getAction()) {
             case MotionEvent.ACTION_DOWN: {
                 mLastTouchY = y; mIsDragging = false;
-                if (mCloseRect != null && mCloseRect.contains((int) x, (int) y)) {
-                    if (mListener != null) { clearAllToggles(); mListener.closeFragment(); }
+
+                /* Tab bar */
+                if (mShortcutsTabRect != null && mShortcutsTabRect.contains((int)x, (int)y)) {
+                    if (mCurrentTab != Tab.SHORTCUTS) { mCurrentTab = Tab.SHORTCUTS; invalidate(); }
                     return true;
                 }
-                if (mDelRect != null && mDelRect.contains((int) x, (int) y)) {
-                    mDeleteMode = !mDeleteMode; invalidate(); return true;
-                }
-                if (mMoveRect != null && mMoveRect.contains((int) x, (int) y)) {
-                    if (mListener != null) mListener.enterKey(new int[]{10000});
+                if (mKeyboardTabRect != null && mKeyboardTabRect.contains((int)x, (int)y)) {
+                    if (mCurrentTab != Tab.KEYBOARD) { mCurrentTab = Tab.KEYBOARD; invalidate(); }
                     return true;
                 }
-                int hitIdx = hitTest(x, y);
-                if (hitIdx >= 0) {
-                    if (mDeleteMode) {
-                        deleteShortcut(hitIdx);
-                    } else {
-                        mPressedIdx = hitIdx;
-                        mPressTime = System.currentTimeMillis();
-                        invalidate();
-                        performHapticFeedback(0);
-                        executeShortcut(hitIdx);
-                        postDelayed(() -> { mPressedIdx = -1; invalidate(); }, 80);
-                    }
+                if (mNumPadTabRect != null && mNumPadTabRect.contains((int)x, (int)y)) {
+                    if (mCurrentTab != Tab.NUMPAD) { mCurrentTab = Tab.NUMPAD; invalidate(); }
                     return true;
                 }
-                if (hitIdx == -99) {
-                    mPressedIdx = -2;
-                    invalidate();
-                    startAddShortcut();
+
+                /* Settings gear */
+                if (mSettingsRect != null && mSettingsRect.contains((int)x, (int)y)) {
+                    showSettings();
                     return true;
+                }
+
+                switch (mCurrentTab) {
+                    case SHORTCUTS: return onShortcutsTouch(x, y);
+                    case KEYBOARD: return onKeyboardTouch(x, y);
+                    case NUMPAD: return onNumPadTouch(x, y);
                 }
                 break;
             }
             case MotionEvent.ACTION_MOVE: {
-                float dy = y - mLastTouchY;
-                if (Math.abs(dy) > 10f) mIsDragging = true;
-                if (mIsDragging) {
-                    mScrollY -= (int) dy;
-                    if (mScrollY < 0) mScrollY = 0;
-                    if (mScrollY > mMaxScrollY) mScrollY = mMaxScrollY;
-                    mLastTouchY = y;
-                    invalidate();
+                if (mCurrentTab == Tab.SHORTCUTS) {
+                    float dy = y - mLastTouchY;
+                    if (Math.abs(dy) > 10f) mIsDragging = true;
+                    if (mIsDragging) {
+                        mScrollY -= (int) dy;
+                        if (mScrollY < 0) mScrollY = 0;
+                        if (mScrollY > mMaxScrollY) mScrollY = mMaxScrollY;
+                        mLastTouchY = y;
+                        invalidate();
+                    }
                 }
                 break;
             }
@@ -290,6 +539,91 @@ public class OblSettingFragment extends View {
         }
         return true;
     }
+
+    /* ─── Shortcuts touch ─── */
+
+    private boolean onShortcutsTouch(float x, float y) {
+        if (mCloseRect != null && mCloseRect.contains((int) x, (int) y)) {
+            if (mListener != null) { clearAllToggles(); mListener.closeFragment(); }
+            return true;
+        }
+        if (mDelRect != null && mDelRect.contains((int)x, (int)y)) {
+            mDeleteMode = !mDeleteMode; invalidate(); return true;
+        }
+        int hitIdx = hitTest(x, y);
+        if (hitIdx >= 0) {
+            if (mDeleteMode) {
+                deleteShortcut(hitIdx);
+            } else {
+                mPressedIdx = hitIdx; mPressTime = System.currentTimeMillis(); invalidate();
+                performHapticFeedback(0);
+                executeShortcut(hitIdx);
+                postDelayed(() -> { mPressedIdx = -1; invalidate(); }, 80);
+            }
+            return true;
+        }
+        if (hitIdx == -99) {
+            mPressedIdx = -2; invalidate();
+            startAddShortcut();
+            return true;
+        }
+        return false;
+    }
+
+    /* ─── Keyboard touch ─── */
+
+    private boolean onKeyboardTouch(float x, float y) {
+        if (mKbHitRects == null) return false;
+        for (int ri = 0; ri < mKbHitRects.length; ri++) {
+            if (mKbHitRects[ri] == null) continue;
+            for (int ki = 0; ki < mKbHitRects[ri].length; ki++) {
+                RectF kr = mKbHitRects[ri][ki];
+                if (kr != null && kr.contains(x, y)) {
+                    KbKey k = KB_ROWS[ri][ki];
+                    performHapticFeedback(0);
+
+                    if (k.ordinal == 0) {
+                        /* Shift toggle */
+                        mShiftActive = !mShiftActive;
+                        invalidate();
+                    } else if (k.ordinal == 1) {
+                        /* Ctrl toggle */
+                        toggleModifier(1);
+                    } else if (k.ordinal == 2) {
+                        /* Alt toggle */
+                        toggleModifier(2);
+                    } else {
+                        /* Send key */
+                        if (mListener != null) {
+                            /* If shift active, handle uppercase */
+                            int[] keys = {k.ordinal};
+                            mListener.enterKey(keys);
+                        }
+                    }
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /* ─── Numpad touch ─── */
+
+    private boolean onNumPadTouch(float x, float y) {
+        if (mNpHitRects == null) return false;
+        for (int i = 0; i < mNpHitRects.length; i++) {
+            if (mNpHitRects[i] != null && mNpHitRects[i].contains(x, y)) {
+                performHapticFeedback(0);
+                if (mListener != null) {
+                    mListener.enterKey(new int[]{NP_ORDS[i]});
+                }
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /* ─── Hit test for shortcuts ─── */
 
     private int hitTest(float x, float y) {
         if (mCols <= 0) return -1;
@@ -310,7 +644,22 @@ public class OblSettingFragment extends View {
         return -1;
     }
 
-    /* ─── Execution ─── */
+    /* ════════════════════════════════════════
+     * EXECUTION
+     * ════════════════════════════════════════ */
+
+    private void toggleModifier(int ord) {
+        /* Find if any toggle shortcut exists for this modifier */
+        for (int idx = 0; idx < mShortcuts.size(); idx++) {
+            ShortcutItem sc = mShortcuts.get(idx);
+            if (sc.toggleMode && sc.keyOrdinals.size() == 1 && sc.keyOrdinals.get(0) == ord) {
+                executeShortcut(idx);
+                return;
+            }
+        }
+        /* No toggle shortcut found — send a normal press */
+        if (mListener != null) mListener.enterKey(new int[]{ord});
+    }
 
     private void executeShortcut(int index) {
         if (index < 0 || index >= mShortcuts.size() || mListener == null) return;
@@ -322,18 +671,34 @@ public class OblSettingFragment extends View {
             else actionKeys.add(ord);
         }
 
-        if (sc.toggleMode && mods.size() > 0 && actionKeys.isEmpty()) {
+        if (sc.toggleMode) {
+            /* Toggle mode: press on tap, release on next tap (works for ANY combo) */
             if (mToggleActive.contains(index)) {
-                for (int m : mods) mListener.enterKeyOff(new int[]{m});
+                /* Release all */
+                for (int ord : sc.keyOrdinals) mListener.enterKeyOff(new int[]{ord});
                 mToggleActive.remove(index);
             } else {
-                for (int m : mods) mListener.enterKeyOn(new int[]{m});
+                /* Press all */
+                for (int ord : sc.keyOrdinals) mListener.enterKeyOn(new int[]{ord});
                 mToggleActive.add(index);
             }
         } else {
-            for (int m : mods) mListener.enterKeyOn(new int[]{m});
-            for (int k : actionKeys) mListener.enterKey(new int[]{k});
-            for (int m : mods) mListener.enterKeyOff(new int[]{m});
+            /* Normal chord */
+            if (mods.size() > 0) {
+                int[] modArr = new int[mods.size()];
+                for (int i = 0; i < mods.size(); i++) modArr[i] = mods.get(i);
+                mListener.enterKeyOn(modArr);
+            }
+            if (actionKeys.size() > 0) {
+                int[] actArr = new int[actionKeys.size()];
+                for (int i = 0; i < actionKeys.size(); i++) actArr[i] = actionKeys.get(i);
+                mListener.enterKey(actArr);
+            }
+            if (mods.size() > 0) {
+                int[] modArr = new int[mods.size()];
+                for (int i = 0; i < mods.size(); i++) modArr[i] = mods.get(i);
+                mListener.enterKeyOff(modArr);
+            }
         }
         invalidate();
     }
@@ -359,14 +724,11 @@ public class OblSettingFragment extends View {
         for (int idx : mToggleActive) {
             if (idx < 0 || idx >= mShortcuts.size()) continue;
             ShortcutItem sc = mShortcuts.get(idx);
-            ArrayList<Integer> mods = new ArrayList<>();
-            for (int ord : sc.keyOrdinals) {
-                if (ord == 0 || ord == 1 || ord == 2) mods.add(ord);
-            }
             if (mListener != null)
-                for (int m : mods) mListener.enterKeyOff(new int[]{m});
+                for (int ord : sc.keyOrdinals) mListener.enterKeyOff(new int[]{ord});
         }
         mToggleActive.clear();
+        mShiftActive = false;
     }
 
     /* ─── Display helpers ─── */
@@ -406,7 +768,77 @@ public class OblSettingFragment extends View {
         return "?";
     }
 
-    /* ─── Add shortcut dialogs (3-slot system) ─── */
+    /* ─── Settings dialog ─── */
+
+    private void showSettings() {
+        Context ctx = getContext();
+        if (ctx == null) return;
+
+        String[] items = {"Export shortcuts", "Import shortcuts", "Cancel"};
+        new AlertDialog.Builder(ctx)
+            .setCustomTitle(makeTitle(ctx, "Grid Settings"))
+            .setItems(items, (d, w) -> {
+                if (w == 0) exportShortcuts();
+                else if (w == 1) importShortcuts();
+            })
+            .show();
+    }
+
+    private void exportShortcuts() {
+        Context ctx = getContext();
+        if (ctx == null) return;
+        try {
+            JSONArray arr = new JSONArray();
+            for (ShortcutItem s : mShortcuts) {
+                JSONObject o = new JSONObject();
+                o.put("n", s.name);
+                JSONArray ka = new JSONArray();
+                for (int k : s.keyOrdinals) ka.put(k);
+                o.put("k", ka);
+                o.put("t", s.toggleMode);
+                arr.put(o);
+            }
+            String json = arr.toString(2);
+            ClipboardManager clip = (ClipboardManager) ctx.getSystemService(Context.CLIPBOARD_SERVICE);
+            clip.setPrimaryClip(ClipData.newPlainText("obl_shortcuts", json));
+            Toast.makeText(ctx, "Exported " + mShortcuts.size() + " shortcuts to clipboard", Toast.LENGTH_SHORT).show();
+        } catch (Exception e) {
+            Toast.makeText(ctx, "Export failed: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void importShortcuts() {
+        Context ctx = getContext();
+        if (ctx == null) return;
+        try {
+            ClipboardManager clip = (ClipboardManager) ctx.getSystemService(Context.CLIPBOARD_SERVICE);
+            if (!clip.hasPrimaryClip()) { Toast.makeText(ctx, "Clipboard is empty", Toast.LENGTH_SHORT).show(); return; }
+            String json = clip.getPrimaryClip().getItemAt(0).getText().toString();
+            JSONArray arr = new JSONArray(json);
+            int imported = 0;
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject o = arr.getJSONObject(i);
+                String n = o.getString("n");
+                JSONArray ka = o.getJSONArray("k");
+                ArrayList<Integer> k = new ArrayList<>();
+                for (int j = 0; j < ka.length(); j++) k.add(ka.getInt(j));
+                boolean t = o.has("t") && o.getBoolean("t");
+                /* Skip if it matches a builtin */
+                if (isBuiltinKeySet(k)) continue;
+                mShortcuts.add(new ShortcutItem(n, k, t));
+                imported++;
+            }
+            persistShortcuts();
+            invalidate();
+            Toast.makeText(ctx, "Imported " + imported + " shortcuts", Toast.LENGTH_SHORT).show();
+        } catch (Exception e) {
+            Toast.makeText(ctx, "Import failed: invalid JSON", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    /* ════════════════════════════════════════
+     * ADD SHORTCUT DIALOG
+     * ════════════════════════════════════════ */
 
     private void startAddShortcut() {
         Context ctx = getContext();
@@ -601,7 +1033,9 @@ public class OblSettingFragment extends View {
         dlg.getWindow().getDecorView().setBackgroundColor(0xFF1A1A2E);
     }
 
-    /* ─── Persistence ─── */
+    /* ════════════════════════════════════════
+     * PERSISTENCE
+     * ════════════════════════════════════════ */
 
     private static final int[][] BUILTIN_KEYS = {
         {10004}, {10005}, {10006}, {10001}, {0}, {1}, {2}
@@ -623,6 +1057,7 @@ public class OblSettingFragment extends View {
     private void loadShortcuts() {
         mShortcuts.clear();
         mToggleActive.clear();
+        /* Load saved shortcuts from SharedPreferences */
         try {
             Context ctx = getContext();
             if (ctx == null) return;
@@ -635,12 +1070,13 @@ public class OblSettingFragment extends View {
                 JSONArray ka = o.getJSONArray("k");
                 ArrayList<Integer> k = new ArrayList<>();
                 for (int j = 0; j < ka.length(); j++) k.add(ka.getInt(j));
-                /* Skip if this matches a built-in (prevents duplication from old saves). */
                 if (isBuiltinKeySet(k)) continue;
                 boolean t = o.has("t") && o.getBoolean("t");
                 mShortcuts.add(new ShortcutItem(n, k, t));
             }
         } catch (Exception e) { Log.e(TAG, "load", e); }
+        /* Add builtins FIRST so saved shortcuts always appear AFTER them (fix:
+         * new shortcuts that were last before save appear above defaults after restart). */
         addBuiltin("\u21A9 Undo", new int[]{10004});
         addBuiltin("\u21AA Redo", new int[]{10005});
         addBuiltin("Scroll \u21C5", new int[]{10006});
@@ -653,7 +1089,7 @@ public class OblSettingFragment extends View {
     private void addBuiltin(String name, int[] ords) {
         ArrayList<Integer> k = new ArrayList<>();
         for (int o : ords) k.add(o);
-        mShortcuts.add(new ShortcutItem(name, k, false, true));
+        mShortcuts.add(0, new ShortcutItem(name, k, false, true));
     }
 
     private void persistShortcuts() {
