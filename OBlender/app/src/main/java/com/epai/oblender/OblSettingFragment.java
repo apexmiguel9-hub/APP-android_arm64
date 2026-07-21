@@ -1026,126 +1026,297 @@ public class OblSettingFragment extends View {
             .show();
     }
 
-    /* ─── Color picker for shortcuts ─── */
+    /* ─── HSV Color picker ─── */
 
-    private void showShortcutColorPicker(final Context ctx, final int[] result, final TextView preview) {
+    private void showHsvColorPicker(final Context ctx, final String label,
+                                     final int initialColor, final ColorCallback callback) {
         LinearLayout layout = new LinearLayout(ctx);
         layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setPadding(16, 8, 16, 8);
-        LinearLayout row = null;
-        int cols = 4;
-        for (int i = 0; i < COLOR_PRESETS.length; i++) {
-            if (i % cols == 0) { row = new LinearLayout(ctx); row.setOrientation(LinearLayout.HORIZONTAL); row.setGravity(Gravity.CENTER); layout.addView(row); }
-            final int color = COLOR_PRESETS[i];
-            View swatch = new View(ctx);
-            swatch.setBackgroundColor(color);
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, 50, 1);
-            lp.setMargins(3, 3, 3, 3);
-            swatch.setLayoutParams(lp);
-            swatch.setClickable(true);
-            swatch.setOnClickListener(v -> {
-                result[0] = color;
-                preview.setBackgroundColor(color);
-                preview.setText("");
-                preview.setTextColor(0xFFE8E8F0);
+        layout.setPadding(12, 8, 12, 8);
+
+        /* HSV picker View */
+        final int pickerSize = Math.min(280, (int)(getResources().getDisplayMetrics().widthPixels * 0.7f));
+        final HsvPickerView picker = new HsvPickerView(ctx, initialColor, pickerSize);
+        layout.addView(picker);
+
+        /* Preview + hex row */
+        LinearLayout previewRow = new LinearLayout(ctx);
+        previewRow.setOrientation(LinearLayout.HORIZONTAL);
+        previewRow.setPadding(0, 6, 0, 2);
+        final View previewSwatch = new View(ctx);
+        previewSwatch.setBackgroundColor(initialColor);
+        previewSwatch.setLayoutParams(new LinearLayout.LayoutParams(50, 50));
+        previewRow.addView(previewSwatch);
+        final EditText hexInput = new EditText(ctx);
+        hexInput.setText(String.format("%08X", initialColor));
+        hexInput.setTextColor(0xFFE8E8F0);
+        hexInput.setHintTextColor(0xFF666688);
+        hexInput.setBackgroundColor(0xFF2D2D50);
+        hexInput.setPadding(8, 6, 8, 6);
+        hexInput.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        previewRow.addView(hexInput);
+        layout.addView(previewRow);
+
+        /* RGB inputs */
+        LinearLayout rgbRow = new LinearLayout(ctx);
+        rgbRow.setOrientation(LinearLayout.HORIZONTAL);
+        int[] rgb = { (initialColor >> 16) & 0xFF, (initialColor >> 8) & 0xFF, initialColor & 0xFF };
+        String[] rgbLabels = {"R", "G", "B"};
+        final EditText[] rgbInputs = new EditText[3];
+        for (int i = 0; i < 3; i++) {
+            final int fi = i;
+            TextView l = new TextView(ctx);
+            l.setText(rgbLabels[i]);
+            l.setTextColor(0xFFB388FF);
+            l.setTextSize(13);
+            l.setPadding(4, 6, 2, 6);
+            rgbRow.addView(l);
+            EditText et = new EditText(ctx);
+            et.setText(String.valueOf(rgb[i]));
+            et.setTextColor(0xFFE8E8F0);
+            et.setBackgroundColor(0xFF2D2D50);
+            et.setGravity(Gravity.CENTER);
+            et.setPadding(4, 4, 4, 4);
+            et.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+            final EditText inputRef = et;
+            et.setOnEditorActionListener((v, actionId, event) -> {
+                try {
+                    int val = Integer.parseInt(inputRef.getText().toString().trim());
+                    if (val < 0) val = 0; if (val > 255) val = 255;
+                    int nc = (fi == 0 ? (val << 16) | (initialColor & 0xFF00FFFF) :
+                              fi == 1 ? (val << 8) | (initialColor & 0xFFFF00FF) :
+                              val | (initialColor & 0xFFFFFF00));
+                    picker.setColor(nc);
+                    updateColorDisplay(nc, picker, previewSwatch, hexInput, rgbInputs);
+                } catch (Exception e) {}
+                return false;
             });
-            row.addView(swatch);
+            rgbRow.addView(et);
+            rgbInputs[i] = et;
         }
-        /* Clear color option */
+        layout.addView(rgbRow);
+
+        /* Preset row (small swatches) */
+        LinearLayout presetRow = new LinearLayout(ctx);
+        presetRow.setOrientation(LinearLayout.HORIZONTAL);
+        presetRow.setPadding(0, 6, 0, 0);
+        int[] presets = {0xFFFF0000, 0xFFFFA500, 0xFFFFFF00, 0xFF00FF00, 0xFF0000FF, 0xFF800080};
+        for (int pc : presets) {
+            View sw = new View(ctx);
+            sw.setBackgroundColor(pc);
+            sw.setLayoutParams(new LinearLayout.LayoutParams(0, 36, 1));
+            sw.setPadding(2, 2, 2, 2);
+            final int fp = pc;
+            sw.setOnClickListener(v -> {
+                picker.setColor(fp);
+                updateColorDisplay(fp, picker, previewSwatch, hexInput, rgbInputs);
+            });
+            presetRow.addView(sw);
+        }
+        /* Clear button */
         TextView clearBtn = new TextView(ctx);
-        clearBtn.setText("Clear (use default)");
+        clearBtn.setText(" \u2716 ");
         clearBtn.setTextColor(0xFF8888AA);
-        clearBtn.setTextSize(14);
-        clearBtn.setPadding(0, 16, 0, 8);
-        clearBtn.setClickable(true);
+        clearBtn.setTextSize(16);
+        clearBtn.setGravity(Gravity.CENTER);
+        clearBtn.setPadding(6, 6, 6, 6);
         clearBtn.setOnClickListener(v -> {
-            result[0] = 0;
-            preview.setBackgroundColor(0xFF2D2D50);
-            preview.setText("default");
-            preview.setTextColor(0xFF8888AA);
+            int nc = 0;
+            callback.onColor(nc);
+            previewSwatch.setBackgroundColor(0xFF2D2D50);
         });
-        layout.addView(clearBtn);
+        presetRow.addView(clearBtn);
+        layout.addView(presetRow);
+
+        /* Update callback from picker */
+        picker.mCallback = (nc) -> updateColorDisplay(nc, picker, previewSwatch, hexInput, rgbInputs);
 
         new AlertDialog.Builder(ctx)
-            .setCustomTitle(makeTitle(ctx, "Pick key color"))
+            .setCustomTitle(makeTitle(ctx, label))
             .setView(layout)
-            .setPositiveButton("OK", null)
+            .setPositiveButton("OK", (d, w) -> callback.onColor(picker.getColor()))
+            .setNegativeButton("Cancel", null)
             .show();
     }
 
-    /* ─── Color picker for grid colors ─── */
+    private void updateColorDisplay(int nc, HsvPickerView picker, View swatch, EditText hex, EditText[] rgb) {
+        swatch.setBackgroundColor(nc);
+        hex.setText(String.format("%08X", nc));
+        if (rgb != null) {
+            rgb[0].setText(String.valueOf((nc >> 16) & 0xFF));
+            rgb[1].setText(String.valueOf((nc >> 8) & 0xFF));
+            rgb[2].setText(String.valueOf(nc & 0xFF));
+        }
+    }
 
-    private static final int[] COLOR_PRESETS = {
-        0xFF1A1A2E, 0xFF2D2D50, 0xFF3D3D6C, 0xFF4A4A7A,
-        0xFF1B5E20, 0xFF2ECC71, 0xFF27AE60, 0xFF4CAF50,
-        0xFF0F0F23, 0xFF7A2A2A, 0xFFB71C1C, 0xFFFF1744,
-        0xFF1A237E, 0xFF283593, 0xFF7C4DFF, 0xFFB388FF,
-        0xFFE8E8F0, 0xFF9999BB, 0xFF666688, 0xFF222244,
-        0xFFF5F5F5, 0xFF9E9E9E, 0xFF424242, 0xFF000000
-    };
+    private interface ColorCallback { void onColor(int color); }
+
+    /* ─── HSV Picker View ─── */
+
+    private static class HsvPickerView extends View {
+        private int mSize;
+        private float mHue = 0, mSat = 1, mVal = 1;
+        private int mColor = 0xFFFF0000;
+        private RectF mSvRect, mHueRect;
+        private Bitmap mSvBmp, mHueBmp;
+        private Paint mBmpPaint, mBorderPaint;
+        private boolean mDragSv = false, mDragHue = false;
+        private ColorCallback mCallback;
+
+        HsvPickerView(Context ctx, int initialColor, int size) {
+            super(ctx);
+            mSize = size;
+            mBmpPaint = new Paint(Paint.FILTER_BITMAP_FLAG);
+            mBorderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            mBorderPaint.setStyle(Paint.Style.STROKE);
+            mBorderPaint.setColor(0xFF666688);
+            mBorderPaint.setStrokeWidth(1);
+            setColor(initialColor);
+        }
+
+        void setColor(int c) {
+            mColor = c;
+            int r = (c >> 16) & 0xFF, g = (c >> 8) & 0xFF, b = c & 0xFF;
+            float[] hsv = new float[3];
+            android.graphics.Color.RGBToHSV(r, g, b, hsv);
+            mHue = hsv[0]; mSat = hsv[1]; mVal = hsv[2];
+            invalidate();
+        }
+
+        int getColor() { return mColor; }
+
+        @Override
+        protected void onSizeChanged(int w, int h, int oldW, int oldH) {
+            float pad = 8;
+            float svSize = mSize;
+            float hueH = 28;
+            mSvRect = new RectF(pad, pad, pad + svSize, pad + svSize);
+            mHueRect = new RectF(pad, pad + svSize + 8, pad + svSize, pad + svSize + 8 + hueH);
+            buildSvBitmap();
+            buildHueBitmap();
+        }
+
+        private void buildSvBitmap() {
+            int res = 64;
+            mSvBmp = Bitmap.createBitmap(res, res, Bitmap.Config.ARGB_8888);
+            for (int y = 0; y < res; y++) {
+                for (int x = 0; x < res; x++) {
+                    float sat = x / (float)(res - 1);
+                    float val = 1f - y / (float)(res - 1);
+                    mSvBmp.setPixel(x, y, android.graphics.Color.HSVToColor(new float[]{mHue, sat, val}));
+                }
+            }
+        }
+
+        private void buildHueBitmap() {
+            int w = (int) mHueRect.width();
+            int h = (int) mHueRect.height();
+            if (w <= 0 || h <= 0) return;
+            mHueBmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+            for (int x = 0; x < w; x++) {
+                float hue = 360f * x / (float)(w - 1);
+                int col = android.graphics.Color.HSVToColor(new float[]{hue, 1f, 1f});
+                for (int y = 0; y < h; y++) mHueBmp.setPixel(x, y, col);
+            }
+        }
+
+        @Override
+        protected void onDraw(Canvas c) {
+            if (mSvBmp != null && mSvRect != null) {
+                c.drawBitmap(mSvBmp, null, mSvRect, mBmpPaint);
+                c.drawRoundRect(mSvRect, 4, 4, mBorderPaint);
+                /* Indicator dot */
+                float dx = mSvRect.left + mSat * mSvRect.width();
+                float dy = mSvRect.top + (1f - mVal) * mSvRect.height();
+                mBorderPaint.setColor(0xFFFFFFFF);
+                mBorderPaint.setStrokeWidth(2);
+                c.drawCircle(dx, dy, 6, mBorderPaint);
+                mBorderPaint.setColor(0xFF666688);
+                mBorderPaint.setStrokeWidth(1);
+            }
+            if (mHueBmp != null && mHueRect != null) {
+                c.drawBitmap(mHueBmp, null, mHueRect, mBmpPaint);
+                c.drawRoundRect(mHueRect, 4, 4, mBorderPaint);
+                /* Indicator */
+                float hx = mHueRect.left + (mHue / 360f) * mHueRect.width();
+                mBorderPaint.setColor(0xFFFFFFFF);
+                mBorderPaint.setStrokeWidth(3);
+                c.drawRect(hx - 3, mHueRect.top - 2, hx + 3, mHueRect.bottom + 2, mBorderPaint);
+                mBorderPaint.setColor(0xFF666688);
+                mBorderPaint.setStrokeWidth(1);
+            }
+        }
+
+        @Override
+        public boolean onTouchEvent(MotionEvent e) {
+            float x = e.getX(), y = e.getY();
+            switch (e.getAction()) {
+                case MotionEvent.ACTION_DOWN: {
+                    if (mSvRect != null && mSvRect.contains(x, y)) { mDragSv = true; pickSv(x, y); return true; }
+                    if (mHueRect != null && mHueRect.contains(x, y)) { mDragHue = true; pickHue(x, y); return true; }
+                    break;
+                }
+                case MotionEvent.ACTION_MOVE: {
+                    if (mDragSv) { pickSv(x, y); return true; }
+                    if (mDragHue) { pickHue(x, y); return true; }
+                    break;
+                }
+                case MotionEvent.ACTION_UP: case MotionEvent.ACTION_CANCEL: {
+                    mDragSv = false; mDragHue = false; break;
+                }
+            }
+            return false;
+        }
+
+        private void pickSv(float x, float y) {
+            if (mSvRect == null) return;
+            mSat = Math.max(0, Math.min(1, (x - mSvRect.left) / mSvRect.width()));
+            mVal = Math.max(0, Math.min(1, 1f - (y - mSvRect.top) / mSvRect.height()));
+            updateColor();
+        }
+
+        private void pickHue(float x, float y) {
+            if (mHueRect == null) return;
+            mHue = Math.max(0, Math.min(360, (x - mHueRect.left) / mHueRect.width() * 360f));
+            buildSvBitmap();
+            updateColor();
+            invalidate();
+        }
+
+        private void updateColor() {
+            mColor = android.graphics.Color.HSVToColor(new float[]{mHue, mSat, mVal});
+            if (mCallback != null) mCallback.onColor(mColor);
+            invalidate();
+        }
+    }
+
+    /* ─── Shortcut color picker (wraps HSV picker) ─── */
+
+    private void showShortcutColorPicker(final Context ctx, final int[] result, final TextView preview) {
+        showHsvColorPicker(ctx, "Pick key color", result[0] != 0 ? result[0] : 0xFF2D2D50, (nc) -> {
+            if (nc == 0) {
+                result[0] = 0;
+                preview.setBackgroundColor(0xFF2D2D50);
+                preview.setText("default");
+                preview.setTextColor(0xFF8888AA);
+            } else {
+                result[0] = nc;
+                preview.setBackgroundColor(nc);
+                preview.setText("");
+                preview.setTextColor(0xFFE8E8F0);
+            }
+        });
+    }
+
+    /* ─── Grid color picker (wraps HSV picker) ─── */
 
     private void showColorPicker(final Context ctx, final String label,
                                   final int slotIdx, final int[] colorVals,
                                   final TextView[] colorPreviews) {
-        LinearLayout layout = new LinearLayout(ctx);
-        layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setPadding(16, 8, 16, 8);
-
-        /* Add a hex input for custom color + a set button */
-        final EditText hexInput = new EditText(ctx);
-        hexInput.setHint("e.g. FF1A1A2E or #1A1A2E");
-        hexInput.setText(String.format("%08X", colorVals[slotIdx]));
-        hexInput.setTextColor(0xFFE8E8F0);
-        hexInput.setHintTextColor(0xFF666688);
-        hexInput.setBackgroundColor(0xFF2D2D50);
-        hexInput.setPadding(12, 8, 12, 8);
-        layout.addView(hexInput);
-
-        /* Preset grid */
-        final int cols = 4;
-        LinearLayout row = null;
-        for (int i = 0; i < COLOR_PRESETS.length; i++) {
-            if (i % cols == 0) {
-                row = new LinearLayout(ctx);
-                row.setOrientation(LinearLayout.HORIZONTAL);
-                row.setGravity(Gravity.CENTER);
-                layout.addView(row);
-            }
-            final int color = COLOR_PRESETS[i];
-            View swatch = new View(ctx);
-            swatch.setBackgroundColor(color);
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, 50, 1);
-            lp.setMargins(3, 3, 3, 3);
-            swatch.setLayoutParams(lp);
-            swatch.setClickable(true);
-            swatch.setOnClickListener(v -> {
-                colorVals[slotIdx] = color;
-                colorPreviews[slotIdx].setBackgroundColor(color);
-                if (hexInput != null) hexInput.setText(String.format("%08X", color));
-            });
-            row.addView(swatch);
-        }
-
-        /* Custom set button */
-        Button setBtn = new Button(ctx);
-        setBtn.setText("Set custom");
-        setBtn.setBackgroundColor(0xFF7C4DFF);
-        setBtn.setTextColor(Color.WHITE);
-        setBtn.setPadding(0, 12, 0, 12);
-        setBtn.setOnClickListener(v -> {
-            int c = parseHex(hexInput.getText().toString().trim(), colorVals[slotIdx]);
-            colorVals[slotIdx] = c;
-            colorPreviews[slotIdx].setBackgroundColor(c);
+        showHsvColorPicker(ctx, label, colorVals[slotIdx], (nc) -> {
+            colorVals[slotIdx] = nc;
+            colorPreviews[slotIdx].setBackgroundColor(nc);
         });
-        layout.addView(setBtn);
-
-        ScrollView sv = new ScrollView(ctx);
-        sv.addView(layout);
-        new AlertDialog.Builder(ctx)
-            .setCustomTitle(makeTitle(ctx, label))
-            .setView(sv)
-            .setPositiveButton("OK", null)
-            .show();
     }
 
     private int parseHex(String s, int def) {
