@@ -64,7 +64,7 @@ public class OblSettingFragment extends View {
     private HashSet<Integer> mToggleActive = new HashSet<>();
     private OBLSettingFragmentListener mListener;
 
-    private Rect mCloseRect, mSettingsRect;
+    private Rect mCloseRect, mSettingsRect, mDelRect;
     private int mGridTop, mGridBot;
     private int mScrollY = 0, mMaxScrollY = 0;
     private float mLastTouchY = 0;
