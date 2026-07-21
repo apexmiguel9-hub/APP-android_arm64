@@ -48,6 +48,7 @@ import androidx.fragment.app.Fragment;
 
 import com.epai.oblfiles.InstallOBLFiles;
 import com.epai.oblender.WindowGLSurfaceView.WindowGLSurfaceViewListener;
+import com.epai.oblender.GodotLib;
 import com.epai.oblender.input.GodotEditText;
 import com.epai.oblender.input.GodotInputHandler;
 
@@ -191,6 +192,20 @@ public class OBLNativeActivity extends NativeActivity
                                 String joined = String.join(",", strings);
                                 Log.d("OBL.DIAG", "enterKeyOn sending: " + joined);
                                 oblSetValueOn(joined);
+                            }
+
+                            @Override
+                            public void backspace() {
+                                Log.d("OBL.DIAG", "backspace via GodotLib.key(KEYCODE_DEL)");
+                                GodotLib.key(KeyEvent.KEYCODE_DEL, 0, 0, true, false);
+                                GodotLib.key(KeyEvent.KEYCODE_DEL, 0, 0, false, false);
+                            }
+
+                            @Override
+                            public void enter() {
+                                Log.d("OBL.DIAG", "enter via GodotLib.key(KEYCODE_ENTER)");
+                                GodotLib.key(KeyEvent.KEYCODE_ENTER, 0, 0, true, false);
+                                GodotLib.key(KeyEvent.KEYCODE_ENTER, 0, 0, false, false);
                             }
 
                             @Override

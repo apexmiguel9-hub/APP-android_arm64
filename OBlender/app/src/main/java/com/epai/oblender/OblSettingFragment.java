@@ -347,7 +347,7 @@ public class OblSettingFragment extends View {
         new KbKey[]{
             new KbKey("A",25,1), new KbKey("S",44,1), new KbKey("D",48,1), new KbKey("F",53,1),
             new KbKey("G",45,1), new KbKey("H",46,1), new KbKey("J",49,1), new KbKey("K",71,1),
-            new KbKey("L",72,1), new KbKey("\u21B2",42,1.3f,true) /* Delete */
+            new KbKey("L",72,1), new KbKey("\u232B",42,1.3f,true) /* Backspace */
         },
         /* Row 2: Z X C V B N M , . */
         new KbKey[]{
@@ -385,6 +385,7 @@ public class OblSettingFragment extends View {
             KbKey[] row = KB_ROWS[ri];
             float totalW = 0;
             for (KbKey k : row) totalW += k.w;
+            float availW = usableW - (row.length - 1) * pad;
             float kx0 = pad;
             float ky = ky0 + ri * (rowH + pad);
 
@@ -394,7 +395,7 @@ public class OblSettingFragment extends View {
 
             for (int ki = 0; ki < row.length; ki++) {
                 KbKey k = row[ki];
-                float kw = (usableW * k.w / totalW);
+                float kw = (availW * k.w / totalW);
                 RectF kr = new RectF(kx0, ky, kx0 + kw, ky + rowH);
 
                 /* Draw key */
@@ -592,10 +593,15 @@ public class OblSettingFragment extends View {
                     } else if (k.ordinal == 2) {
                         /* Alt toggle */
                         toggleModifier(2);
+                    } else if (k.ordinal == 42) {
+                        /* Backspace via Godot input system (KEYCODE_DEL) */
+                        if (mListener != null) mListener.backspace();
+                    } else if (k.ordinal == 13) {
+                        /* Enter via Godot input system (KEYCODE_ENTER) */
+                        if (mListener != null) mListener.enter();
                     } else {
                         /* Send key */
                         if (mListener != null) {
-                            /* If shift active, handle uppercase */
                             int[] keys = {k.ordinal};
                             mListener.enterKey(keys);
                         }
@@ -1121,6 +1127,8 @@ public class OblSettingFragment extends View {
         void enterKeyOn(int keys[]);
         void enterKeyOff(int keys[]);
         void enterKey(int keys[]);
+        void backspace();
+        void enter();
         void closeFragment();
     }
 }
