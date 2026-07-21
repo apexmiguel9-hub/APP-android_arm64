@@ -15,6 +15,7 @@ import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -92,8 +93,9 @@ public class OblSettingFragment extends View {
         ArrayList<Integer> keyOrdinals;
         boolean toggleMode;
         boolean builtin;
-        ShortcutItem(String n, ArrayList<Integer> k, boolean t) { name = n; keyOrdinals = k; toggleMode = t; builtin = false; }
-        ShortcutItem(String n, ArrayList<Integer> k, boolean t, boolean b) { name = n; keyOrdinals = k; toggleMode = t; builtin = b; }
+        int customColor; /* 0 = use grid default */
+        ShortcutItem(String n, ArrayList<Integer> k, boolean t) { name = n; keyOrdinals = k; toggleMode = t; builtin = false; customColor = 0; }
+        ShortcutItem(String n, ArrayList<Integer> k, boolean t, boolean b) { name = n; keyOrdinals = k; toggleMode = t; builtin = b; customColor = 0; }
     }
 
     public OblSettingFragment(Context context) { super(context); init(); }
@@ -272,15 +274,25 @@ public class OblSettingFragment extends View {
         int bg, txtCol = mBtnTxt, borderCol = mBtnBorder;
         if (toggleActive) { bg = mToggleOnBg; borderCol = mToggleOnBorder; txtCol = 0xFFA5D6A7; }
         else if (pressed) bg = mBtnBgPress;
+        else if (sc.customColor != 0) { bg = sc.customColor; borderCol = sc.customColor; }
         else bg = mBtnBg;
 
+        /* Scale down slightly when pressed (pulse animation) */
+        float sx = 1f, sy = 1f;
+        if (pressed) { sx = 0.92f; sy = 0.92f; }
+        float cx = r.centerX(), cy = r.centerY();
+        float l = cx + (r.left - cx) * sx;
+        float t = cy + (r.top - cy) * sy;
+        float r2 = cx + (r.right - cx) * sx;
+        float b = cy + (r.bottom - cy) * sy;
+
         mPaint.setColor(0x11000000);
-        c.drawRoundRect(r.left + 2, r.top + 2, r.right + 2, r.bottom + 2, mRadius, mRadius, mPaint);
+        c.drawRoundRect(l + 2, t + 2, r2 + 2, b + 2, mRadius, mRadius, mPaint);
         mPaint.setColor(bg);
-        c.drawRoundRect(r, mRadius, mRadius, mPaint);
+        c.drawRoundRect(l, t, r2, b, mRadius, mRadius, mPaint);
         mBorderPaint.setColor(borderCol);
         mBorderPaint.setStrokeWidth(sc.toggleMode ? 2 : 1);
-        c.drawRoundRect(r, mRadius, mRadius, mBorderPaint);
+        c.drawRoundRect(l, t, r2, b, mRadius, mRadius, mBorderPaint);
 
         if (mDeleteMode) {
             mPaint.setColor(0xCCFF1744);
@@ -913,7 +925,9 @@ public class OblSettingFragment extends View {
                     for (int j = 0; j < ka.length(); j++) k.add(ka.getInt(j));
                     if (isBuiltinKeySet(k)) continue;
                     boolean t = o.optBoolean("t", false);
-                    mShortcuts.add(new ShortcutItem(n, k, t));
+                    ShortcutItem si = new ShortcutItem(n, k, t);
+                    si.customColor = o.optInt("c", 0);
+                    mShortcuts.add(si);
                     imported++;
                 }
                 persistShortcuts();
@@ -936,40 +950,49 @@ public class OblSettingFragment extends View {
         layout.setPadding(20, 10, 20, 10);
 
         final EditText nameInput = makeEditField(ctx, "Grid name", mGridName);
-        layout.addView(label(ctx, "Name"));
+        layout.addView(catLabel(ctx, "Name"));
         layout.addView(nameInput);
 
         final EditText colsInput = makeEditField(ctx, "2-6", String.valueOf(mCols));
-        layout.addView(label(ctx, "Columns (2-6)"));
+        layout.addView(catLabel(ctx, "Columns (2-6)"));
         layout.addView(colsInput);
 
         final EditText sizeInput = makeEditField(ctx, "0.5-2.0", String.valueOf(mKeySize));
-        layout.addView(label(ctx, "Key size (0.5-2.0)"));
+        layout.addView(catLabel(ctx, "Key size (0.5-2.0)"));
         layout.addView(sizeInput);
 
-        final EditText bgInput = makeEditField(ctx, "e.g. FF1A1A2E", String.format("%08X", mBg));
-        layout.addView(label(ctx, "Background (ARGB hex)"));
-        layout.addView(bgInput);
-
-        final EditText btnBgInput = makeEditField(ctx, "e.g. FF2D2D50", String.format("%08X", mBtnBg));
-        layout.addView(label(ctx, "Button bg (ARGB hex)"));
-        layout.addView(btnBgInput);
-
-        final EditText btnTxtInput = makeEditField(ctx, "e.g. FFE8E8F0", String.format("%08X", mBtnTxt));
-        layout.addView(label(ctx, "Button text (ARGB hex)"));
-        layout.addView(btnTxtInput);
-
-        final EditText borderInput = makeEditField(ctx, "e.g. FF4A4A7A", String.format("%08X", mBtnBorder));
-        layout.addView(label(ctx, "Border (ARGB hex)"));
-        layout.addView(borderInput);
-
-        final EditText headerBgInput = makeEditField(ctx, "e.g. FF0F0F23", String.format("%08X", mHeaderBg));
-        layout.addView(label(ctx, "Header bg (ARGB hex)"));
-        layout.addView(headerBgInput);
-
         final EditText radiusInput = makeEditField(ctx, "4-24", String.valueOf(mRadius));
-        layout.addView(label(ctx, "Corner radius (4-24)"));
+        layout.addView(catLabel(ctx, "Corner radius (4-24)"));
         layout.addView(radiusInput);
+
+        layout.addView(catLabel(ctx, "Colors (tap to change)"));
+
+        /* Color fields: label + colored preview that opens picker */
+        final int[] colorVals = { mBg, mBtnBg, mBtnTxt, mBtnBorder, mHeaderBg };
+        String[] colorLabels = { "Background", "Button bg", "Button text", "Border", "Header bg" };
+        final TextView[] colorPreviews = new TextView[colorVals.length];
+
+        for (int i = 0; i < colorVals.length; i++) {
+            final int fi = i;
+            LinearLayout row = new LinearLayout(ctx);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setPadding(0, 4, 0, 0);
+            TextView lbl = new TextView(ctx);
+            lbl.setText(colorLabels[i]);
+            lbl.setTextColor(0xFF8888AA);
+            lbl.setTextSize(13);
+            lbl.setPadding(0, 8, 8, 8);
+            final TextView preview = new TextView(ctx);
+            preview.setText("      ");
+            preview.setBackgroundColor(colorVals[i]);
+            preview.setPadding(16, 10, 16, 10);
+            preview.setClickable(true);
+            preview.setOnClickListener(v -> showColorPicker(ctx, colorLabels[fi], fi, colorVals, colorPreviews));
+            row.addView(lbl);
+            row.addView(preview);
+            colorPreviews[i] = preview;
+            layout.addView(row);
+        }
 
         ScrollView sv = new ScrollView(ctx);
         sv.addView(layout);
@@ -986,11 +1009,11 @@ public class OblSettingFragment extends View {
                     if (s >= 0.5f && s <= 2.0f) mKeySize = s;
                 } catch (Exception e) {}
                 mGridName = nameInput.getText().toString().trim();
-                mBg = parseHex(bgInput.getText().toString().trim(), mBg);
-                mBtnBg = parseHex(btnBgInput.getText().toString().trim(), mBtnBg);
-                mBtnTxt = parseHex(btnTxtInput.getText().toString().trim(), mBtnTxt);
-                mBtnBorder = parseHex(borderInput.getText().toString().trim(), mBtnBorder);
-                mHeaderBg = parseHex(headerBgInput.getText().toString().trim(), mHeaderBg);
+                mBg = colorVals[0];
+                mBtnBg = colorVals[1];
+                mBtnTxt = colorVals[2];
+                mBtnBorder = colorVals[3];
+                mHeaderBg = colorVals[4];
                 try {
                     int r = Integer.parseInt(radiusInput.getText().toString().trim());
                     if (r >= 4 && r <= 24) mRadius = r;
@@ -1003,6 +1026,128 @@ public class OblSettingFragment extends View {
             .show();
     }
 
+    /* ─── Color picker for shortcuts ─── */
+
+    private void showShortcutColorPicker(final Context ctx, final int[] result, final TextView preview) {
+        LinearLayout layout = new LinearLayout(ctx);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(16, 8, 16, 8);
+        LinearLayout row = null;
+        int cols = 4;
+        for (int i = 0; i < COLOR_PRESETS.length; i++) {
+            if (i % cols == 0) { row = new LinearLayout(ctx); row.setOrientation(LinearLayout.HORIZONTAL); row.setGravity(Gravity.CENTER); layout.addView(row); }
+            final int color = COLOR_PRESETS[i];
+            View swatch = new View(ctx);
+            swatch.setBackgroundColor(color);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, 50, 1);
+            lp.setMargins(3, 3, 3, 3);
+            swatch.setLayoutParams(lp);
+            swatch.setClickable(true);
+            swatch.setOnClickListener(v -> {
+                result[0] = color;
+                preview.setBackgroundColor(color);
+                preview.setText("");
+                preview.setTextColor(0xFFE8E8F0);
+            });
+            row.addView(swatch);
+        }
+        /* Clear color option */
+        TextView clearBtn = new TextView(ctx);
+        clearBtn.setText("Clear (use default)");
+        clearBtn.setTextColor(0xFF8888AA);
+        clearBtn.setTextSize(14);
+        clearBtn.setPadding(0, 16, 0, 8);
+        clearBtn.setClickable(true);
+        clearBtn.setOnClickListener(v -> {
+            result[0] = 0;
+            preview.setBackgroundColor(0xFF2D2D50);
+            preview.setText("default");
+            preview.setTextColor(0xFF8888AA);
+        });
+        layout.addView(clearBtn);
+
+        new AlertDialog.Builder(ctx)
+            .setCustomTitle(makeTitle(ctx, "Pick key color"))
+            .setView(layout)
+            .setPositiveButton("OK", null)
+            .show();
+    }
+
+    /* ─── Color picker for grid colors ─── */
+
+    private static final int[] COLOR_PRESETS = {
+        0xFF1A1A2E, 0xFF2D2D50, 0xFF3D3D6C, 0xFF4A4A7A,
+        0xFF1B5E20, 0xFF2ECC71, 0xFF27AE60, 0xFF4CAF50,
+        0xFF0F0F23, 0xFF7A2A2A, 0xFFB71C1C, 0xFFFF1744,
+        0xFF1A237E, 0xFF283593, 0xFF7C4DFF, 0xFFB388FF,
+        0xFFE8E8F0, 0xFF9999BB, 0xFF666688, 0xFF222244,
+        0xFFF5F5F5, 0xFF9E9E9E, 0xFF424242, 0xFF000000
+    };
+
+    private void showColorPicker(final Context ctx, final String label,
+                                  final int slotIdx, final int[] colorVals,
+                                  final TextView[] colorPreviews) {
+        LinearLayout layout = new LinearLayout(ctx);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(16, 8, 16, 8);
+
+        /* Add a hex input for custom color + a set button */
+        final EditText hexInput = new EditText(ctx);
+        hexInput.setHint("e.g. FF1A1A2E or #1A1A2E");
+        hexInput.setText(String.format("%08X", colorVals[slotIdx]));
+        hexInput.setTextColor(0xFFE8E8F0);
+        hexInput.setHintTextColor(0xFF666688);
+        hexInput.setBackgroundColor(0xFF2D2D50);
+        hexInput.setPadding(12, 8, 12, 8);
+        layout.addView(hexInput);
+
+        /* Preset grid */
+        final int cols = 4;
+        LinearLayout row = null;
+        for (int i = 0; i < COLOR_PRESETS.length; i++) {
+            if (i % cols == 0) {
+                row = new LinearLayout(ctx);
+                row.setOrientation(LinearLayout.HORIZONTAL);
+                row.setGravity(Gravity.CENTER);
+                layout.addView(row);
+            }
+            final int color = COLOR_PRESETS[i];
+            View swatch = new View(ctx);
+            swatch.setBackgroundColor(color);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, 50, 1);
+            lp.setMargins(3, 3, 3, 3);
+            swatch.setLayoutParams(lp);
+            swatch.setClickable(true);
+            swatch.setOnClickListener(v -> {
+                colorVals[slotIdx] = color;
+                colorPreviews[slotIdx].setBackgroundColor(color);
+                if (hexInput != null) hexInput.setText(String.format("%08X", color));
+            });
+            row.addView(swatch);
+        }
+
+        /* Custom set button */
+        Button setBtn = new Button(ctx);
+        setBtn.setText("Set custom");
+        setBtn.setBackgroundColor(0xFF7C4DFF);
+        setBtn.setTextColor(Color.WHITE);
+        setBtn.setPadding(0, 12, 0, 12);
+        setBtn.setOnClickListener(v -> {
+            int c = parseHex(hexInput.getText().toString().trim(), colorVals[slotIdx]);
+            colorVals[slotIdx] = c;
+            colorPreviews[slotIdx].setBackgroundColor(c);
+        });
+        layout.addView(setBtn);
+
+        ScrollView sv = new ScrollView(ctx);
+        sv.addView(layout);
+        new AlertDialog.Builder(ctx)
+            .setCustomTitle(makeTitle(ctx, label))
+            .setView(sv)
+            .setPositiveButton("OK", null)
+            .show();
+    }
+
     private int parseHex(String s, int def) {
         try {
             if (s.startsWith("0x") || s.startsWith("0X")) s = s.substring(2);
@@ -1012,7 +1157,7 @@ public class OblSettingFragment extends View {
         } catch (Exception e) { return def; }
     }
 
-    private View label(Context ctx, String text) {
+    private View catLabel(Context ctx, String text) {
         TextView tv = new TextView(ctx);
         tv.setText(text);
         tv.setTextColor(0xFFB388FF);
@@ -1084,6 +1229,31 @@ public class OblSettingFragment extends View {
         toggleCheck.setTextColor(0xFFB388FF);
         layout.addView(toggleCheck);
 
+        /* Custom color picker row */
+        final int[] customColor = {0};
+        LinearLayout colorRow = new LinearLayout(ctx);
+        colorRow.setOrientation(LinearLayout.HORIZONTAL);
+        colorRow.setPadding(0, 8, 0, 4);
+        TextView colorLbl = new TextView(ctx);
+        colorLbl.setText("Color: ");
+        colorLbl.setTextColor(0xFF8888AA);
+        colorLbl.setTextSize(13);
+        colorLbl.setPadding(0, 8, 8, 8);
+        final TextView colorPreview = new TextView(ctx);
+        colorPreview.setText("default");
+        colorPreview.setTextColor(0xFF8888AA);
+        colorPreview.setTextSize(13);
+        colorPreview.setPadding(16, 10, 16, 10);
+        colorPreview.setBackgroundColor(0xFF2D2D50);
+        colorPreview.setClickable(true);
+        colorPreview.setOnClickListener(v -> {
+            /* Show simple color picker, store result in customColor[0] */
+            showShortcutColorPicker(ctx, customColor, colorPreview);
+        });
+        colorRow.addView(colorLbl);
+        colorRow.addView(colorPreview);
+        layout.addView(colorRow);
+
         AlertDialog.Builder b = new AlertDialog.Builder(ctx);
         b.setCustomTitle(makeTitle(ctx, "Name + keys"));
         b.setView(layout);
@@ -1102,7 +1272,9 @@ public class OblSettingFragment extends View {
                 }
                 name = sb.toString();
             }
-            mShortcuts.add(new ShortcutItem(name, keys, toggleCheck.isChecked()));
+            ShortcutItem si = new ShortcutItem(name, keys, toggleCheck.isChecked());
+            si.customColor = customColor[0];
+            mShortcuts.add(si);
             persistShortcuts(); invalidate();
         });
         b.setNegativeButton("Cancel", null);
@@ -1268,7 +1440,9 @@ public class OblSettingFragment extends View {
                 for (int j = 0; j < ka.length(); j++) k.add(ka.getInt(j));
                 if (isBuiltinKeySet(k)) continue;
                 boolean t = o.has("t") && o.getBoolean("t");
-                mShortcuts.add(new ShortcutItem(n, k, t));
+                ShortcutItem si = new ShortcutItem(n, k, t);
+                si.customColor = o.optInt("c", 0);
+                mShortcuts.add(si);
             }
         } catch (Exception e) { Log.e(TAG, "load", e); }
         /* Add builtins FIRST so saved shortcuts always appear AFTER them (fix:
@@ -1299,6 +1473,7 @@ public class OblSettingFragment extends View {
                 for (int k : s.keyOrdinals) ka.put(k);
                 o.put("k", ka);
                 o.put("t", s.toggleMode);
+                if (s.customColor != 0) o.put("c", s.customColor);
                 arr.put(o);
             }
             getContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -1402,6 +1577,7 @@ public class OblSettingFragment extends View {
                 for (int k : s.keyOrdinals) ka.put(k);
                 o.put("k", ka);
                 o.put("t", s.toggleMode);
+                if (s.customColor != 0) o.put("c", s.customColor);
                 arr.put(o);
             }
             root.put("shortcuts", arr);
