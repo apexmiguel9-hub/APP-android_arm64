@@ -804,14 +804,17 @@ public class OblSettingFragment extends View {
         if (ctx == null) return;
 
         String[] items = {"Export to file", "Import from file", "Customize appearance", "Cancel"};
-        new AlertDialog.Builder(ctx)
+        AlertDialog dlg = new AlertDialog.Builder(ctx)
             .setCustomTitle(makeTitle(ctx, "Grid Settings"))
             .setItems(items, (d, w) -> {
                 if (w == 0) showExportDialog();
                 else if (w == 1) showFilePicker();
                 else if (w == 2) showCustomizeDialog();
             })
-            .show();
+            .create();
+        dlg.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+        dlg.getWindow().getDecorView().setBackgroundColor(mBg);
+        dlg.show();
     }
 
     /* ─── Export ─── */
@@ -826,12 +829,15 @@ public class OblSettingFragment extends View {
         input.setHintTextColor(0xFF666688);
         input.setBackgroundColor(0xFF2D2D50);
         input.setPadding(12, 8, 12, 8);
-        new AlertDialog.Builder(ctx)
+        AlertDialog dlg = new AlertDialog.Builder(ctx)
             .setCustomTitle(makeTitle(ctx, "Export to file"))
             .setView(input)
             .setPositiveButton("Export", (d, w) -> exportToFile(input.getText().toString().trim()))
             .setNegativeButton("Cancel", null)
-            .show();
+            .create();
+        dlg.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+        dlg.getWindow().getDecorView().setBackgroundColor(mBg);
+        dlg.show();
     }
 
     private void exportToFile(String name) {
@@ -872,11 +878,14 @@ public class OblSettingFragment extends View {
             names[i] = files[i].getName();
             paths[i] = files[i].getAbsolutePath();
         }
-        new AlertDialog.Builder(ctx)
+        AlertDialog dlg = new AlertDialog.Builder(ctx)
             .setCustomTitle(makeTitle(ctx, "Select file to import"))
             .setItems(names, (d, w) -> importFromFile(paths[w]))
             .setNegativeButton("Cancel", null)
-            .show();
+            .create();
+        dlg.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+        dlg.getWindow().getDecorView().setBackgroundColor(mBg);
+        dlg.show();
     }
 
     private void importFromFile(String path) {
