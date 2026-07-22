@@ -53,15 +53,15 @@ jobs:
 
       - name: Get Blender CI run ID
         id: get-run
-        run: |
+         run: |
            LATEST_BLENDER_RUN="29888087782"
-          if [ -n "${{ inputs.blender_run_id }}" ]; then
-            echo "run_id=${{ inputs.blender_run_id }}" >> $GITHUB_OUTPUT
-            echo "Using specified run: ${{ inputs.blender_run_id }}"
-          else
-            echo "run_id=$LATEST_BLENDER_RUN" >> $GITHUB_OUTPUT
-            echo "Using hardcoded latest Blender run: $LATEST_BLENDER_RUN"
-          fi
+           if [ -n "${{ inputs.blender_run_id }}" ]; then
+             echo "run_id=${{ inputs.blender_run_id }}" >> $GITHUB_OUTPUT
+             echo "Using specified run: ${{ inputs.blender_run_id }}"
+           else
+             echo "run_id=$LATEST_BLENDER_RUN" >> $GITHUB_OUTPUT
+             echo "Using hardcoded latest Blender run: $LATEST_BLENDER_RUN"
+           fi
 
       - name: Download Blender static libs artifact
         uses: actions/download-artifact@v4
