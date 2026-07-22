@@ -997,7 +997,7 @@ public class OblSettingFragment extends View {
 
         ScrollView sv = new ScrollView(ctx);
         sv.addView(layout);
-        new AlertDialog.Builder(ctx)
+        AlertDialog dlg = new AlertDialog.Builder(ctx)
             .setCustomTitle(makeTitle(ctx, "Customize Appearance"))
             .setView(sv)
             .setPositiveButton("Apply", (d, w) -> {
@@ -1024,7 +1024,10 @@ public class OblSettingFragment extends View {
                 Toast.makeText(ctx, "Customization applied", Toast.LENGTH_SHORT).show();
             })
             .setNegativeButton("Cancel", null)
-            .show();
+            .create();
+        dlg.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+        dlg.getWindow().getDecorView().setBackgroundColor(mBg);
+        dlg.show();
     }
 
     /* ─── HSV Color picker ─── */
