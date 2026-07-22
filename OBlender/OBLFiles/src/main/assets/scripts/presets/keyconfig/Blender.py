@@ -68,7 +68,7 @@ class Prefs(bpy.types.KeyConfigPreferences):
             ('TOOL', "Active Tool",
              "Activate the tool for editors that support tools"),
         ),
-        default='IMMEDIATE',
+        default='TOOL',
         update=update_fn,
     )
 
