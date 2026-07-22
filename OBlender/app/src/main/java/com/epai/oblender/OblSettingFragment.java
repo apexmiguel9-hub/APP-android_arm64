@@ -1135,12 +1135,15 @@ public class OblSettingFragment extends View {
         /* Update callback from picker */
         picker.mCallback = (nc) -> updateColorDisplay(nc, picker, previewSwatch, hexInput, rgbInputs);
 
-        new AlertDialog.Builder(ctx)
+        AlertDialog dlg = new AlertDialog.Builder(ctx)
             .setCustomTitle(makeTitle(ctx, label))
             .setView(layout)
             .setPositiveButton("OK", (d, w) -> callback.onColor(picker.getColor()))
             .setNegativeButton("Cancel", null)
-            .show();
+            .create();
+        dlg.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+        dlg.getWindow().getDecorView().setBackgroundColor(mBg);
+        dlg.show();
     }
 
     private void updateColorDisplay(int nc, HsvPickerView picker, View swatch, EditText hex, EditText[] rgb) {
@@ -1573,7 +1576,7 @@ public class OblSettingFragment extends View {
         dlg.getWindow().setGravity(Gravity.CENTER);
         dlg.getWindow().setDimAmount(0.6f);
         dlg.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
-        dlg.getWindow().getDecorView().setBackgroundColor(0xFF1A1A2E);
+        dlg.getWindow().getDecorView().setBackgroundColor(mBg);
     }
 
     /* ════════════════════════════════════════
