@@ -16,6 +16,7 @@ import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
@@ -93,6 +94,7 @@ public class OblSettingFragment extends View {
 
     /* Grid drag-to-move state */
     private float mGridOffsetX = 0, mGridOffsetY = 0;
+    private int mGridBaseX = 20, mGridBaseY = 180; /* original LayoutParams.x/y */
     private boolean mDragGrid = false;
     private float mDragStartX = 0, mDragStartY = 0;
     private boolean mMoveGrid = false;
@@ -125,7 +127,14 @@ public class OblSettingFragment extends View {
         mBorderPaint.setStrokeWidth(1);
         loadCustomization();
         loadShortcuts();
-        post(() -> updateGridPosition());
+        post(() -> {
+            /* Capture base position from LayoutParams for proper WindowManager move */
+            if (getLayoutParams() instanceof WindowManager.LayoutParams) {
+                WindowManager.LayoutParams lp = (WindowManager.LayoutParams) getLayoutParams();
+                mGridBaseX = lp.x; mGridBaseY = lp.y;
+            }
+            updateGridPosition();
+        });
     }
 
     @Override
@@ -1906,12 +1915,19 @@ public class OblSettingFragment extends View {
     }
 
     void updateGridPosition() {
-        setTranslationX(mGridOffsetX);
-        setTranslationY(mGridOffsetY);
+        if (getLayoutParams() instanceof WindowManager.LayoutParams) {
+            WindowManager.LayoutParams lp = (WindowManager.LayoutParams) getLayoutParams();
+            lp.x = (int)(mGridBaseX + mGridOffsetX);
+            lp.y = (int)(mGridBaseY + mGridOffsetY);
+            try {
+                WindowManager wm = (WindowManager) getContext().getSystemService(Context.WINDOW_SERVICE);
+                wm.updateViewLayout(this, lp);
+            } catch (Exception e) { Log.e(TAG, "updateGridPosition", e); }
+        }
     }
 
     void setGridPosition(float x, float y) {
-        mGridOffsetX = x; mGridOffsetY = y;
+        mGridOffsetX = x - mGridBaseX; mGridOffsetY = y - mGridBaseY;
         updateGridPosition();
     }
 
