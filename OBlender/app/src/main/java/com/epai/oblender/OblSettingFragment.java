@@ -71,6 +71,7 @@ public class OblSettingFragment extends View {
     /* Shortcuts tab */
     private ArrayList<ShortcutItem> mShortcuts = new ArrayList<>();
     private HashSet<Integer> mToggleActive = new HashSet<>();
+    private HashSet<String> mDeletedBuiltins = new HashSet<>();
     private OBLSettingFragmentListener mListener;
 
     private Rect mCloseRect, mSettingsRect, mDelRect;
@@ -759,22 +760,11 @@ public class OblSettingFragment extends View {
                 mToggleActive.add(index);
             }
         } else {
-            /* Normal chord */
-            if (mods.size() > 0) {
-                int[] modArr = new int[mods.size()];
-                for (int i = 0; i < mods.size(); i++) modArr[i] = mods.get(i);
-                mListener.enterKeyOn(modArr);
-            }
-            if (actionKeys.size() > 0) {
-                int[] actArr = new int[actionKeys.size()];
-                for (int i = 0; i < actionKeys.size(); i++) actArr[i] = actionKeys.get(i);
-                mListener.enterKey(actArr);
-            }
-            if (mods.size() > 0) {
-                int[] modArr = new int[mods.size()];
-                for (int i = 0; i < mods.size(); i++) modArr[i] = mods.get(i);
-                mListener.enterKeyOff(modArr);
-            }
+            /* Normal chord: send each modifier/action individually because
+             * GHOST_SystemAndroid::setValueOn/Off only handles num==1. */
+            for (int ord : mods) mListener.enterKeyOn(new int[]{ord});
+            for (int ord : actionKeys) mListener.enterKey(new int[]{ord});
+            for (int ord : mods) mListener.enterKeyOff(new int[]{ord});
         }
         invalidate();
     }
@@ -783,11 +773,21 @@ public class OblSettingFragment extends View {
         if (index < 0 || index >= mShortcuts.size()) return;
         Context ctx = getContext();
         if (ctx == null) return;
-        String name = mShortcuts.get(index).name;
+        ShortcutItem si = mShortcuts.get(index);
+        String name = si.name;
         new AlertDialog.Builder(ctx)
             .setTitle("Delete \"" + name + "\"?")
             .setMessage("This cannot be undone.")
             .setPositiveButton("Delete", (d, w) -> {
+                /* If deleting a builtin, remember the deletion */
+                if (si.builtin) {
+                    mDeletedBuiltins.add(keySetString(si.keyOrdinals));
+                    try {
+                        String joined = String.join(",", mDeletedBuiltins);
+                        ctx.getSharedPreferences(PREFS_CUSTOM, Context.MODE_PRIVATE)
+                            .edit().putString("deletedBuiltins", joined).apply();
+                    } catch (Exception e) { Log.e(TAG, "save del", e); }
+                }
                 mShortcuts.remove(index);
                 persistShortcuts();
                 invalidate();
@@ -1668,7 +1668,22 @@ public class OblSettingFragment extends View {
     private void loadShortcuts() {
         mShortcuts.clear();
         mToggleActive.clear();
-        /* Load saved shortcuts from SharedPreferences */
+
+        /* Load deleted-builtins set */
+        mDeletedBuiltins.clear();
+        try {
+            Context ctx = getContext();
+            if (ctx != null) {
+                String del = ctx.getSharedPreferences(PREFS_CUSTOM, Context.MODE_PRIVATE)
+                    .getString("deletedBuiltins", "");
+                if (!del.isEmpty()) {
+                    for (String s : del.split(",")) mDeletedBuiltins.add(s.trim());
+                }
+            }
+        } catch (Exception e) { Log.e(TAG, "load del", e); }
+
+        /* Load saved shortcuts into a map (key set string -> ShortcutItem) */
+        java.util.HashMap<String, ShortcutItem> savedMap = new java.util.HashMap<>();
         try {
             Context ctx = getContext();
             if (ctx == null) return;
@@ -1681,28 +1696,63 @@ public class OblSettingFragment extends View {
                 JSONArray ka = o.getJSONArray("k");
                 ArrayList<Integer> k = new ArrayList<>();
                 for (int j = 0; j < ka.length(); j++) k.add(ka.getInt(j));
-                if (isBuiltinKeySet(k)) continue;
                 boolean t = o.has("t") && o.getBoolean("t");
                 ShortcutItem si = new ShortcutItem(n, k, t);
                 si.customColor = o.optInt("c", 0);
-                mShortcuts.add(si);
+                savedMap.put(keySetString(k), si);
             }
         } catch (Exception e) { Log.e(TAG, "load", e); }
-        /* Add builtins FIRST so saved shortcuts always appear AFTER them (fix:
-         * new shortcuts that were last before save appear above defaults after restart). */
-        addBuiltin("\u21A9 Undo", new int[]{10004});
-        addBuiltin("\u21AA Redo", new int[]{10005});
-        addBuiltin("Scroll \u21C5", new int[]{10006});
-        addBuiltin("Right", new int[]{10001});
-        addBuiltin("Shift", new int[]{0});
-        addBuiltin("Ctrl", new int[]{1});
-        addBuiltin("Alt", new int[]{2});
+
+        /* Define builtins: if deleted, skip; else merge saved props (toggleMode, color) */
+        addBuiltinMerge(savedMap, "\u21A9 Undo", new int[]{10004});
+        addBuiltinMerge(savedMap, "\u21AA Redo", new int[]{10005});
+        addBuiltinMerge(savedMap, "Scroll \u21C5", new int[]{10006});
+        addBuiltinMerge(savedMap, "Right", new int[]{10001});
+        addBuiltinMerge(savedMap, "Shift", new int[]{0});
+        addBuiltinMerge(savedMap, "Ctrl", new int[]{1});
+        addBuiltinMerge(savedMap, "Alt", new int[]{2});
+
+        /* Add any remaining saved shortcuts that are NOT builtin key sets */
+        for (ShortcutItem si : savedMap.values()) {
+            boolean isBuiltin = false;
+            for (int[] bk : BUILTIN_KEYS) {
+                if (si.keyOrdinals.size() == bk.length) {
+                    boolean match = true;
+                    for (int i = 0; i < bk.length; i++) {
+                        if (si.keyOrdinals.get(i) != bk[i]) { match = false; break; }
+                    }
+                    if (match) { isBuiltin = true; break; }
+                }
+            }
+            if (!isBuiltin) {
+                mShortcuts.add(si);
+            }
+        }
     }
 
-    private void addBuiltin(String name, int[] ords) {
+    private String keySetString(ArrayList<Integer> keys) {
+        StringBuilder sb = new StringBuilder();
+        for (int k : keys) { if (sb.length() > 0) sb.append(','); sb.append(k); }
+        return sb.toString();
+    }
+
+    private void addBuiltinMerge(java.util.HashMap<String, ShortcutItem> savedMap,
+                                  String name, int[] ords) {
         ArrayList<Integer> k = new ArrayList<>();
         for (int o : ords) k.add(o);
-        mShortcuts.add(0, new ShortcutItem(name, k, false, true));
+        String ks = keySetString(k);
+        /* If this builtin was deleted, skip */
+        if (mDeletedBuiltins.contains(ks)) {
+            savedMap.remove(ks); /* discard any saved shortcut too */
+            return;
+        }
+        ShortcutItem saved = savedMap.remove(ks);
+        if (saved != null) {
+            saved.builtin = true;
+            mShortcuts.add(0, saved);
+        } else {
+            mShortcuts.add(0, new ShortcutItem(name, k, false, true));
+        }
     }
 
     private void persistShortcuts() {
