@@ -36,6 +36,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.UUID;
+import com.epai.oblender.control.*;
 
 public class OblSettingFragment extends View {
     private final String TAG = "OBL_Grid";
@@ -44,7 +46,7 @@ public class OblSettingFragment extends View {
     private static final String PREFS_CUSTOM = "obl_custom";
     private static final String KB_DIR_NAME = "keyboards";
 
-    private enum Tab { SHORTCUTS, KEYBOARD, NUMPAD }
+    private enum Tab { SHORTCUTS, KEYBOARD, NUMPAD, CONTROLS }
     private Tab mCurrentTab = Tab.SHORTCUTS;
 
     /* Colors */
@@ -75,13 +77,20 @@ public class OblSettingFragment extends View {
     private HashSet<String> mDeletedBuiltins = new HashSet<>();
     private OBLSettingFragmentListener mListener;
 
+    /* Controls tab (FCL-based) */
+    private ViewManager mViewManager = new ViewManager();
+    private boolean mControlsEditMode = false;
+
     private Rect mCloseRect, mSettingsRect, mDelRect, mMoveRect;
+    private Rect mControlsEditRect, mControlsAddRect, mControlsCloseRect;
     private int mGridTop, mGridBot;
     private int mScrollY = 0, mMaxScrollY = 0;
     private float mLastTouchY = 0;
     private boolean mIsDragging = false;
     private boolean mDeleteMode = false;
     private boolean mMoveGridMode = false;
+    private int mControlsDragIndex = -1;
+    private boolean mControlsMoved = false;
     private boolean mHitButton = false;
     private int mCols = 4;
     private float mKeySize = 1.0f;
@@ -100,7 +109,7 @@ public class OblSettingFragment extends View {
     private boolean mMoveGrid = false;
 
     /* Tab bar rects for touch */
-    private Rect mShortcutsTabRect, mKeyboardTabRect, mNumPadTabRect;
+    private Rect mShortcutsTabRect, mKeyboardTabRect, mNumPadTabRect, mControlsTabRect;
 
     private static class ShortcutItem {
         String name;
@@ -127,6 +136,12 @@ public class OblSettingFragment extends View {
         mBorderPaint.setStrokeWidth(1);
         loadCustomization();
         loadShortcuts();
+        mViewManager.setKeySender(new ViewManager.KeySender() {
+            public void enterKeyOn(int[] keys) { if (mListener != null) mListener.enterKeyOn(keys); }
+            public void enterKeyOff(int[] keys) { if (mListener != null) mListener.enterKeyOff(keys); }
+            public void enterKey(int[] keys) { if (mListener != null) mListener.enterKey(keys); }
+        });
+        mViewManager.load(getContext());
         post(() -> {
             /* Capture base position from LayoutParams for proper WindowManager move */
             if (getLayoutParams() instanceof WindowManager.LayoutParams) {
@@ -168,6 +183,9 @@ public class OblSettingFragment extends View {
             case NUMPAD:
                 drawNumPad(canvas, mGridTop, mGridBot - mGridTop);
                 break;
+            case CONTROLS:
+                drawControlButtons(canvas, mGridTop, mGridBot - mGridTop);
+                break;
         }
 
         if (mPressedIdx >= 0 && System.currentTimeMillis() - mPressTime > 120) {
@@ -181,14 +199,14 @@ public class OblSettingFragment extends View {
         mPaint.setColor(mHeaderBg);
         c.drawRect(0, 0, mW, h, mPaint);
 
-        String[] tabs = { "Shortcuts", "Keyboard", "#NumPad" };
-        Tab[] values = { Tab.SHORTCUTS, Tab.KEYBOARD, Tab.NUMPAD };
-        float tw = mW / 3f;
-        mPaint.setTextSize(h * 0.42f);
+        String[] tabs = { "Shortcuts", "Keyboard", "#NumPad", "Controls" };
+        Tab[] values = { Tab.SHORTCUTS, Tab.KEYBOARD, Tab.NUMPAD, Tab.CONTROLS };
+        float tw = mW / 4f;
+        mPaint.setTextSize(h * 0.4f);
         Paint.FontMetrics fm = mPaint.getFontMetrics();
         float ty = h / 2f + (fm.bottom - fm.top) / 2f - fm.bottom;
 
-        for (int i = 0; i < 3; i++) {
+        for (int i = 0; i < 4; i++) {
             float lx = i * tw, rx = (i + 1) * tw;
             boolean active = (mCurrentTab == values[i]);
             mPaint.setColor(active ? mTabActiveBg : mTabInactiveBg);
@@ -204,9 +222,10 @@ public class OblSettingFragment extends View {
         }
 
         /* Store tab hit rects */
-        mShortcutsTabRect = new Rect(0, 0, (int)(mW / 3f), h);
-        mKeyboardTabRect = new Rect((int)(mW / 3f), 0, (int)(2 * mW / 3f), h);
-        mNumPadTabRect = new Rect((int)(2 * mW / 3f), 0, mW, h);
+        mShortcutsTabRect = new Rect(0, 0, (int)(mW / 4f), h);
+        mKeyboardTabRect = new Rect((int)(mW / 4f), 0, (int)(2 * mW / 4f), h);
+        mNumPadTabRect = new Rect((int)(2 * mW / 4f), 0, (int)(3 * mW / 4f), h);
+        mControlsTabRect = new Rect((int)(3 * mW / 4f), 0, mW, h);
     }
 
     /* ─── Header (gear + toggle badge) ─── */
@@ -225,6 +244,7 @@ public class OblSettingFragment extends View {
         switch (mCurrentTab) {
             case KEYBOARD: title = "QWERTY"; break;
             case NUMPAD: title = "Numpad"; break;
+            case CONTROLS: title = "Controls " + mViewManager.getButtons().size(); break;
             default:
                 title = "Shortcuts  " + mShortcuts.size();
                 break;
@@ -537,6 +557,105 @@ public class OblSettingFragment extends View {
     }
 
     /* ════════════════════════════════════════
+     * CONTROLS TAB (FCL-based)
+     * ════════════════════════════════════════ */
+
+    private void drawControlButtons(Canvas c, int top, int gridH) {
+        mViewManager.setScreenSize(mW, gridH);
+        /* Draw edit mode buttons first */
+        float tabBarH = mH * 0.09f;
+        float btw = mW / 4f;
+
+        /* Edit mode toggle */
+        mControlsEditRect = new Rect(0, (int)(top + gridH - tabBarH), (int)btw, (int)(top + gridH));
+        mPaint.setColor(mControlsEditMode ? mToggleOnBg : mBtnBorder);
+        c.drawRoundRect(new RectF(mControlsEditRect), 8, 8, mPaint);
+        mPaint.setColor(mControlsEditMode ? 0xFFA5D6A7 : 0xFF9999AA);
+        mPaint.setTextSize(tabBarH * 0.38f);
+        Paint.FontMetrics fm = mPaint.getFontMetrics();
+        float d = (fm.bottom - fm.top) / 2f - fm.bottom;
+        c.drawText("Edit", mControlsEditRect.exactCenterX(), mControlsEditRect.exactCenterY() + d, mPaint);
+
+        /* Add button (only in edit mode) */
+        mControlsAddRect = new Rect((int)btw, (int)(top + gridH - tabBarH), (int)(btw * 2), (int)(top + gridH));
+        mPaint.setColor(mControlsEditMode ? mAddBg : mBtnBorder);
+        c.drawRoundRect(new RectF(mControlsAddRect), 8, 8, mPaint);
+        mPaint.setColor(Color.WHITE);
+        mPaint.setTextSize(tabBarH * 0.38f);
+        c.drawText("+ Add", mControlsAddRect.exactCenterX(), mControlsAddRect.exactCenterY() + d, mPaint);
+
+        /* Close button */
+        mControlsCloseRect = new Rect((int)(btw * 3), (int)(top + gridH - tabBarH), mW, (int)(top + gridH));
+        mPaint.setColor(mCloseBg);
+        c.drawRoundRect(new RectF(mControlsCloseRect), 8, 8, mPaint);
+        mPaint.setColor(Color.WHITE);
+        c.drawText("\u2716 Close", mControlsCloseRect.exactCenterX(), mControlsCloseRect.exactCenterY() + d, mPaint);
+
+        /* Clip to grid area so buttons don't overlap the tab bar */
+        int save = c.save();
+        c.clipRect(0, top, mW, top + gridH - tabBarH);
+        c.translate(0, top);
+        mViewManager.draw(c);
+        c.restoreToCount(save);
+    }
+
+    private boolean onControlsTouch(float x, float y) {
+        /* Bottom buttons */
+        if (mControlsCloseRect != null && mControlsCloseRect.contains((int)x, (int)y)) {
+            if (mListener != null) mListener.closeFragment();
+            mHitButton = true;
+            return true;
+        }
+        if (mControlsEditRect != null && mControlsEditRect.contains((int)x, (int)y)) {
+            mControlsEditMode = !mControlsEditMode;
+            if (!mControlsEditMode) mViewManager.setShowBoundaries(false);
+            else mViewManager.setShowBoundaries(true);
+            invalidate(); mHitButton = true;
+            return true;
+        }
+        if (mControlsAddRect != null && mControlsAddRect.contains((int)x, (int)y)) {
+            mHitButton = true;
+            if (mControlsEditMode) showAddControlButton();
+            return true;
+        }
+        /* Hit test on buttons */
+        mViewManager.setScreenSize(mW, (int)(mGridBot - mGridTop));
+        float gx = x;
+        float gy = y - mGridTop;
+        int hit = mViewManager.hitTest(gx, gy);
+        if (hit >= 0) {
+            mHitButton = true;
+            if (mControlsEditMode) {
+                mControlsDragIndex = hit;
+                mControlsMoved = false;
+                mViewManager.startDrag(hit, gx, gy);
+                return true;
+            } else {
+                mViewManager.fireButton(hit);
+                return true;
+            }
+        }
+        return true;
+    }
+
+    private void showAddControlButton() {
+        ControlButtonData data = new ControlButtonData(UUID.randomUUID().toString());
+        EditViewDialog.show(getContext(), data, true, new EditViewDialog.Callback() {
+            public void onSave(ControlButtonData d) {
+                mViewManager.addButton(d);
+                mViewManager.save(getContext());
+                invalidate();
+            }
+            public void onDelete() {}
+            public void onClone(ControlButtonData d) {
+                mViewManager.addButton(d);
+                mViewManager.save(getContext());
+                invalidate();
+            }
+        });
+    }
+
+    /* ════════════════════════════════════════
      * TOUCH HANDLING
      * ════════════════════════════════════════ */
 
@@ -562,6 +681,10 @@ public class OblSettingFragment extends View {
                     if (mCurrentTab != Tab.NUMPAD) { mCurrentTab = Tab.NUMPAD; invalidate(); }
                     return true;
                 }
+                if (mControlsTabRect != null && mControlsTabRect.contains((int)x, (int)y)) {
+                    if (mCurrentTab != Tab.CONTROLS) { mCurrentTab = Tab.CONTROLS; invalidate(); }
+                    return true;
+                }
 
                 /* Settings gear */
                 if (mSettingsRect != null && mSettingsRect.contains((int)x, (int)y)) {
@@ -573,22 +696,33 @@ public class OblSettingFragment extends View {
                     case SHORTCUTS: return onShortcutsTouch(x, y);
                     case KEYBOARD: return onKeyboardTouch(x, y);
                     case NUMPAD: return onNumPadTouch(x, y);
+                    case CONTROLS: return onControlsTouch(x, y);
                 }
                 break;
             }
             case MotionEvent.ACTION_MOVE: {
                 float dx = x - mDragStartX;
                 float dy = y - mLastTouchY;
-                if (!mDragGrid && !mMoveGrid) {
+                if (mCurrentTab == Tab.CONTROLS && mControlsEditMode && mControlsDragIndex >= 0) {
+                    float cdx = Math.abs(x - mDragStartX);
+                    float cdy = Math.abs(y - mDragStartY);
+                    if (!mControlsMoved && (cdx > 15f || cdy > 15f)) {
+                        mControlsMoved = true;
+                    }
+                    if (mControlsMoved) {
+                        mViewManager.dragTo(x, y - mGridTop);
+                        invalidate();
+                    }
+                } else if (!mDragGrid && !mMoveGrid) {
                     if (mMoveGridMode && !mHitButton) {
                         mMoveGrid = true;
                     } else if (Math.abs(y - mDragStartY) > 20f || Math.abs(x - mDragStartX) > 20f) {
                         /* If touch started inside the view, decide: grid drag or shortcuts scroll */
-                        if (y < mGridTop && mCurrentTab == Tab.SHORTCUTS) {
+                        if (y < mGridTop && (mCurrentTab == Tab.SHORTCUTS || mCurrentTab == Tab.CONTROLS)) {
                             mMoveGrid = true;
-                        } else if (mCurrentTab != Tab.SHORTCUTS) {
+                        } else if (mCurrentTab != Tab.SHORTCUTS && mCurrentTab != Tab.CONTROLS) {
                             mMoveGrid = true;
-                        } else {
+                        } else if (mCurrentTab == Tab.SHORTCUTS) {
                             mDragGrid = true;
                         }
                     }
@@ -612,7 +746,34 @@ public class OblSettingFragment extends View {
                 break;
             }
             case MotionEvent.ACTION_UP: case MotionEvent.ACTION_CANCEL: {
-                mPressedIdx = -1; mIsDragging = false; invalidate(); performClick();
+                mPressedIdx = -1; mIsDragging = false;
+                if (mControlsDragIndex >= 0) {
+                    mViewManager.endDrag();
+                    if (!mControlsMoved && mControlsEditMode) {
+                        /* Tap on a control button in edit mode → open editor */
+                        ControlButtonData data = mViewManager.getButtons().get(mControlsDragIndex);
+                        EditViewDialog.show(getContext(), data, false, new EditViewDialog.Callback() {
+                            public void onSave(ControlButtonData d) {
+                                mViewManager.updateButton(data.getId(), d);
+                                mViewManager.save(getContext());
+                                invalidate();
+                            }
+                            public void onDelete() {
+                                mViewManager.removeButton(data.getId());
+                                mViewManager.save(getContext());
+                                invalidate();
+                            }
+                            public void onClone(ControlButtonData d) {
+                                mViewManager.addButton(d);
+                                mViewManager.save(getContext());
+                                invalidate();
+                            }
+                        });
+                    }
+                    mControlsDragIndex = -1;
+                    mViewManager.save(getContext());
+                }
+                invalidate(); performClick();
                 break;
             }
         }
