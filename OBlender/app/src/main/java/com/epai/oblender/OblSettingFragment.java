@@ -74,12 +74,14 @@ public class OblSettingFragment extends View {
     private HashSet<String> mDeletedBuiltins = new HashSet<>();
     private OBLSettingFragmentListener mListener;
 
-    private Rect mCloseRect, mSettingsRect, mDelRect;
+    private Rect mCloseRect, mSettingsRect, mDelRect, mMoveRect;
     private int mGridTop, mGridBot;
     private int mScrollY = 0, mMaxScrollY = 0;
     private float mLastTouchY = 0;
     private boolean mIsDragging = false;
     private boolean mDeleteMode = false;
+    private boolean mMoveGridMode = false;
+    private boolean mHitButton = false;
     private int mCols = 4;
     private float mKeySize = 1.0f;
     private String mGridName = "";
@@ -353,6 +355,14 @@ public class OblSettingFragment extends View {
         mPaint.setColor(mDeleteMode ? Color.WHITE : 0xFF9999AA);
         mPaint.setTextSize(textSize);
         c.drawText(mDeleteMode ? "\u2716 Del" : "Del", mDelRect.exactCenterX(), mDelRect.exactCenterY() + d, mPaint);
+
+        /* Move grid toggle button */
+        mMoveRect = new Rect((int) (bw * 2.1f), top, (int) (bw * 2.9f), top + h);
+        mPaint.setColor(mMoveGridMode ? mToggleOnBg : mBtnBorder);
+        c.drawRoundRect(new RectF(mMoveRect), 8, 8, mPaint);
+        mPaint.setColor(mMoveGridMode ? 0xFFA5D6A7 : 0xFF9999AA);
+        mPaint.setTextSize(textSize);
+        c.drawText("Move", mMoveRect.exactCenterX(), mMoveRect.exactCenterY() + d, mPaint);
     }
 
     /* ════════════════════════════════════════
@@ -527,7 +537,7 @@ public class OblSettingFragment extends View {
         switch (event.getAction()) {
             case MotionEvent.ACTION_DOWN: {
                 mLastTouchY = y; mIsDragging = false;
-                mDragGrid = false; mMoveGrid = false;
+                mDragGrid = false; mMoveGrid = false; mHitButton = false;
                 mDragStartX = x; mDragStartY = y;
 
                 /* Tab bar */
@@ -561,7 +571,9 @@ public class OblSettingFragment extends View {
                 float dx = x - mDragStartX;
                 float dy = y - mLastTouchY;
                 if (!mDragGrid && !mMoveGrid) {
-                    if (Math.abs(y - mDragStartY) > 20f || Math.abs(x - mDragStartX) > 20f) {
+                    if (mMoveGridMode && !mHitButton) {
+                        mMoveGrid = true;
+                    } else if (Math.abs(y - mDragStartY) > 20f || Math.abs(x - mDragStartX) > 20f) {
                         /* If touch started inside the view, decide: grid drag or shortcuts scroll */
                         if (y < mGridTop && mCurrentTab == Tab.SHORTCUTS) {
                             mMoveGrid = true;
@@ -606,10 +618,14 @@ public class OblSettingFragment extends View {
             return true;
         }
         if (mDelRect != null && mDelRect.contains((int)x, (int)y)) {
-            mDeleteMode = !mDeleteMode; invalidate(); return true;
+            mDeleteMode = !mDeleteMode; invalidate(); mHitButton = true; return true;
+        }
+        if (mMoveRect != null && mMoveRect.contains((int)x, (int)y)) {
+            mMoveGridMode = !mMoveGridMode; invalidate(); mHitButton = true; return true;
         }
         int hitIdx = hitTest(x, y);
         if (hitIdx >= 0) {
+            mHitButton = true;
             if (mDeleteMode) {
                 deleteShortcut(hitIdx);
             } else {
@@ -621,6 +637,7 @@ public class OblSettingFragment extends View {
             return true;
         }
         if (hitIdx == -99) {
+            mHitButton = true;
             mPressedIdx = -2; invalidate();
             startAddShortcut();
             return true;
@@ -975,6 +992,7 @@ public class OblSettingFragment extends View {
                 mKeySize = (float) cust.optDouble("keySize", mKeySize);
                 mGridOffsetX = (float) cust.optDouble("gridOffsetX", mGridOffsetX);
                 mGridOffsetY = (float) cust.optDouble("gridOffsetY", mGridOffsetY);
+                mMoveGridMode = cust.optBoolean("moveGridMode", mMoveGridMode);
                 mGridName = root.optString("name", mGridName);
                 saveCustomization();
             }
@@ -1801,6 +1819,7 @@ public class OblSettingFragment extends View {
             mGridName = sp.getString("gridName", "");
             mGridOffsetX = sp.getFloat("gridOffsetX", 0f);
             mGridOffsetY = sp.getFloat("gridOffsetY", 0f);
+            mMoveGridMode = sp.getBoolean("moveGridMode", false);
         } catch (Exception e) { Log.e(TAG, "loadCustomization", e); }
     }
 
@@ -1829,6 +1848,7 @@ public class OblSettingFragment extends View {
                 .putString("gridName", mGridName)
                 .putFloat("gridOffsetX", mGridOffsetX)
                 .putFloat("gridOffsetY", mGridOffsetY)
+                .putBoolean("moveGridMode", mMoveGridMode)
                 .apply();
         } catch (Exception e) { Log.e(TAG, "saveCustomization", e); }
     }
@@ -1865,6 +1885,7 @@ public class OblSettingFragment extends View {
             cust.put("keySize", mKeySize);
             cust.put("gridOffsetX", mGridOffsetX);
             cust.put("gridOffsetY", mGridOffsetY);
+            cust.put("moveGridMode", mMoveGridMode);
             root.put("customization", cust);
 
             JSONArray arr = new JSONArray();
@@ -1898,6 +1919,7 @@ public class OblSettingFragment extends View {
     void SetValue(int type, int value) {}
     int GetAsyncKeyState(int type) {
         if (type == 100) return getVisibility() == VISIBLE ? 1 : 0;
+        if (type == 101) return mMoveGridMode ? 1 : 0;
         return 0;
     }
 
