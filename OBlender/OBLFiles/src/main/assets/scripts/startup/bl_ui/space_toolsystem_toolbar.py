@@ -409,6 +409,16 @@ class _defs_view3d_select:
         )
 
     @ToolDef.from_fn
+    def toggle_select():
+        return dict(
+            idname="builtin.toggle_select",
+            label="Toggle Select",
+            icon="ops.generic.toggle_select",
+            widget=None,
+            keymap="3D View Tool: Toggle Select",
+        )
+
+    @ToolDef.from_fn
     def box():
         def draw_settings(_context, layout, tool):
             props = tool.operator_properties("view3d.select_box")
@@ -2818,6 +2828,7 @@ class VIEW3D_PT_tools_active(ToolSelectPanelHelper, Panel):
     _tools_select = (
         (
             _defs_view3d_select.select,
+            _defs_view3d_select.toggle_select,
             _defs_view3d_select.box,
             _defs_view3d_select.circle,
             _defs_view3d_select.lasso,

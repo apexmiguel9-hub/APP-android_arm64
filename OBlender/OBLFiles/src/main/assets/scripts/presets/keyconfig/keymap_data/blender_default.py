@@ -6894,6 +6894,21 @@ def km_3d_view_tool_select(params, *, fallback):
     )
 
 
+def km_3d_view_tool_toggle_select(params, *, fallback):
+    return (
+        _fallback_id("3D View Tool: Toggle Select", fallback),
+        {"space_type": 'VIEW_3D', "region_type": 'WINDOW'},
+        {"items": [
+            ("view3d.select", {"type": 'LEFTMOUSE', "value": 'PRESS'},
+             {"properties": [("deselect_all", False), ("toggle", True)]}),
+            ("view3d.select", {"type": 'LEFTMOUSE', "value": 'CLICK'},
+             {"properties": [("deselect_all", False), ("toggle", True)]}),
+            ("transform.translate", {"type": 'LEFTMOUSE', "value": 'CLICK_DRAG'},
+             {"properties": [("release_confirm", True)]}),
+        ]},
+    )
+
+
 def km_3d_view_tool_select_box(params, *, fallback):
     return (
         _fallback_id("3D View Tool: Select Box", fallback),
@@ -8303,6 +8318,7 @@ def generate_keymaps(params=None):
         km_3d_view_tool_cursor(params),
         km_3d_view_tool_text_select(params),
         *(km_3d_view_tool_select(params, fallback=fallback) for fallback in (False, True)),
+        *(km_3d_view_tool_toggle_select(params, fallback=fallback) for fallback in (False, True)),
         *(km_3d_view_tool_select_box(params, fallback=fallback) for fallback in (False, True)),
         *(km_3d_view_tool_select_circle(params, fallback=fallback) for fallback in (False, True)),
         *(km_3d_view_tool_select_lasso(params, fallback=fallback) for fallback in (False, True)),
