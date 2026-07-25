@@ -22,7 +22,7 @@ public class EditViewDialog {
     public interface Callback {
         void onSave(ControlButtonData data);
         void onDelete();
-        void onClone(ControlButtonData data);
+        void onClone(CustomControl view);
     }
 
     public static void show(Context ctx, ControlButtonData data, boolean isNew, Callback cb) {
@@ -265,7 +265,7 @@ public class EditViewDialog {
             dlg.dismiss();
         });
         cloneBtn.setOnClickListener(v -> {
-            cb.onClone(working);
+            cb.onClone((CustomControl) working);
             dlg.dismiss();
         });
 

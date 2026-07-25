@@ -28,6 +28,8 @@ public class ButtonEventData implements Cloneable {
         public void removeKeycode(int k) { if (keycodes.remove((Integer) k)) notifyChange(); }
         public void clearKeycodes() { keycodes.clear(); notifyChange(); }
 
+        public List<Integer> outputKeycodesList() { return keycodes; }
+
         public boolean hasAnyKey() {
             return !keycodes.isEmpty();
         }

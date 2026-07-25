@@ -1,4 +1,4 @@
-// Adapted from FoldCraftLauncher (FCL-Team) control editor concept, GPL-3.0
+// Adapted from FoldCraftLauncher (FCL-Team) control editor, GPL-3.0
 // https://github.com/FCL-Team/FoldCraftLauncher
 package com.epai.oblender.control;
 
@@ -10,7 +10,6 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.FrameLayout;
-
 import com.epai.oblender.OblSettingFragment;
 
 import java.util.ArrayList;
@@ -19,17 +18,16 @@ import java.util.UUID;
 
 public class ControlOverlayView extends FrameLayout {
 
-    /* Bottom bar */
     private Button editBtn, addBtn, closeBtn;
     private boolean editMode = false;
     private boolean initialized = false;
 
-    /* Content area that holds control buttons */
     private FrameLayout gridArea;
     private List<ControlButton> buttons = new ArrayList<>();
-    private ViewManager persistence;
 
     private OblSettingFragment.OBLSettingFragmentListener keyListener;
+    private GameMenuStub menu;
+    private ViewManager viewManager;
 
     private int screenW, screenH;
 
@@ -39,7 +37,6 @@ public class ControlOverlayView extends FrameLayout {
     private float dragStartX, dragStartY;
     private int windowStartX, windowStartY;
     private WindowPositionCallback windowPosCallback;
-    private boolean inLayoutUpdate = false;
 
     public interface WindowPositionCallback {
         void setPosition(int x, int y);
@@ -50,26 +47,11 @@ public class ControlOverlayView extends FrameLayout {
         super(context);
         setWillNotDraw(false);
         setBackgroundColor(0xFF1A1A2E);
-
-        persistence = new ViewManager();
-        persistence.load(context);
     }
 
-    /* Called by OBLNativeActivity */
     public void setListener(OblSettingFragment.OBLSettingFragmentListener l) {
-        setKeyListener(l);
-    }
-
-    public void setKeyListener(OblSettingFragment.OBLSettingFragmentListener l) {
         keyListener = l;
-        persistence.setKeySender(new ViewManager.KeySender() {
-            public void enterKeyOn(int[] keys) { if (keyListener != null) keyListener.enterKeyOn(keys); }
-            public void enterKeyOff(int[] keys) { if (keyListener != null) keyListener.enterKeyOff(keys); }
-            public void enterKey(int[] keys) { if (keyListener != null) keyListener.enterKey(keys); }
-        });
     }
-
-    public ViewManager getPersistence() { return persistence; }
 
     private void ensureChildren() {
         if (initialized) return;
@@ -77,7 +59,7 @@ public class ControlOverlayView extends FrameLayout {
 
         int density = (int) getResources().getDisplayMetrics().density;
 
-        /* ── Drag handle at top ── */
+        /* Drag handle */
         dragHandle = new View(getContext());
         dragHandle.setBackgroundColor(0x44000000);
         LayoutParams dlp = new LayoutParams(LayoutParams.MATCH_PARENT, 24 * density);
@@ -105,7 +87,7 @@ public class ControlOverlayView extends FrameLayout {
             return true;
         });
 
-        /* ── Grid area (scrollable content) ── */
+        /* Grid area for buttons */
         gridArea = new FrameLayout(getContext());
         gridArea.setBackgroundColor(0xFF2A2A3E);
         LayoutParams glp = new LayoutParams(LayoutParams.MATCH_PARENT, 0);
@@ -113,7 +95,7 @@ public class ControlOverlayView extends FrameLayout {
         glp.bottomMargin = (int) (40 * density);
         addView(gridArea, glp);
 
-        /* ── Bottom bar buttons ── */
+        /* Bottom bar */
         int btnSize = (int) (100 * density);
         int barH = (int) (40 * density);
 
@@ -129,10 +111,7 @@ public class ControlOverlayView extends FrameLayout {
         addBtn.setTextColor(Color.WHITE);
         addBtn.setTextSize(15);
         addBtn.setBackgroundColor(0xFF2ECC71);
-        addBtn.setOnClickListener(v -> {
-            if (!editMode) toggleEditMode();
-            showAddDialog();
-        });
+        addBtn.setOnClickListener(v -> showAddDialog());
 
         closeBtn = new Button(getContext());
         closeBtn.setText("X");
@@ -157,18 +136,22 @@ public class ControlOverlayView extends FrameLayout {
         lp.setMargins(0, 0, 10, 0);
         addView(closeBtn, lp);
 
-        /* ── Load persisted buttons ── */
-        for (ControlButtonData data : persistence.getButtons()) {
-            addControlButton(data, false);
-        }
+        /* Create GameMenuStub + ViewManager */
+        menu = new GameMenuStub((android.app.Activity) getContext(), gridArea, keyListener);
+        menu.screenWidth = screenW;
+        menu.screenHeight = screenH;
+        viewManager = menu.getViewManager();
+        viewManager.load(getContext());
+        viewManager.initializeController();
     }
 
     private void toggleEditMode() {
         editMode = !editMode;
-        editBtn.setBackgroundColor(editMode ? 0xFF1B5E20 : 0xFF4A4A7A);
-        for (ControlButton btn : buttons) {
-            btn.setShowBoundary(editMode);
+        if (menu != null) {
+            menu.setEditMode(editMode);
+            menu.setShowViewBoundaries(editMode);
         }
+        editBtn.setBackgroundColor(editMode ? 0xFF1B5E20 : 0xFF4A4A7A);
     }
 
     private void showAddDialog() {
@@ -180,54 +163,14 @@ public class ControlOverlayView extends FrameLayout {
         data.getBaseInfo().setAbsoluteHeight(60);
         EditViewDialog.show(getContext(), data, true, new EditViewDialog.Callback() {
             public void onSave(ControlButtonData d) {
-                addControlButton(d, true);
+                viewManager.addView(d);
+                viewManager.saveController();
             }
             public void onDelete() {}
-            public void onClone(ControlButtonData d) {
-                addControlButton(d, true);
+            public void onClone(CustomControl view) {
+                viewManager.addView(view);
             }
         });
-    }
-
-    private void addControlButton(ControlButtonData data, boolean persist) {
-        final ControlButton btn = new ControlButton(getContext(), data, keyListener);
-        btn.setEditCallback(new ControlButton.EditCallback() {
-            public void onSave(ControlButtonData d) {
-                btn.updateFromData();
-                if (persist) persistence.save(getContext());
-            }
-            public void onDelete(String id) {
-                removeControlButton(btn);
-            }
-            public void onClone(ControlButtonData d) {
-                addControlButton(d, true);
-            }
-        });
-        btn.setShowBoundary(editMode);
-        btn.setScreenSize(screenW, screenH);
-
-        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
-                LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT);
-        lp.width = data.getBaseInfo().computeWidth(screenW, screenH);
-        lp.height = data.getBaseInfo().computeHeight(screenW, screenH);
-        btn.setLayoutParams(lp);
-        btn.setX(data.getBaseInfo().computeX(screenW, lp.width));
-        btn.setY(data.getBaseInfo().computeY(screenH, lp.height));
-
-        gridArea.addView(btn);
-        buttons.add(btn);
-
-        if (persist) {
-            persistence.addButton(data);
-            persistence.save(getContext());
-        }
-    }
-
-    private void removeControlButton(ControlButton btn) {
-        persistence.removeButton(btn.getViewId());
-        persistence.save(getContext());
-        buttons.remove(btn);
-        gridArea.removeView(btn);
     }
 
     @Override
@@ -236,21 +179,15 @@ public class ControlOverlayView extends FrameLayout {
         screenW = right - left;
         screenH = bottom - top;
         ensureChildren();
-        /* Update grid area size */
+        if (menu != null) {
+            menu.screenWidth = screenW;
+            menu.screenHeight = screenH;
+        }
         if (gridArea != null) {
             ViewGroup.LayoutParams glp = gridArea.getLayoutParams();
             glp.height = screenH - (int)(40 * getResources().getDisplayMetrics().density)
                     - (int)(24 * getResources().getDisplayMetrics().density);
             gridArea.setLayoutParams(glp);
-        }
-        /* Update control button positions (safe guard avoids re-entrant layout loop) */
-        if (!inLayoutUpdate) {
-            inLayoutUpdate = true;
-            for (ControlButton btn : buttons) {
-                btn.setScreenSize(screenW, screenH);
-                btn.updateFromData();
-            }
-            inLayoutUpdate = false;
         }
     }
 

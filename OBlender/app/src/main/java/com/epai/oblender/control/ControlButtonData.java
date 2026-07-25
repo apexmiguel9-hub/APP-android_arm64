@@ -6,7 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-public class ControlButtonData implements Cloneable {
+public class ControlButtonData implements Cloneable, CustomControl {
     private String id;
     private String text = "";
     private ControlButtonStyle style = ControlButtonStyle.DEFAULT;
@@ -32,9 +32,13 @@ public class ControlButtonData implements Cloneable {
     }
 
     public void addChangeListener(Runnable r) { changeListeners.add(r); }
+    public void addListener(Runnable r) { changeListeners.add(r); }
+    public void removeListener(Runnable r) { changeListeners.remove(r); }
     private void notifyChange() { for (Runnable r : changeListeners) r.run(); }
 
     public String getId() { return id; }
+    public String getViewId() { return id; }
+    public CustomControl.ViewType getType() { return CustomControl.ViewType.CONTROL_BUTTON; }
 
     public String getText() { return text; }
     public void setText(String v) { text = v != null ? v : ""; notifyChange(); }
