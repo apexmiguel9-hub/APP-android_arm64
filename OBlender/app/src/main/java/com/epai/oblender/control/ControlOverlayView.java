@@ -3,207 +3,259 @@
 package com.epai.oblender.control;
 
 import android.content.Context;
-import android.graphics.Canvas;
 import android.graphics.Color;
-import android.graphics.Paint;
-import android.graphics.Rect;
-import android.graphics.RectF;
-import android.util.AttributeSet;
+import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewGroup;
+import android.widget.Button;
+import android.widget.FrameLayout;
+
 import com.epai.oblender.OblSettingFragment;
+
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
-public class ControlOverlayView extends View {
-    private static final String TAG = "ControlOverlay";
+public class ControlOverlayView extends FrameLayout {
 
-    private ViewManager mViewManager = new ViewManager();
-    private boolean mEditMode = false;
-    private int mControlsDragIndex = -1;
-    private boolean mControlsMoved = false;
-    private float mDragStartX, mDragStartY;
-    private boolean mHitButton = false;
+    /* Bottom bar */
+    private Button editBtn, addBtn, closeBtn;
+    private boolean editMode = false;
+    private boolean initialized = false;
 
-    private Paint mPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private int mW, mH;
-    private int mBg = 0xFF1A1A2E;
+    /* Content area that holds control buttons */
+    private FrameLayout gridArea;
+    private List<ControlButton> buttons = new ArrayList<>();
+    private ViewManager persistence;
 
-    /* Bottom bar rects */
-    private Rect mCloseRect, mEditRect, mAddRect;
+    private OblSettingFragment.OBLSettingFragmentListener keyListener;
 
-    private OblSettingFragment.OBLSettingFragmentListener mListener;
+    private int screenW, screenH;
 
-    public ControlOverlayView(Context context) { super(context); init(); }
-    public ControlOverlayView(Context context, AttributeSet attrs) { super(context, attrs); init(); }
-    public ControlOverlayView(Context context, AttributeSet attrs, int defStyleAttr) { super(context, attrs, defStyleAttr); init(); }
+    /* Drag handle */
+    private View dragHandle;
+    private boolean dragging = false;
+    private float dragStartX, dragStartY;
+    private int windowStartX, windowStartY;
+    private WindowPositionCallback windowPosCallback;
+    private boolean inLayoutUpdate = false;
 
-    private void init() {
-        mViewManager.setKeySender(new ViewManager.KeySender() {
-            public void enterKeyOn(int[] keys) { if (mListener != null) mListener.enterKeyOn(keys); }
-            public void enterKeyOff(int[] keys) { if (mListener != null) mListener.enterKeyOff(keys); }
-            public void enterKey(int[] keys) { if (mListener != null) mListener.enterKey(keys); }
+    public interface WindowPositionCallback {
+        void setPosition(int x, int y);
+    }
+    public void setWindowPosCallback(WindowPositionCallback cb) { windowPosCallback = cb; }
+
+    public ControlOverlayView(Context context) {
+        super(context);
+        setWillNotDraw(false);
+        setBackgroundColor(0xFF1A1A2E);
+
+        persistence = new ViewManager();
+        persistence.load(context);
+    }
+
+    /* Called by OBLNativeActivity */
+    public void setListener(OblSettingFragment.OBLSettingFragmentListener l) {
+        setKeyListener(l);
+    }
+
+    public void setKeyListener(OblSettingFragment.OBLSettingFragmentListener l) {
+        keyListener = l;
+        persistence.setKeySender(new ViewManager.KeySender() {
+            public void enterKeyOn(int[] keys) { if (keyListener != null) keyListener.enterKeyOn(keys); }
+            public void enterKeyOff(int[] keys) { if (keyListener != null) keyListener.enterKeyOff(keys); }
+            public void enterKey(int[] keys) { if (keyListener != null) keyListener.enterKey(keys); }
         });
-        mViewManager.load(getContext());
     }
 
-    public void setListener(OblSettingFragment.OBLSettingFragmentListener l) { mListener = l; }
-    public ViewManager getViewManager() { return mViewManager; }
+    public ViewManager getPersistence() { return persistence; }
 
-    @Override
-    protected void onDraw(Canvas canvas) {
-        super.onDraw(canvas);
-        mW = getWidth(); mH = getHeight();
-        if (mW <= 0 || mH <= 0) return;
+    private void ensureChildren() {
+        if (initialized) return;
+        initialized = true;
 
-        mPaint.setColor(mBg);
-        canvas.drawRoundRect(0, 0, mW, mH, 16, 16, mPaint);
+        int density = (int) getResources().getDisplayMetrics().density;
 
-        int gridH = mH - (int)(mH * 0.09f);
-
-        /* Bottom bar */
-        float tabBarH = mH * 0.09f;
-        float btw = mW / 4f;
-
-        mPaint.setColor(0xFF0F0F23);
-        canvas.drawRect(0, gridH, mW, mH, mPaint);
-
-        /* Edit toggle */
-        mEditRect = new Rect(0, gridH, (int)btw, mH);
-        mPaint.setColor(mEditMode ? 0xFF1B5E20 : 0xFF4A4A7A);
-        canvas.drawRoundRect(new RectF(mEditRect), 8, 8, mPaint);
-        mPaint.setColor(mEditMode ? 0xFFA5D6A7 : 0xFF9999AA);
-        mPaint.setTextSize(tabBarH * 0.38f);
-        Paint.FontMetrics fm = mPaint.getFontMetrics();
-        float d = (fm.bottom - fm.top) / 2f - fm.bottom;
-        canvas.drawText("Edit", mEditRect.exactCenterX(), mEditRect.exactCenterY() + d, mPaint);
-
-        /* Add button */
-        mAddRect = new Rect((int)btw, gridH, (int)(btw * 2), mH);
-        mPaint.setColor(mEditMode ? 0xFF2ECC71 : 0xFF4A4A7A);
-        canvas.drawRoundRect(new RectF(mAddRect), 8, 8, mPaint);
-        mPaint.setColor(Color.WHITE);
-        canvas.drawText("+ Add", mAddRect.exactCenterX(), mAddRect.exactCenterY() + d, mPaint);
-
-        /* Close button */
-        mCloseRect = new Rect((int)(btw * 3), gridH, mW, mH);
-        mPaint.setColor(0xFF7A2A2A);
-        canvas.drawRoundRect(new RectF(mCloseRect), 8, 8, mPaint);
-        mPaint.setColor(Color.WHITE);
-        canvas.drawText("\u2716 Close", mCloseRect.exactCenterX(), mCloseRect.exactCenterY() + d, mPaint);
-
-        /* Draw control buttons in the grid area */
-        mViewManager.setScreenSize(mW, gridH);
-        int save = canvas.save();
-        canvas.clipRect(0, 0, mW, gridH);
-        mViewManager.draw(canvas);
-        canvas.restoreToCount(save);
-    }
-
-    @Override
-    public boolean onTouchEvent(MotionEvent event) {
-        float x = event.getX(), y = event.getY();
-        switch (event.getAction()) {
-            case MotionEvent.ACTION_DOWN: {
-                mDragStartX = x; mDragStartY = y;
-                mHitButton = false;
-
-                /* Bottom bar */
-                if (mCloseRect != null && mCloseRect.contains((int)x, (int)y)) {
-                    setVisibility(INVISIBLE);
-                    mHitButton = true;
-                    return true;
-                }
-                if (mEditRect != null && mEditRect.contains((int)x, (int)y)) {
-                    mEditMode = !mEditMode;
-                    mViewManager.setShowBoundaries(mEditMode);
-                    mHitButton = true;
-                    invalidate();
-                    return true;
-                }
-                if (mAddRect != null && mAddRect.contains((int)x, (int)y)) {
-                    mHitButton = true;
-                    if (mEditMode) showAddButton();
-                    return true;
-                }
-
-                /* Hit test buttons */
-                mViewManager.setScreenSize(mW, mH - (int)(mH * 0.09f));
-                int hit = mViewManager.hitTest(x, y);
-                if (hit >= 0) {
-                    mHitButton = true;
-                    if (mEditMode) {
-                        mControlsDragIndex = hit;
-                        mControlsMoved = false;
-                        mViewManager.startDrag(hit, x, y);
-                    } else {
-                        mViewManager.fireButton(hit);
+        /* ── Drag handle at top ── */
+        dragHandle = new View(getContext());
+        dragHandle.setBackgroundColor(0x44000000);
+        LayoutParams dlp = new LayoutParams(LayoutParams.MATCH_PARENT, 24 * density);
+        addView(dragHandle, dlp);
+        dragHandle.setOnTouchListener((v, event) -> {
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    dragging = true;
+                    dragStartX = event.getRawX();
+                    dragStartY = event.getRawY();
+                    v.getParent().requestDisallowInterceptTouchEvent(true);
+                    break;
+                case MotionEvent.ACTION_MOVE:
+                    if (dragging && windowPosCallback != null) {
+                        int dx = (int) (event.getRawX() - dragStartX);
+                        int dy = (int) (event.getRawY() - dragStartY);
+                        windowPosCallback.setPosition(windowStartX + dx, windowStartY + dy);
                     }
-                    return true;
-                }
-                break;
+                    break;
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    dragging = false;
+                    break;
             }
-            case MotionEvent.ACTION_MOVE: {
-                if (mEditMode && mControlsDragIndex >= 0) {
-                    float cdx = Math.abs(x - mDragStartX);
-                    float cdy = Math.abs(y - mDragStartY);
-                    if (!mControlsMoved && (cdx > 15f || cdy > 15f)) {
-                        mControlsMoved = true;
-                    }
-                    if (mControlsMoved) {
-                        mViewManager.dragTo(x, y);
-                        invalidate();
-                    }
-                }
-                break;
-            }
-            case MotionEvent.ACTION_UP: case MotionEvent.ACTION_CANCEL: {
-                if (mControlsDragIndex >= 0) {
-                    mViewManager.endDrag();
-                    if (!mControlsMoved && mEditMode) {
-                        /* Tap → open editor */
-                        ControlButtonData data = mViewManager.getButtons().get(mControlsDragIndex);
-                        EditViewDialog.show(getContext(), data, false, new EditViewDialog.Callback() {
-                            public void onSave(ControlButtonData d) {
-                                mViewManager.updateButton(data.getId(), d);
-                                mViewManager.save(getContext());
-                                invalidate();
-                            }
-                            public void onDelete() {
-                                mViewManager.removeButton(data.getId());
-                                mViewManager.save(getContext());
-                                invalidate();
-                            }
-                            public void onClone(ControlButtonData d) {
-                                mViewManager.addButton(d);
-                                mViewManager.save(getContext());
-                                invalidate();
-                            }
-                        });
-                    }
-                    mControlsDragIndex = -1;
-                    mViewManager.save(getContext());
-                }
-                invalidate(); performClick();
-                break;
-            }
+            return true;
+        });
+
+        /* ── Grid area (scrollable content) ── */
+        gridArea = new FrameLayout(getContext());
+        gridArea.setBackgroundColor(0xFF2A2A3E);
+        LayoutParams glp = new LayoutParams(LayoutParams.MATCH_PARENT, 0);
+        glp.topMargin = 24 * density;
+        glp.bottomMargin = (int) (40 * density);
+        addView(gridArea, glp);
+
+        /* ── Bottom bar buttons ── */
+        int btnSize = (int) (100 * density);
+        int barH = (int) (40 * density);
+
+        editBtn = new Button(getContext());
+        editBtn.setText("Edit");
+        editBtn.setTextColor(Color.WHITE);
+        editBtn.setTextSize(11);
+        editBtn.setBackgroundColor(0xFF4A4A7A);
+        editBtn.setOnClickListener(v -> toggleEditMode());
+
+        addBtn = new Button(getContext());
+        addBtn.setText("+");
+        addBtn.setTextColor(Color.WHITE);
+        addBtn.setTextSize(15);
+        addBtn.setBackgroundColor(0xFF2ECC71);
+        addBtn.setOnClickListener(v -> {
+            if (!editMode) toggleEditMode();
+            showAddDialog();
+        });
+
+        closeBtn = new Button(getContext());
+        closeBtn.setText("X");
+        closeBtn.setTextColor(Color.WHITE);
+        closeBtn.setTextSize(15);
+        closeBtn.setBackgroundColor(0xFF7A2A2A);
+        closeBtn.setOnClickListener(v -> setVisibility(GONE));
+
+        LayoutParams lp;
+        lp = new LayoutParams(btnSize, barH);
+        lp.gravity = Gravity.BOTTOM | Gravity.LEFT;
+        lp.setMargins(10, 0, 0, 0);
+        addView(editBtn, lp);
+
+        lp = new LayoutParams(btnSize, barH);
+        lp.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+        lp.setMargins(0, 0, 0, 0);
+        addView(addBtn, lp);
+
+        lp = new LayoutParams(btnSize, barH);
+        lp.gravity = Gravity.BOTTOM | Gravity.RIGHT;
+        lp.setMargins(0, 0, 10, 0);
+        addView(closeBtn, lp);
+
+        /* ── Load persisted buttons ── */
+        for (ControlButtonData data : persistence.getButtons()) {
+            addControlButton(data, false);
         }
-        return true;
     }
 
-    private void showAddButton() {
+    private void toggleEditMode() {
+        editMode = !editMode;
+        editBtn.setBackgroundColor(editMode ? 0xFF1B5E20 : 0xFF4A4A7A);
+        for (ControlButton btn : buttons) {
+            btn.setShowBoundary(editMode);
+        }
+    }
+
+    private void showAddDialog() {
         ControlButtonData data = new ControlButtonData(UUID.randomUUID().toString());
+        data.getBaseInfo().setXPosition(100);
+        data.getBaseInfo().setYPosition(100);
+        data.getBaseInfo().setSizeType(BaseInfoData.SizeType.ABSOLUTE);
+        data.getBaseInfo().setAbsoluteWidth(60);
+        data.getBaseInfo().setAbsoluteHeight(60);
         EditViewDialog.show(getContext(), data, true, new EditViewDialog.Callback() {
             public void onSave(ControlButtonData d) {
-                mViewManager.addButton(d);
-                mViewManager.save(getContext());
-                invalidate();
+                addControlButton(d, true);
             }
             public void onDelete() {}
             public void onClone(ControlButtonData d) {
-                mViewManager.addButton(d);
-                mViewManager.save(getContext());
-                invalidate();
+                addControlButton(d, true);
             }
         });
+    }
+
+    private void addControlButton(ControlButtonData data, boolean persist) {
+        final ControlButton btn = new ControlButton(getContext(), data, keyListener);
+        btn.setEditCallback(new ControlButton.EditCallback() {
+            public void onSave(ControlButtonData d) {
+                btn.updateFromData();
+                if (persist) persistence.save(getContext());
+            }
+            public void onDelete(String id) {
+                removeControlButton(btn);
+            }
+            public void onClone(ControlButtonData d) {
+                addControlButton(d, true);
+            }
+        });
+        btn.setShowBoundary(editMode);
+        btn.setScreenSize(screenW, screenH);
+
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
+                LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT);
+        lp.width = data.getBaseInfo().computeWidth(screenW, screenH);
+        lp.height = data.getBaseInfo().computeHeight(screenW, screenH);
+        btn.setLayoutParams(lp);
+        btn.setX(data.getBaseInfo().computeX(screenW, lp.width));
+        btn.setY(data.getBaseInfo().computeY(screenH, lp.height));
+
+        gridArea.addView(btn);
+        buttons.add(btn);
+
+        if (persist) {
+            persistence.addButton(data);
+            persistence.save(getContext());
+        }
+    }
+
+    private void removeControlButton(ControlButton btn) {
+        persistence.removeButton(btn.getViewId());
+        persistence.save(getContext());
+        buttons.remove(btn);
+        gridArea.removeView(btn);
+    }
+
+    @Override
+    protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
+        super.onLayout(changed, left, top, right, bottom);
+        screenW = right - left;
+        screenH = bottom - top;
+        ensureChildren();
+        /* Update grid area size */
+        if (gridArea != null) {
+            ViewGroup.LayoutParams glp = gridArea.getLayoutParams();
+            glp.height = screenH - (int)(40 * getResources().getDisplayMetrics().density)
+                    - (int)(24 * getResources().getDisplayMetrics().density);
+            gridArea.setLayoutParams(glp);
+        }
+        /* Update control button positions (safe guard avoids re-entrant layout loop) */
+        if (!inLayoutUpdate) {
+            inLayoutUpdate = true;
+            for (ControlButton btn : buttons) {
+                btn.setScreenSize(screenW, screenH);
+                btn.updateFromData();
+            }
+            inLayoutUpdate = false;
+        }
+    }
+
+    public void setWindowStartPosition(int x, int y) {
+        windowStartX = x;
+        windowStartY = y;
     }
 }
