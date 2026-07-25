@@ -1,6 +1,6 @@
 OBlender — Blender 3.6 for Android ARM64 (Mali GPU Fork)
-Fork of ePai's Blender Android port focused on identifying and fixing GPU compatibility bugs affecting ARM Mali devices, which represent a large share of the Android hardware market (Mediatek Dimensity/Helio, older Samsung Exynos) but historically receive less attention from mobile GPU driver testing than Adreno (Qualcomm Snapdragon).
-This is an independent, non-commercial, community-driven effort. It is not affiliated with the Blender Foundation or with ePai.
+Fork of ePai's (https://github.com/dshawshank) Blender Android port focused on identifying and fixing GPU compatibility bugs affecting ARM Mali devices, which represent a large share of the Android hardware market (Mediatek Dimensity/Helio, older Samsung Exynos) but historically receive less attention from mobile GPU driver testing than Adreno (Qualcomm Snapdragon).
+**IMPORTANT**: This is an independent, non-commercial, community-driven **UNOFFICIAL** port of Blender. It is **NOT** affiliated with or endorsed by the Blender Foundation or by ePai. Blender is a registered trademark of the Blender Foundation. This port is provided as-is with no guarantees of stability or suitability for production use.
 Related repositories
 This project is split across four repositories:
 Blender-android_arm64 — Blender 3.6 source, patched for Android ARM64 and Mali GPU compatibility. Compiles to ~146 static libraries (.a) via GitHub Actions.
@@ -55,7 +55,9 @@ Replace or supplement the current Java/Canvas-based virtual keyboard with a conf
 Investigate raising targetSdkVersion (currently API 30) and validate real-world compatibility on Android 12+ / Adreno / Xclipse hardware as such devices become available for testing.
 Triage the ~86 issues open against the original ePai project against this fork.
 License
-GNU General Public License v2.0 (GPL-2.0), consistent with Blender's own licensing and the license under which the original ePai fork was distributed. See LICENSE for the full text.
+GNU General Public License v3.0 (GPL-3.0). See LICENSE for the full text.
 This project is distributed free of charge, with optional donations to support continued development. It is not published on Google Play.
+Third-party dependencies and precompiled libraries bundled with the APK may be covered by their own respective licenses (Apache 2.0, MIT, BSD, LGPL, CC0, etc.); their attribution is maintained in the THIRD-PARTY-LICENSES file under the Blender source distribution and in the respective package metadata shipped with the Python environment.
 Acknowledgments
-Built on a fork of ePai's (dshawshank) original Blender Android ARM64 port. This fork's focus has been specifically on Mali GPU driver compatibility, which was not resolved in the upstream project at the time this work began.
+Built on a fork of ePai (https://github.com/dshawshank) original Blender Android ARM64 port. This fork's focus has been specifically on Mali GPU driver compatibility, which was not resolved in the upstream project at the time this work began.
+The control layout customization system (virtual keyboard and on-screen control editor) references and is inspired by the control editor in FoldCraftLauncher (FCL-Team) — https://github.com/FCL-Team/FoldCraftLauncher — distributed under GPL-3.0. Portions of adapted code from that project carry the original copyright header and are marked accordingly in the source files.
