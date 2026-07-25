@@ -59,7 +59,6 @@ public class OblSettingFragment extends View {
 
     private Rect mSettingsRect;
     private int mGridTop;
-    private float mDragStartX = 0, mDragStartY = 0;
 
     /* Keyboard tab state — toggle for Shift/Ctrl/Alt */
     private boolean mShiftActive = false;
