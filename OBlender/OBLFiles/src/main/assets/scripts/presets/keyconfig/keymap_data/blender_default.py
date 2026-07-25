@@ -6901,10 +6901,6 @@ def km_3d_view_tool_toggle_select(params, *, fallback):
         {"items": [
             ("view3d.select", {"type": 'LEFTMOUSE', "value": 'PRESS'},
              {"properties": [("deselect_all", False), ("toggle", True)]}),
-            ("view3d.select", {"type": 'LEFTMOUSE', "value": 'CLICK'},
-             {"properties": [("deselect_all", False), ("toggle", True)]}),
-            ("transform.translate", {"type": 'LEFTMOUSE', "value": 'CLICK_DRAG'},
-             {"properties": [("release_confirm", True)]}),
         ]},
     )
 
