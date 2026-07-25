@@ -343,7 +343,6 @@ public class OblSettingFragment extends View {
                 break;
             }
             case MotionEvent.ACTION_MOVE: {
-                float dx = x - mDragStartX;
                 if (!mMoveGrid) {
                     if (mMoveGridMode && !mHitButton) {
                         mMoveGrid = true;
@@ -352,8 +351,8 @@ public class OblSettingFragment extends View {
                     }
                 }
                 if (mMoveGrid) {
-                    mGridOffsetX += dx;
-                    mGridOffsetY += dy;
+                    mGridOffsetX += x - mDragStartX;
+                    mGridOffsetY += y - mDragStartY;
                     mDragStartX = x; mDragStartY = y;
                     updateGridPosition();
                     invalidate();
