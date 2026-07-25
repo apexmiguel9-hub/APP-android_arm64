@@ -632,6 +632,15 @@ int mainBlenderLoop(void*pContext) {
   bContext *C = (bContext *)pContext;
   if (!g_dpi_initialized && g_dpi_scale > 1.01f) {
     g_dpi_initialized = true;
+    /* Don't override if user has a custom ui_scale saved in preferences */
+    float diff_from_default = fabsf(U.ui_scale - 1.0f);
+    float diff_from_dpi = fabsf(U.ui_scale - g_dpi_scale);
+    if (diff_from_default > 0.1f && diff_from_dpi > 0.1f) {
+      __android_log_print(ANDROID_LOG_INFO, "OBL.DPI",
+        "Skipping DPI override: user has custom ui_scale=%.2f (dpi would set %.2f)",
+        U.ui_scale, g_dpi_scale);
+      return 0;
+    }
     __android_log_print(ANDROID_LOG_INFO, "OBL.DPI", "Applying DPI scale: %.2f", g_dpi_scale);
     char python_cmd[256];
     SNPRINTF(python_cmd,

@@ -83,8 +83,16 @@ public class OblSettingFragment extends View {
     private float mKeySize = 1.0f;
     private String mGridName = "";
 
-    /* Keyboard tab state */
+    /* Keyboard tab state — toggle for Shift/Ctrl/Alt */
     private boolean mShiftActive = false;
+    private boolean mCtrlActive = false;
+    private boolean mAltActive = false;
+
+    /* Grid drag-to-move state */
+    private float mGridOffsetX = 0, mGridOffsetY = 0;
+    private boolean mDragGrid = false;
+    private float mDragStartX = 0, mDragStartY = 0;
+    private boolean mMoveGrid = false;
 
     /* Tab bar rects for touch */
     private Rect mShortcutsTabRect, mKeyboardTabRect, mNumPadTabRect;
@@ -114,6 +122,7 @@ public class OblSettingFragment extends View {
         mBorderPaint.setStrokeWidth(1);
         loadCustomization();
         loadShortcuts();
+        post(() -> updateGridPosition());
     }
 
     @Override
@@ -437,8 +446,11 @@ public class OblSettingFragment extends View {
                 float lx = (kr.left + kr.right) / 2f;
                 float ly = (kr.top + kr.bottom) / 2f + (fm.bottom - fm.top) / 2f - fm.bottom;
 
-                /* Shift highlight */
-                if (k.ordinal == 0 && mShiftActive) {
+                /* Toggle highlight for Shift/Ctrl/Alt */
+                boolean active = (k.ordinal == 0 && mShiftActive) ||
+                                 (k.ordinal == 1 && mCtrlActive) ||
+                                 (k.ordinal == 2 && mAltActive);
+                if (active) {
                     mPaint.setColor(mToggleOnBg);
                     c.drawRoundRect(kr, 8, 8, mPaint);
                     mPaint.setColor(0xFFA5D6A7);
@@ -514,6 +526,8 @@ public class OblSettingFragment extends View {
         switch (event.getAction()) {
             case MotionEvent.ACTION_DOWN: {
                 mLastTouchY = y; mIsDragging = false;
+                mDragGrid = false; mMoveGrid = false;
+                mDragStartX = x; mDragStartY = y;
 
                 /* Tab bar */
                 if (mShortcutsTabRect != null && mShortcutsTabRect.contains((int)x, (int)y)) {
@@ -543,8 +557,27 @@ public class OblSettingFragment extends View {
                 break;
             }
             case MotionEvent.ACTION_MOVE: {
-                if (mCurrentTab == Tab.SHORTCUTS) {
-                    float dy = y - mLastTouchY;
+                float dx = x - mDragStartX;
+                float dy = y - mLastTouchY;
+                if (!mDragGrid && !mMoveGrid) {
+                    if (Math.abs(y - mDragStartY) > 20f || Math.abs(x - mDragStartX) > 20f) {
+                        /* If touch started inside the view, decide: grid drag or shortcuts scroll */
+                        if (y < mGridTop && mCurrentTab == Tab.SHORTCUTS) {
+                            mMoveGrid = true;
+                        } else if (mCurrentTab != Tab.SHORTCUTS) {
+                            mMoveGrid = true;
+                        } else {
+                            mDragGrid = true;
+                        }
+                    }
+                }
+                if (mMoveGrid) {
+                    mGridOffsetX += dx;
+                    mGridOffsetY += dy;
+                    mDragStartX = x; mDragStartY = y;
+                    updateGridPosition();
+                    invalidate();
+                } else if (mDragGrid) {
                     if (Math.abs(dy) > 10f) mIsDragging = true;
                     if (mIsDragging) {
                         mScrollY -= (int) dy;
@@ -609,13 +642,27 @@ public class OblSettingFragment extends View {
                     if (k.ordinal == 0) {
                         /* Shift toggle */
                         mShiftActive = !mShiftActive;
+                        if (mListener != null) {
+                            if (mShiftActive) mListener.enterKeyOn(new int[]{0});
+                            else mListener.enterKeyOff(new int[]{0});
+                        }
                         invalidate();
                     } else if (k.ordinal == 1) {
                         /* Ctrl toggle */
-                        toggleModifier(1);
+                        mCtrlActive = !mCtrlActive;
+                        if (mListener != null) {
+                            if (mCtrlActive) mListener.enterKeyOn(new int[]{1});
+                            else mListener.enterKeyOff(new int[]{1});
+                        }
+                        invalidate();
                     } else if (k.ordinal == 2) {
                         /* Alt toggle */
-                        toggleModifier(2);
+                        mAltActive = !mAltActive;
+                        if (mListener != null) {
+                            if (mAltActive) mListener.enterKeyOn(new int[]{2});
+                            else mListener.enterKeyOff(new int[]{2});
+                        }
+                        invalidate();
                     } else if (k.ordinal == 42) {
                         /* Backspace via Godot input system (KEYCODE_DEL) */
                         if (mListener != null) mListener.backspace();
@@ -757,7 +804,14 @@ public class OblSettingFragment extends View {
                 for (int ord : sc.keyOrdinals) mListener.enterKeyOff(new int[]{ord});
         }
         mToggleActive.clear();
+        if (mListener != null) {
+            if (mShiftActive) mListener.enterKeyOff(new int[]{0});
+            if (mCtrlActive) mListener.enterKeyOff(new int[]{1});
+            if (mAltActive) mListener.enterKeyOff(new int[]{2});
+        }
         mShiftActive = false;
+        mCtrlActive = false;
+        mAltActive = false;
     }
 
     /* ─── Display helpers ─── */
@@ -919,6 +973,8 @@ public class OblSettingFragment extends View {
                 mRadius = cust.optInt("radius", mRadius);
                 mCols = cust.optInt("cols", mCols);
                 mKeySize = (float) cust.optDouble("keySize", mKeySize);
+                mGridOffsetX = (float) cust.optDouble("gridOffsetX", mGridOffsetX);
+                mGridOffsetY = (float) cust.optDouble("gridOffsetY", mGridOffsetY);
                 mGridName = root.optString("name", mGridName);
                 saveCustomization();
             }
@@ -1693,6 +1749,8 @@ public class OblSettingFragment extends View {
             mCols = sp.getInt("cols", 4);
             mKeySize = sp.getFloat("keySize", 1.0f);
             mGridName = sp.getString("gridName", "");
+            mGridOffsetX = sp.getFloat("gridOffsetX", 0f);
+            mGridOffsetY = sp.getFloat("gridOffsetY", 0f);
         } catch (Exception e) { Log.e(TAG, "loadCustomization", e); }
     }
 
@@ -1719,6 +1777,8 @@ public class OblSettingFragment extends View {
                 .putInt("cols", mCols)
                 .putFloat("keySize", mKeySize)
                 .putString("gridName", mGridName)
+                .putFloat("gridOffsetX", mGridOffsetX)
+                .putFloat("gridOffsetY", mGridOffsetY)
                 .apply();
         } catch (Exception e) { Log.e(TAG, "saveCustomization", e); }
     }
@@ -1753,6 +1813,8 @@ public class OblSettingFragment extends View {
             cust.put("radius", mRadius);
             cust.put("cols", mCols);
             cust.put("keySize", mKeySize);
+            cust.put("gridOffsetX", mGridOffsetX);
+            cust.put("gridOffsetY", mGridOffsetY);
             root.put("customization", cust);
 
             JSONArray arr = new JSONArray();
@@ -1770,6 +1832,16 @@ public class OblSettingFragment extends View {
             root.put("shortcuts", arr);
             return root;
         } catch (Exception e) { return null; }
+    }
+
+    void updateGridPosition() {
+        setTranslationX(mGridOffsetX);
+        setTranslationY(mGridOffsetY);
+    }
+
+    void setGridPosition(float x, float y) {
+        mGridOffsetX = x; mGridOffsetY = y;
+        updateGridPosition();
     }
 
     void setOBLSettingFragmentListener(OBLSettingFragmentListener l) { mListener = l; }
