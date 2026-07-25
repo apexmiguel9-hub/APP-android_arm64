@@ -28,6 +28,8 @@ import android.view.ViewGroup;
 import android.view.ViewGroup.MarginLayoutParams;
 import android.widget.Button;
 import android.view.WindowManager;
+import android.widget.LinearLayout;
+import com.epai.oblender.control.ControlOverlayView;
 import android.view.WindowManager.LayoutParams;
 import android.Manifest;
 import android.content.Intent;
@@ -79,6 +81,7 @@ public class OBLNativeActivity extends NativeActivity
     Map<Integer, WindowGLSurfaceView> mWindowFragmentMap = new HashMap<>();
 
     private OblSettingFragment mOblSettingFragment = null;
+    private ControlOverlayView mControlOverlayView = null;
     private boolean mBooleanLastOblSettingFragmentVisible=false;
 
     public String getClipboard(boolean selection){
@@ -346,9 +349,7 @@ public class OBLNativeActivity extends NativeActivity
             public void keyBoardShow(int height) {
                 if (mOblSettingFragment!=null){
                     mBooleanLastOblSettingFragmentVisible=mOblSettingFragment.getVisibility()==View.VISIBLE;
-                    if (mBooleanLastOblSettingFragmentVisible){
-                        mOblSettingFragment.clearAllToggles();
-                        mOblSettingFragment.setVisibility(View.INVISIBLE);
+                    mOblSettingFragment.setVisibility(View.INVISIBLE);
                     }
                 }else{
                     mBooleanLastOblSettingFragmentVisible=false;
@@ -428,6 +429,9 @@ public class OBLNativeActivity extends NativeActivity
     private void initialKeyboardToggle() {
         int btnSz = 72;
         int pad = 6;
+        int gap = 4;
+
+        /* ⌨ button — opens keyboard/numpad overlay */
         Button toggleBtn = new Button(OBLNativeActivity.this);
         toggleBtn.setText("⌨");
         toggleBtn.setTextSize(16);
@@ -440,7 +444,7 @@ public class OBLNativeActivity extends NativeActivity
         lp.width = btnSz;
         lp.height = btnSz;
         lp.x = pad;
-        lp.y = 6;
+        lp.y = 6 + btnSz + gap;
         lp.flags = LayoutParams.FLAG_NOT_FOCUSABLE | LayoutParams.FLAG_NOT_TOUCH_MODAL;
 
         toggleBtn.setOnClickListener(new View.OnClickListener() {
@@ -459,6 +463,84 @@ public class OBLNativeActivity extends NativeActivity
         });
 
         getWindowManager().addView(toggleBtn, lp);
+
+        /* FCL button — opens control editor overlay */
+        Button fclBtn = new Button(OBLNativeActivity.this);
+        fclBtn.setText("🎮");
+        fclBtn.setTextSize(16);
+        fclBtn.setTextColor(Color.WHITE);
+        fclBtn.setAlpha(0.5f);
+        fclBtn.setBackgroundResource(android.R.color.transparent);
+
+        LayoutParams lp2 = new LayoutParams();
+        lp2.gravity = Gravity.RIGHT | Gravity.BOTTOM;
+        lp2.width = btnSz;
+        lp2.height = btnSz;
+        lp2.x = pad;
+        lp2.y = 6;
+        lp2.flags = LayoutParams.FLAG_NOT_FOCUSABLE | LayoutParams.FLAG_NOT_TOUCH_MODAL;
+
+        fclBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (mControlOverlayView == null) {
+                    mControlOverlayView = new ControlOverlayView(OBLNativeActivity.this);
+                    LayoutParams lp = new LayoutParams();
+                    lp.flags = LayoutParams.FLAG_NOT_FOCUSABLE;
+                    lp.flags |= LayoutParams.FLAG_FULLSCREEN;
+                    lp.flags |= LayoutParams.FLAG_LAYOUT_IN_SCREEN;
+                    lp.flags |= LayoutParams.FLAG_LAYOUT_NO_LIMITS;
+                    lp.flags |= LayoutParams.FLAG_LAYOUT_INSET_DECOR;
+                    lp.flags |= LayoutParams.FLAG_NOT_TOUCH_MODAL;
+                    lp.gravity = Gravity.RIGHT | Gravity.BOTTOM;
+                    lp.width = 500;
+                    lp.height = 500;
+                    lp.x = 20;
+                    lp.y = 180;
+                    mControlOverlayView.setListener(new OblSettingFragment.OBLSettingFragmentListener() {
+                        public void enterKeyOn(int[] keys) {
+                            ArrayList<String> strings = new ArrayList<>();
+                            for (int i = 0; i < keys.length; i++) strings.add(String.valueOf(keys[i]));
+                            String joined = String.join(",", strings);
+                            Log.d("OBL.DIAG", "FCL enterKeyOn sending: " + joined);
+                            oblSetValueOn(joined);
+                        }
+                        public void enterKeyOff(int[] keys) {
+                            ArrayList<String> strings = new ArrayList<>();
+                            for (int i = 0; i < keys.length; i++) strings.add(String.valueOf(keys[i]));
+                            String joined = String.join(",", strings);
+                            Log.d("OBL.DIAG", "FCL enterKeyOff sending: " + joined);
+                            oblSetValueOff(joined);
+                        }
+                        public void enterKey(int[] keys) {
+                            ArrayList<String> strings = new ArrayList<>();
+                            for (int i = 0; i < keys.length; i++) strings.add(String.valueOf(keys[i]));
+                            String joined = String.join(",", strings);
+                            Log.d("OBL.DIAG", "FCL enterKey sending: " + joined);
+                            oblSetValue(joined);
+                        }
+                        public void backspace() {
+                            GodotLib.key(KeyEvent.KEYCODE_DEL, 0, 0, true, false);
+                            GodotLib.key(KeyEvent.KEYCODE_DEL, 0, 0, false, false);
+                        }
+                        public void enter() {
+                            GodotLib.key(KeyEvent.KEYCODE_ENTER, 0, 0, true, false);
+                            GodotLib.key(KeyEvent.KEYCODE_ENTER, 0, 0, false, false);
+                        }
+                        public void closeFragment() { mControlOverlayView.setVisibility(View.INVISIBLE); }
+                    });
+                    getWindowManager().addView(mControlOverlayView, lp);
+                } else {
+                    if (mControlOverlayView.getVisibility() == View.VISIBLE) {
+                        mControlOverlayView.setVisibility(View.INVISIBLE);
+                    } else {
+                        mControlOverlayView.setVisibility(View.VISIBLE);
+                    }
+                }
+            }
+        });
+
+        getWindowManager().addView(fclBtn, lp2);
     }
 
     private void initialUndoRedoButtons() {
