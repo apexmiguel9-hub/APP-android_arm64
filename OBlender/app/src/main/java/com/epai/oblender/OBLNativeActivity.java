@@ -350,9 +350,12 @@ public class OBLNativeActivity extends NativeActivity
                 if (mOblSettingFragment!=null){
                     mBooleanLastOblSettingFragmentVisible=mOblSettingFragment.getVisibility()==View.VISIBLE;
                     mOblSettingFragment.setVisibility(View.INVISIBLE);
-                    }
                 }else{
                     mBooleanLastOblSettingFragmentVisible=false;
+                }
+                if (mControlOverlayView != null && mControlOverlayView.getVisibility() == View.VISIBLE) {
+                    mBooleanLastOblSettingFragmentVisible = true;
+                    mControlOverlayView.setVisibility(View.INVISIBLE);
                 }
                 ScreenUtils.fullScreen(getWindow());
             }
@@ -364,6 +367,9 @@ public class OBLNativeActivity extends NativeActivity
                     if (mBooleanLastOblSettingFragmentVisible){
                         mOblSettingFragment.setVisibility(View.VISIBLE);
                     }
+                }
+                if (mControlOverlayView != null && mBooleanLastOblSettingFragmentVisible) {
+                    mControlOverlayView.setVisibility(View.VISIBLE);
                 }
             }
         });
