@@ -154,6 +154,6 @@ fun loadFromFile(jsonFile: File): JoystickStyle? {
 }
 
 fun saveToFile(style: JoystickStyle, jsonFile: File) {
-    val jsonString = layoutJson.encodeToString(style)
+    val jsonString = layoutJson.encodeToString(JoystickStyle.serializer(), style)
     jsonFile.writeText(jsonString)
 }
