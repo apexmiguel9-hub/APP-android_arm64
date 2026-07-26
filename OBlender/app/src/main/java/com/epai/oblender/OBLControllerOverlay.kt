@@ -46,7 +46,9 @@ private class SimpleSavedStateRegistryOwner(
     lifecycleOwner: LifecycleOwner
 ) : SavedStateRegistryOwner {
     override val lifecycle = lifecycleOwner.lifecycle
-    private val controller by lazy { SavedStateRegistryController.create(this) }
+    private val controller = SavedStateRegistryController.create(this).also {
+        it.performRestore(null)
+    }
     override val savedStateRegistry: SavedStateRegistry
         get() = controller.savedStateRegistry
 }

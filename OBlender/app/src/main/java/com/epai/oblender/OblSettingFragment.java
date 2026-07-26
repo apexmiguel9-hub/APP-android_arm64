@@ -6,9 +6,11 @@ import android.content.SharedPreferences;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.os.Environment;
+import android.os.Handler;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.MotionEvent;
@@ -27,6 +29,8 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.HashSet;
+import java.util.Set;
 
 public class OblSettingFragment extends View {
     private final String TAG = "OBL_Grid";
@@ -72,6 +76,19 @@ public class OblSettingFragment extends View {
     private boolean mMoveGrid = false;
     private boolean mMoveGridMode = false;
     private boolean mHitButton = false;
+    private static final float MOVE_FACTOR = 0.3f;
+    private static final float MOVE_ARROW_STEP = 10f;
+
+    /* Arrow buttons for precise move */
+    private RectF mArrowUpRect, mArrowDownRect, mArrowLeftRect, mArrowRightRect;
+    private boolean mHitArrow = false;
+
+    /* Key long-press hold state */
+    private final Set<Integer> mHeldKeys = new HashSet<>();
+    private Integer mTouchDownOrdinal = null;
+    private int mTouchDownRow = -1, mTouchDownCol = -1;
+    private final Handler mHandler = new Handler();
+    private Runnable mLongPressRunnable = null;
 
     /* Tab bar rects for touch */
     private Rect mKeyboardTabRect, mNumPadTabRect;
@@ -80,6 +97,32 @@ public class OblSettingFragment extends View {
     public OblSettingFragment(Context context, AttributeSet attrs) { super(context, attrs); init(); }
     public OblSettingFragment(Context context, AttributeSet attrs, int defStyleAttr) { super(context, attrs, defStyleAttr); init(); }
     public OblSettingFragment(Context context, AttributeSet attrs, int defStyleAttr, int defStyleRes) { super(context, attrs, defStyleAttr, defStyleRes); init(); }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        super.onDetachedFromWindow();
+        cancelLongPress();
+        releaseAllHeldKeys();
+    }
+
+    @Override
+    protected void onVisibilityChanged(View changedView, int visibility) {
+        super.onVisibilityChanged(changedView, visibility);
+        if (visibility != VISIBLE) {
+            cancelLongPress();
+            releaseAllHeldKeys();
+        }
+    }
+
+    private void releaseAllHeldKeys() {
+        if (mListener != null) {
+            for (int ord : mHeldKeys) {
+                mListener.enterKeyOff(new int[]{ord});
+            }
+        }
+        mHeldKeys.clear();
+        mTouchDownOrdinal = null;
+    }
 
     private void init() {
         mPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -90,13 +133,7 @@ public class OblSettingFragment extends View {
         mBorderPaint.setStyle(Paint.Style.STROKE);
         mBorderPaint.setStrokeWidth(1);
         loadCustomization();
-        post(() -> {
-            if (getLayoutParams() instanceof WindowManager.LayoutParams) {
-                WindowManager.LayoutParams lp = (WindowManager.LayoutParams) getLayoutParams();
-                mGridBaseX = lp.x; mGridBaseY = lp.y;
-            }
-            updateGridPosition();
-        });
+        post(this::updateGridPosition);
     }
 
     @Override
@@ -157,7 +194,7 @@ public class OblSettingFragment extends View {
         mNumPadTabRect = new Rect((int)(mW / 2f), 0, mW, h);
     }
 
-    /* ─── Header (gear) ─── */
+    /* ─── Header (gear + move arrows) ─── */
 
     private void drawHeader(Canvas c, int top, int h) {
         float gy = top + 2;
@@ -175,7 +212,35 @@ public class OblSettingFragment extends View {
             case NUMPAD: title = "Numpad"; break;
             default: title = "Keyboard"; break;
         }
-        c.drawText(title, mW / 2f, y, mPaint);
+
+        /* Draw move arrow buttons when Move mode is active */
+        if (mMoveGridMode) {
+            float ah = h * 0.5f;
+            float aw = ah;
+            float aPad = 4f;
+            float arrowY = gy + (h - ah) / 2f;
+            float arrowCenterY = arrowY + ah / 2f;
+            float leftX = aPad;
+            float rightX = leftX + aw + aPad;
+            float upX = rightX + aw + aPad;
+            float downX = upX + aw + aPad;
+
+            drawArrowButton(c, "←", leftX, arrowY, aw, ah, h);
+            drawArrowButton(c, "→", rightX, arrowY, aw, ah, h);
+            drawArrowButton(c, "↑", upX, arrowY, aw, ah, h);
+            drawArrowButton(c, "↓", downX, arrowY, aw, ah, h);
+
+            mArrowLeftRect = new RectF(leftX, arrowY, leftX + aw, arrowY + ah);
+            mArrowRightRect = new RectF(rightX, arrowY, rightX + aw, arrowY + ah);
+            mArrowUpRect = new RectF(upX, arrowY, upX + aw, arrowY + ah);
+            mArrowDownRect = new RectF(downX, arrowY, downX + aw, arrowY + ah);
+
+            /* Push title right to make room for arrows */
+            float titleStart = downX + aw + aPad * 2;
+            c.drawText(title, titleStart + (mW - titleStart) / 2f, y, mPaint);
+        } else {
+            c.drawText(title, mW / 2f, y, mPaint);
+        }
 
         float gearSize = h * 0.6f;
         float gx = mW - gearSize - 16;
@@ -186,6 +251,21 @@ public class OblSettingFragment extends View {
         mPaint.setColor(mBtnTxt);
         mPaint.setTextSize(12);
         c.drawText("\u2699", gtx, gy + gearSize * 0.75f, mPaint);
+    }
+
+    private void drawArrowButton(Canvas c, String label, float x, float y, float w, float h, float headerH) {
+        mPaint.setColor(mBtnBg);
+        c.drawRoundRect(x, y, x + w, y + h, 6, 6, mPaint);
+        mBorderPaint.setColor(mBtnBorder);
+        mBorderPaint.setStrokeWidth(1);
+        c.drawRoundRect(x, y, x + w, y + h, 6, 6, mBorderPaint);
+        mPaint.setColor(mBtnTxt);
+        float sz = Math.min(14f, headerH * 0.3f);
+        mPaint.setTextSize(sz);
+        Paint.FontMetrics fm = mPaint.getFontMetrics();
+        float tx = x + w / 2f;
+        float ty = y + h / 2f + (fm.bottom - fm.top) / 2f - fm.bottom;
+        c.drawText(label, tx, ty, mPaint);
     }
 
     /* ════════════════════════════════════════
@@ -232,7 +312,8 @@ public class OblSettingFragment extends View {
                 RectF kr = new RectF(xx, yy, xx + cellW, yy + rowH);
                 boolean active = (k.ordinal == 0 && mShiftActive) ||
                                  (k.ordinal == 1 && mCtrlActive) ||
-                                 (k.ordinal == 2 && mAltActive);
+                                 (k.ordinal == 2 && mAltActive) ||
+                                 mHeldKeys.contains(k.ordinal);
                 float sx = 1f, sy = 1f;
                 if (active) { sx = 0.92f; sy = 0.92f; }
                 float cx = kr.centerX(), cy = kr.centerY();
@@ -290,15 +371,20 @@ public class OblSettingFragment extends View {
             RectF kr = new RectF(col * cellW + 5, startY + r * cellH + 5,
                                   (col + 1) * cellW - 5, startY + (r + 1) * cellH - 5);
             mNpHitRects[i] = kr;
+            boolean isHeld = mHeldKeys.contains(NP_ORDS[i]);
             boolean isOp = NP_LABELS[i].equals("/") || NP_LABELS[i].equals("*") ||
                            NP_LABELS[i].equals("-") || NP_LABELS[i].equals("+");
-            mPaint.setColor(isOp ? 0xFF3D3D6C : mBtnBg);
+            if (isHeld) {
+                mPaint.setColor(mToggleOnBg);
+            } else {
+                mPaint.setColor(isOp ? 0xFF3D3D6C : mBtnBg);
+            }
             c.drawRoundRect(kr, mRadius, mRadius, mPaint);
-            mBorderPaint.setColor(mBtnBorder);
+            mBorderPaint.setColor(isHeld ? mToggleOnBorder : mBtnBorder);
             mBorderPaint.setStrokeWidth(1);
             c.drawRoundRect(kr, mRadius, mRadius, mBorderPaint);
 
-            mPaint.setColor(isOp ? 0xFFB388FF : mBtnTxt);
+            mPaint.setColor(isHeld ? 0xFFA5D6A7 : (isOp ? 0xFFB388FF : mBtnTxt));
             float sz = Math.min(26f, cellH * 0.4f);
             mPaint.setTextSize(sz);
             Paint.FontMetrics fm = mPaint.getFontMetrics();
@@ -317,8 +403,9 @@ public class OblSettingFragment extends View {
         float x = event.getX(), y = event.getY();
         switch (event.getAction()) {
             case MotionEvent.ACTION_DOWN: {
-                mMoveGrid = false; mHitButton = false;
+                mMoveGrid = false; mHitButton = false; mHitArrow = false;
                 mDragStartX = x; mDragStartY = y;
+                cancelLongPress();
 
                 /* Tab bar */
                 if (mKeyboardTabRect != null && mKeyboardTabRect.contains((int)x, (int)y)) {
@@ -336,23 +423,39 @@ public class OblSettingFragment extends View {
                     return true;
                 }
 
+                /* Arrow buttons (Move mode) */
+                if (mMoveGridMode) {
+                    if (mArrowUpRect != null && mArrowUpRect.contains(x, y)) {
+                        moveGridBy(0, -MOVE_ARROW_STEP); mHitArrow = true; return true;
+                    }
+                    if (mArrowDownRect != null && mArrowDownRect.contains(x, y)) {
+                        moveGridBy(0, MOVE_ARROW_STEP); mHitArrow = true; return true;
+                    }
+                    if (mArrowLeftRect != null && mArrowLeftRect.contains(x, y)) {
+                        moveGridBy(-MOVE_ARROW_STEP, 0); mHitArrow = true; return true;
+                    }
+                    if (mArrowRightRect != null && mArrowRightRect.contains(x, y)) {
+                        moveGridBy(MOVE_ARROW_STEP, 0); mHitArrow = true; return true;
+                    }
+                }
+
                 switch (mCurrentTab) {
-                    case KEYBOARD: return onKeyboardTouch(x, y);
-                    case NUMPAD: return onNumPadTouch(x, y);
+                    case KEYBOARD: onKeyboardTouch(x, y); break;
+                    case NUMPAD: onNumPadTouch(x, y); break;
                 }
                 break;
             }
             case MotionEvent.ACTION_MOVE: {
                 if (!mMoveGrid) {
-                    if (mMoveGridMode && !mHitButton) {
+                    if (mMoveGridMode && !mHitButton && !mHitArrow) {
                         mMoveGrid = true;
                     } else if (Math.abs(y - mDragStartY) > 20f || Math.abs(x - mDragStartX) > 20f) {
                         mMoveGrid = true;
                     }
                 }
                 if (mMoveGrid) {
-                    mGridOffsetX += x - mDragStartX;
-                    mGridOffsetY += y - mDragStartY;
+                    mGridOffsetX += (x - mDragStartX) * MOVE_FACTOR;
+                    mGridOffsetY += (y - mDragStartY) * MOVE_FACTOR;
                     mDragStartX = x; mDragStartY = y;
                     updateGridPosition();
                     invalidate();
@@ -360,6 +463,15 @@ public class OblSettingFragment extends View {
                 break;
             }
             case MotionEvent.ACTION_UP: case MotionEvent.ACTION_CANCEL: {
+                if (mTouchDownOrdinal != null) {
+                    cancelLongPress();
+                    if (mListener != null) {
+                        mListener.enterKey(new int[]{mTouchDownOrdinal});
+                    }
+                    mTouchDownOrdinal = null;
+                    mTouchDownRow = -1;
+                    mTouchDownCol = -1;
+                }
                 invalidate(); performClick();
                 break;
             }
@@ -369,8 +481,8 @@ public class OblSettingFragment extends View {
 
     /* ─── Keyboard touch ─── */
 
-    private boolean onKeyboardTouch(float x, float y) {
-        if (mKbHitRects == null) return false;
+    private void onKeyboardTouch(float x, float y) {
+        if (mKbHitRects == null) return;
         for (int ri = 0; ri < mKbHitRects.length; ri++) {
             if (mKbHitRects[ri] == null) continue;
             for (int ki = 0; ki < mKbHitRects[ri].length; ki++) {
@@ -378,6 +490,7 @@ public class OblSettingFragment extends View {
                 if (kr != null && kr.contains(x, y)) {
                     KbKey k = KB_ROWS[ri][ki];
                     performHapticFeedback(0);
+                    mHitButton = true;
 
                     if (k.ordinal == 0) {
                         mShiftActive = !mShiftActive;
@@ -404,33 +517,79 @@ public class OblSettingFragment extends View {
                         if (mListener != null) mListener.backspace();
                     } else if (k.ordinal == 13) {
                         if (mListener != null) mListener.enter();
+                    } else if (k.ordinal == 34) {
+                        if (mListener != null) mListener.enterKey(new int[]{34});
+                    } else if (mHeldKeys.contains(k.ordinal)) {
+                        mHeldKeys.remove(k.ordinal);
+                        if (mListener != null) mListener.enterKeyOff(new int[]{k.ordinal});
+                        invalidate();
                     } else {
-                        if (mListener != null) {
-                            int[] keys = {k.ordinal};
-                            mListener.enterKey(keys);
-                        }
+                        mTouchDownOrdinal = k.ordinal;
+                        mTouchDownRow = ri;
+                        mTouchDownCol = ki;
+                        final int heldOrdinal = k.ordinal;
+                        mLongPressRunnable = () -> {
+                            mHeldKeys.add(heldOrdinal);
+                            mTouchDownOrdinal = null;
+                            if (mListener != null) mListener.enterKeyOn(new int[]{heldOrdinal});
+                            invalidate();
+                        };
+                        mHandler.postDelayed(mLongPressRunnable, 1000);
                     }
-                    return true;
+                    return;
                 }
             }
         }
-        return false;
     }
 
     /* ─── Numpad touch ─── */
 
-    private boolean onNumPadTouch(float x, float y) {
-        if (mNpHitRects == null) return false;
+    private void onNumPadTouch(float x, float y) {
+        if (mNpHitRects == null) return;
         for (int i = 0; i < mNpHitRects.length; i++) {
             if (mNpHitRects[i] != null && mNpHitRects[i].contains(x, y)) {
                 performHapticFeedback(0);
-                if (mListener != null) {
-                    mListener.enterKey(new int[]{NP_ORDS[i]});
+                mHitButton = true;
+                int ord = NP_ORDS[i];
+                if (mHeldKeys.contains(ord)) {
+                    mHeldKeys.remove(ord);
+                    if (mListener != null) mListener.enterKeyOff(new int[]{ord});
+                    invalidate();
+                } else {
+                    mTouchDownOrdinal = ord;
+                    mTouchDownRow = -1;
+                    mTouchDownCol = -1;
+                    final int heldOrdinal = ord;
+                    mLongPressRunnable = () -> {
+                        mHeldKeys.add(heldOrdinal);
+                        mTouchDownOrdinal = null;
+                        if (mListener != null) mListener.enterKeyOn(new int[]{heldOrdinal});
+                        invalidate();
+                    };
+                    mHandler.postDelayed(mLongPressRunnable, 1000);
                 }
-                return true;
+                return;
             }
         }
-        return false;
+    }
+
+    /* ─── Cancel long-press timer ─── */
+
+    private void cancelLongPress() {
+        if (mLongPressRunnable != null) {
+            mHandler.removeCallbacks(mLongPressRunnable);
+            mLongPressRunnable = null;
+        }
+    }
+
+    /* ─── Move grid by arrow step ─── */
+
+    private void moveGridBy(float dx, float dy) {
+        mGridOffsetX += dx;
+        mGridOffsetY += dy;
+        saveCustomization();
+        updateGridPosition();
+        invalidate();
     }
 
     /* ─── Settings dialog ─── */
