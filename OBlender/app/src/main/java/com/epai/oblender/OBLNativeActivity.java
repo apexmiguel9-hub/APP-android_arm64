@@ -29,7 +29,6 @@ import android.view.ViewGroup.MarginLayoutParams;
 import android.widget.Button;
 import android.view.WindowManager;
 import android.widget.LinearLayout;
-import com.epai.oblender.control.ControlOverlayView;
 import android.view.WindowManager.LayoutParams;
 import android.Manifest;
 import android.content.Intent;
@@ -81,7 +80,7 @@ public class OBLNativeActivity extends NativeActivity
     Map<Integer, WindowGLSurfaceView> mWindowFragmentMap = new HashMap<>();
 
     private OblSettingFragment mOblSettingFragment = null;
-    private ControlOverlayView mControlOverlayView = null;
+    private View mControlOverlayView = null;
     private boolean mBooleanLastOblSettingFragmentVisible=false;
 
     public String getClipboard(boolean selection){
@@ -490,7 +489,7 @@ public class OBLNativeActivity extends NativeActivity
             @Override
             public void onClick(View v) {
                 if (mControlOverlayView == null) {
-                    mControlOverlayView = new ControlOverlayView(OBLNativeActivity.this);
+                    mControlOverlayView = OBLControllerOverlayKt.createControlOverlayView(OBLNativeActivity.this);
                     LayoutParams lp = new LayoutParams();
                     lp.flags = LayoutParams.FLAG_NOT_FOCUSABLE;
                     lp.flags |= LayoutParams.FLAG_FULLSCREEN;
@@ -498,43 +497,8 @@ public class OBLNativeActivity extends NativeActivity
                     lp.flags |= LayoutParams.FLAG_LAYOUT_NO_LIMITS;
                     lp.flags |= LayoutParams.FLAG_LAYOUT_INSET_DECOR;
                     lp.flags |= LayoutParams.FLAG_NOT_TOUCH_MODAL;
-                    lp.gravity = Gravity.RIGHT | Gravity.BOTTOM;
-                    lp.width = 500;
-                    lp.height = 500;
-                    lp.x = 20;
-                    lp.y = 180;
-                    mControlOverlayView.setListener(new OblSettingFragment.OBLSettingFragmentListener() {
-                        public void enterKeyOn(int[] keys) {
-                            ArrayList<String> strings = new ArrayList<>();
-                            for (int i = 0; i < keys.length; i++) strings.add(String.valueOf(keys[i]));
-                            String joined = String.join(",", strings);
-                            Log.d("OBL.DIAG", "FCL enterKeyOn sending: " + joined);
-                            oblSetValueOn(joined);
-                        }
-                        public void enterKeyOff(int[] keys) {
-                            ArrayList<String> strings = new ArrayList<>();
-                            for (int i = 0; i < keys.length; i++) strings.add(String.valueOf(keys[i]));
-                            String joined = String.join(",", strings);
-                            Log.d("OBL.DIAG", "FCL enterKeyOff sending: " + joined);
-                            oblSetValueOff(joined);
-                        }
-                        public void enterKey(int[] keys) {
-                            ArrayList<String> strings = new ArrayList<>();
-                            for (int i = 0; i < keys.length; i++) strings.add(String.valueOf(keys[i]));
-                            String joined = String.join(",", strings);
-                            Log.d("OBL.DIAG", "FCL enterKey sending: " + joined);
-                            oblSetValue(joined);
-                        }
-                        public void backspace() {
-                            GodotLib.key(KeyEvent.KEYCODE_DEL, 0, 0, true, false);
-                            GodotLib.key(KeyEvent.KEYCODE_DEL, 0, 0, false, false);
-                        }
-                        public void enter() {
-                            GodotLib.key(KeyEvent.KEYCODE_ENTER, 0, 0, true, false);
-                            GodotLib.key(KeyEvent.KEYCODE_ENTER, 0, 0, false, false);
-                        }
-                        public void closeFragment() { mControlOverlayView.setVisibility(View.INVISIBLE); }
-                    });
+                    lp.width = ViewGroup.LayoutParams.MATCH_PARENT;
+                    lp.height = ViewGroup.LayoutParams.MATCH_PARENT;
                     getWindowManager().addView(mControlOverlayView, lp);
                 } else {
                     if (mControlOverlayView.getVisibility() == View.VISIBLE) {
