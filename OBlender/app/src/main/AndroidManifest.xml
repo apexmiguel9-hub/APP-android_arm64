@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.epai.oblender">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-feature android:glEsVersion="0x00030002" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
@@ -34,6 +33,7 @@
         </activity>
         <activity
             android:name=".StartupActivity"
+            android:exported="true"
             android:theme="@style/Theme.OBlender.Fullscreen"
             android:screenOrientation="landscape"
             android:configChanges="orientation|keyboardHidden|screenSize|smallestScreenSize|density|keyboard|navigation|screenLayout|uiMode"

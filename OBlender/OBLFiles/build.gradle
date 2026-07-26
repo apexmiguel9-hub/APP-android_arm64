@@ -3,6 +3,7 @@ plugins {
 }
 
 android {
+    namespace 'com.epai.oblfiles'
     compileSdkVersion 30
     buildToolsVersion '30.0.3'
 
