@@ -23,7 +23,7 @@ public class GameMenuStub {
     }
 
     public class Input {
-        private OblSettingFragment.OBLSettingFragmentListener listener;
+        OblSettingFragment.OBLSettingFragmentListener listener;
         private String pointerId;
 
         public Input(OblSettingFragment.OBLSettingFragmentListener l) { this.listener = l; }
