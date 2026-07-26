@@ -74,7 +74,7 @@ private fun longToBytes(long: Long): ByteArray {
 
 suspend fun ControlLayout.saveToFile(file: File) {
     withContext(Dispatchers.IO) {
-        val jsonString = layoutJson.encodeToString(this@saveToFile)
+        val jsonString = layoutJson.encodeToString(ControlLayout.serializer(), this@saveToFile)
         file.writeText(jsonString)
     }
 }
