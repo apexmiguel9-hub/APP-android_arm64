@@ -12,7 +12,6 @@
 package com.epai.oblender
 
 import android.content.Context
-import android.view.View
 import android.view.ViewGroup
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -24,8 +23,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.savedstate.SavedStateRegistry
+import androidx.savedstate.SavedStateRegistryOwner
+import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.movtery.layer_controller.ControlBoxLayout
 import com.movtery.layer_controller.event.EventHandler
 import com.movtery.layer_controller.layout.EmptyControlLayout
@@ -39,12 +42,20 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 fun createControlOverlayView(context: Context): ComposeView {
+    val lifecycleOwner = ProcessLifecycleOwner.get()
+    val savedStateRegistryOwner = object : SavedStateRegistryOwner {
+        private val registry = SavedStateRegistry()
+        override val savedStateRegistry: SavedStateRegistry get() = registry
+        override val lifecycle: Lifecycle get() = lifecycleOwner.lifecycle
+    }
+
     return ComposeView(context).apply {
         layoutParams = ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT
         )
-        this.setViewTreeLifecycleOwner(ProcessLifecycleOwner.get())
+        setViewTreeLifecycleOwner(lifecycleOwner)
+        setViewTreeSavedStateRegistryOwner(savedStateRegistryOwner)
         setContent {
             ControlOverlayContent()
         }

@@ -195,13 +195,13 @@ public class OblSettingFragment extends View {
     private static class KbKey { String label; int ordinal; KbKey(String l, int o) { label = l; ordinal = o; } }
 
     private static final KbKey[][] KB_ROWS = {
-        { new KbKey("Q",16), new KbKey("W",17), new KbKey("E",18), new KbKey("R",19), new KbKey("T",20),
-          new KbKey("Y",21), new KbKey("U",22), new KbKey("I",23), new KbKey("O",24), new KbKey("P",25) },
-        { new KbKey("A",4), new KbKey("S",5), new KbKey("D",6), new KbKey("F",7), new KbKey("G",8),
-          new KbKey("H",9), new KbKey("J",10), new KbKey("K",11), new KbKey("L",12) },
-        { new KbKey("Z",29), new KbKey("X",27), new KbKey("C",28), new KbKey("V",30), new KbKey("B",31),
-          new KbKey("N",32), new KbKey("M",33), new KbKey(",",51), new KbKey(".",52) },
-        { new KbKey("Shift",0), new KbKey("Ctrl",1), new KbKey("Alt",2), new KbKey("Space",57),
+        { new KbKey("Q",20), new KbKey("W",21), new KbKey("E",51), new KbKey("R",43), new KbKey("T",22),
+          new KbKey("Y",28), new KbKey("U",74), new KbKey("I",23), new KbKey("O",24), new KbKey("P",73) },
+        { new KbKey("A",25), new KbKey("S",44), new KbKey("D",48), new KbKey("F",53), new KbKey("G",45),
+          new KbKey("H",46), new KbKey("J",49), new KbKey("K",71), new KbKey("L",72) },
+        { new KbKey("Z",26), new KbKey("X",27), new KbKey("C",29), new KbKey("V",50), new KbKey("B",52),
+          new KbKey("N",30), new KbKey("M",31), new KbKey(",",32), new KbKey(".",33) },
+        { new KbKey("Shift",0), new KbKey("Ctrl",1), new KbKey("Alt",2), new KbKey("Space",34),
           new KbKey("\u232B",42), new KbKey("Ent\u23CE",13) },
     };
 
@@ -271,7 +271,7 @@ public class OblSettingFragment extends View {
         "0",".","Ent","+"
     };
     private static final int[] NP_ORDS = {
-        68,69,70,63, 58,59,67,62,
+        91,92,93,63, 58,59,90,62,
         55,56,57,61, 54,64,65,60
     };
     private RectF[] mNpHitRects = null;
