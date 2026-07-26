@@ -101,7 +101,7 @@ public class OblSettingFragment extends View {
     @Override
     protected void onDetachedFromWindow() {
         super.onDetachedFromWindow();
-        cancelLongPress();
+        cancelHoldTimer();
         releaseAllHeldKeys();
     }
 
@@ -109,7 +109,7 @@ public class OblSettingFragment extends View {
     protected void onVisibilityChanged(View changedView, int visibility) {
         super.onVisibilityChanged(changedView, visibility);
         if (visibility != VISIBLE) {
-            cancelLongPress();
+            cancelHoldTimer();
             releaseAllHeldKeys();
         }
     }
@@ -405,7 +405,7 @@ public class OblSettingFragment extends View {
             case MotionEvent.ACTION_DOWN: {
                 mMoveGrid = false; mHitButton = false; mHitArrow = false;
                 mDragStartX = x; mDragStartY = y;
-                cancelLongPress();
+                cancelHoldTimer();
 
                 /* Tab bar */
                 if (mKeyboardTabRect != null && mKeyboardTabRect.contains((int)x, (int)y)) {
@@ -464,7 +464,7 @@ public class OblSettingFragment extends View {
             }
             case MotionEvent.ACTION_UP: case MotionEvent.ACTION_CANCEL: {
                 if (mTouchDownOrdinal != null) {
-                    cancelLongPress();
+                    cancelHoldTimer();
                     if (mListener != null) {
                         mListener.enterKey(new int[]{mTouchDownOrdinal});
                     }
@@ -575,7 +575,7 @@ public class OblSettingFragment extends View {
 
     /* ─── Cancel long-press timer ─── */
 
-    private void cancelLongPress() {
+    private void cancelHoldTimer() {
         if (mLongPressRunnable != null) {
             mHandler.removeCallbacks(mLongPressRunnable);
             mLongPressRunnable = null;
