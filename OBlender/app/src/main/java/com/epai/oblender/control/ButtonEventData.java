@@ -11,6 +11,7 @@ public class ButtonEventData implements Cloneable {
         private boolean autoKeep;
         private boolean autoClick;
         private List<Integer> keycodes = new ArrayList<>();
+        private String outputText = "";
         private List<Runnable> changeListeners = new ArrayList<>();
 
         public void addChangeListener(Runnable r) { changeListeners.add(r); }
@@ -29,6 +30,8 @@ public class ButtonEventData implements Cloneable {
         public void clearKeycodes() { keycodes.clear(); notifyChange(); }
 
         public List<Integer> outputKeycodesList() { return keycodes; }
+        public String getOutputText() { return outputText; }
+        public void setOutputText(String v) { outputText = v != null ? v : ""; notifyChange(); }
 
         public boolean hasAnyKey() {
             return !keycodes.isEmpty();

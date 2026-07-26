@@ -447,15 +447,23 @@ public class ControlButton extends Button implements CustomView {
     private boolean autoClick = false;
     private ButtonEventData.Event autoClickEvent;
     private final Handler autoClickHandler = new Handler();
-    private final Runnable autoClickRunnable = () -> {
-        ButtonEventData.Event ev = autoClickEvent;
-        handleKeyEvent(ev, true);
-        handleKeyEvent(ev, false);
-        if (autoClick) autoClickHandler.postDelayed(autoClickRunnable, 20);
-    };
+    private Runnable autoClickRunnable;
     private void handleAutoClick(ButtonEventData.Event event, boolean enable) {
         autoClick = enable;
-        if (enable) { autoClickEvent = event; autoClickHandler.post(autoClickRunnable); }
+        if (enable) {
+            autoClickEvent = event;
+            if (autoClickRunnable == null) {
+                autoClickRunnable = new Runnable() {
+                    public void run() {
+                        ButtonEventData.Event ev = autoClickEvent;
+                        handleKeyEvent(ev, true);
+                        handleKeyEvent(ev, false);
+                        if (autoClick) autoClickHandler.postDelayed(autoClickRunnable, 20);
+                    }
+                };
+            }
+            autoClickHandler.post(autoClickRunnable);
+        }
     }
 
     private void cancelTickEvent(ButtonEventData.Event event) {

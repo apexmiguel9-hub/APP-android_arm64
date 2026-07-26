@@ -22,7 +22,7 @@ public class GameMenuStub {
         public void removeLine(int orientation) {}
     }
 
-    public static class Input {
+    public class Input {
         private OblSettingFragment.OBLSettingFragmentListener listener;
         private String pointerId;
 
