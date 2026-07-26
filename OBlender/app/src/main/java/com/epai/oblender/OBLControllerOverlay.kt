@@ -24,6 +24,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
+import androidx.lifecycle.ProcessLifecycleOwner
+import androidx.lifecycle.ViewTreeLifecycleOwner
 import com.movtery.layer_controller.ControlBoxLayout
 import com.movtery.layer_controller.event.EventHandler
 import com.movtery.layer_controller.layout.EmptyControlLayout
@@ -42,6 +44,7 @@ fun createControlOverlayView(context: Context): ComposeView {
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT
         )
+        ViewTreeLifecycleOwner.set(this, ProcessLifecycleOwner.get())
         setContent {
             ControlOverlayContent()
         }
