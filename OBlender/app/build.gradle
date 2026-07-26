@@ -164,7 +164,7 @@ android {
         pickFirst 'lib/arm64-v8a/libboostpython.so'
     }
     composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.3"
+        kotlinCompilerExtensionVersion = "1.5.2"
     }
     android.applicationVariants.all {
         variant ->
