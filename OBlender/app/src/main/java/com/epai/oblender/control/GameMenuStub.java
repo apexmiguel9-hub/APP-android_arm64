@@ -52,6 +52,7 @@ public class GameMenuStub {
         private boolean hideMenuView = false;
 
         public boolean isAutoFit() { return autoFit; }
+        public void setAutoFit(boolean v) { autoFit = v; }
         public int getAutoFitDist() { return autoFitDist; }
         public float getMouseSensitivity() { return mouseSensitivity; }
         public boolean isEnableGyroscope() { return enableGyroscope; }

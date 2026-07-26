@@ -40,6 +40,7 @@ public class ControlOverlayView extends DrawerLayout {
     private ViewManager viewManager;
 
     private int screenW, screenH;
+    private Switch editModeSwitch, showBoundarySwitch;
 
     public ControlOverlayView(Context context) {
         super(context);
@@ -72,9 +73,13 @@ public class ControlOverlayView extends DrawerLayout {
 
         addDrawerLabel("Edit Mode");
         editModeSwitch = addDrawerSwitch(false, (v, checked) -> {
-            if (menu != null) menu.setEditMode(checked);
-            menu.setShowViewBoundaries(checked);
-            showBoundarySwitch.setChecked(checked);
+            if (menu != null) {
+                menu.setEditMode(checked);
+                menu.setShowViewBoundaries(checked);
+                if (showBoundarySwitch != null) {
+                    showBoundarySwitch.setChecked(checked);
+                }
+            }
         });
 
         addDrawerLabel("Show Boundaries");
@@ -83,10 +88,8 @@ public class ControlOverlayView extends DrawerLayout {
         });
 
         addDrawerLabel("Auto Fit");
-        Switch autoFitSw = addDrawerSwitch(true, null);
-
-        autoFitSw.setOnCheckedChangeListener((v, checked) -> {
-            if (menu != null) menu.getMenuSetting().autoFit = checked;
+        Switch autoFitSw = addDrawerSwitch(true, (v, checked) -> {
+            if (menu != null) menu.getMenuSetting().setAutoFit(checked);
         });
 
         /* ── SPACER ── */
