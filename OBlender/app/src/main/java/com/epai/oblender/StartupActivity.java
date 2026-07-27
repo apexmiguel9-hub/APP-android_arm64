@@ -89,10 +89,10 @@ public class StartupActivity extends AppCompatActivity {
                 }
                 mHandler.sendEmptyMessage(MSG_ID.MSG_ID_STARTACTIVITY.ordinal());
             } else if (msg.what == MSG_ID.MSG_ID_STARTACTIVITY.ordinal()) {
-                //  Open modeling activity
-                Intent intent = new Intent(StartupActivity.this, OBLNativeActivity.class);
-                intent.putExtra("HomePath",stringHomePath);
-                intent.putExtra("ConfigPath",stringConfigPath);
+                //  Open launcher activity
+                Intent intent = new Intent(StartupActivity.this, LauncherActivity.class);
+                intent.putExtra("HomePath", stringHomePath);
+                intent.putExtra("ConfigPath", stringConfigPath);
                 startActivity(intent);
                 StartupActivity.this.finish();
             }

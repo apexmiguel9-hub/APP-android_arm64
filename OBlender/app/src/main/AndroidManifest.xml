@@ -32,18 +32,22 @@
                 android:value="blender" />
         </activity>
         <activity
-            android:name=".StartupActivity"
+            android:name=".LauncherActivity"
             android:exported="true"
-            android:theme="@style/Theme.OBlender.Fullscreen"
             android:screenOrientation="landscape"
             android:configChanges="orientation|keyboardHidden|screenSize|smallestScreenSize|density|keyboard|navigation|screenLayout|uiMode"
             android:windowSoftInputMode="adjustNothing">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity
+            android:name=".StartupActivity"
+            android:theme="@style/Theme.OBlender.Fullscreen"
+            android:screenOrientation="landscape"
+            android:configChanges="orientation|keyboardHidden|screenSize|smallestScreenSize|density|keyboard|navigation|screenLayout|uiMode"
+            android:windowSoftInputMode="adjustNothing" />
     </application>
 
 </manifest>
