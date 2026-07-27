@@ -76,6 +76,7 @@ public class OblSettingFragment extends View {
     private boolean mHitButton = false;
     private boolean mMoveDragging = false;
     private float mDragStartX = 0, mDragStartY = 0;
+    private static final float MOVE_FACTOR = 0.3f;
 
     /* Move toggle button */
     private RectF mMoveToggleRect;
@@ -428,8 +429,8 @@ public class OblSettingFragment extends View {
                     float dy = y - mDragStartY;
                     if (Math.abs(dx) > 4f || Math.abs(dy) > 4f) {
                         mMoveDragging = true;
-                        mGridOffsetX += dx;
-                        mGridOffsetY += dy;
+                        mGridOffsetX += dx * MOVE_FACTOR;
+                        mGridOffsetY += dy * MOVE_FACTOR;
                         mDragStartX = x; mDragStartY = y;
                         updateGridPosition();
                         invalidate();

@@ -13,6 +13,8 @@ package com.epai.oblender
 
 import android.content.Context
 import android.view.ViewGroup
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -22,6 +24,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ComposeView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
@@ -65,6 +68,7 @@ fun createControlOverlayView(context: Context): ComposeView {
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT
         )
+        setBackgroundColor(android.graphics.Color.TRANSPARENT)
         setViewTreeLifecycleOwner(lifecycleOwner)
         setViewTreeSavedStateRegistryOwner(savedStateRegistryOwner)
         setContent {
@@ -102,16 +106,22 @@ fun ControlOverlayContent() {
     }
 
     observedLayout?.let { layout ->
-        ControlBoxLayout(
-            modifier = Modifier.fillMaxSize(),
-            observedLayout = layout,
-            eventHandler = EventHandler(),
-            isUsingJoystick = false,
-            isCursorGrabbing = false,
-            checkOccupiedPointers = { false },
-            opacity = 1f,
-            hideLayerWhen = HideLayerWhen.None,
-            content = { }
-        )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.6f))
+        ) {
+            ControlBoxLayout(
+                modifier = Modifier.fillMaxSize(),
+                observedLayout = layout,
+                eventHandler = EventHandler(),
+                isUsingJoystick = false,
+                isCursorGrabbing = false,
+                checkOccupiedPointers = { false },
+                opacity = 1f,
+                hideLayerWhen = HideLayerWhen.None,
+                content = { }
+            )
+        }
     }
 }

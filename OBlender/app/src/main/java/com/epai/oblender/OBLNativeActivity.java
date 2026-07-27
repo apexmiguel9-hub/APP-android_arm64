@@ -492,10 +492,7 @@ public class OBLNativeActivity extends NativeActivity
                     mControlOverlayView = OBLControllerOverlayKt.createControlOverlayView(OBLNativeActivity.this);
                     LayoutParams lp = new LayoutParams();
                     lp.flags = LayoutParams.FLAG_NOT_FOCUSABLE;
-                    lp.flags |= LayoutParams.FLAG_FULLSCREEN;
                     lp.flags |= LayoutParams.FLAG_LAYOUT_IN_SCREEN;
-                    lp.flags |= LayoutParams.FLAG_LAYOUT_NO_LIMITS;
-                    lp.flags |= LayoutParams.FLAG_LAYOUT_INSET_DECOR;
                     lp.flags |= LayoutParams.FLAG_NOT_TOUCH_MODAL;
                     lp.width = ViewGroup.LayoutParams.MATCH_PARENT;
                     lp.height = ViewGroup.LayoutParams.MATCH_PARENT;
