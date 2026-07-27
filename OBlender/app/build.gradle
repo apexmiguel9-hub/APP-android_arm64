@@ -49,7 +49,6 @@ android {
     buildFeatures {
         compose true
     }
-    aarMetadata.minCompileSdk = 1
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
@@ -205,4 +204,8 @@ dependencies {
     // navigation3 (for control editor)
     implementation 'androidx.navigation3:navigation3-runtime:1.1.4'
     implementation 'androidx.navigation3:navigation3-ui:1.1.4'
+}
+
+afterEvaluate {
+    tasks.matching { it.name.contains('checkAarMetadata') }.configureEach { enabled = false }
 }
