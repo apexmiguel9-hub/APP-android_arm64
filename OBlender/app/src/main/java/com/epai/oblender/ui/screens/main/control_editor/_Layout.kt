@@ -98,6 +98,7 @@ fun InfoLayoutSwitchItem(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun <E> InfoLayoutSelectItem(
     modifier: Modifier = Modifier,

@@ -65,7 +65,7 @@ fun EditWidgetDialog(
                             // Content area
                             Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
                                 when (currentPage) {
-                                    EditWidgetCategory.Info -> EditWidgetInfo(data = data.data)
+                                    EditWidgetCategory.Info -> EditWidgetInfoPlaceholder(data = data.data)
                                     EditWidgetCategory.TextStyle -> EditTextStyle(data = data.data, onEditWidgetText = onEditWidgetText)
                                     EditWidgetCategory.ClickEvent -> {
                                         if (data.data is ObservableNormalData) {
@@ -97,8 +97,7 @@ fun EditWidgetDialog(
 }
 
 @Composable
-private fun EditWidgetInfo(data: ObservableWidget) {
-    // Simplified info page - just show basic info text
+private fun EditWidgetInfoPlaceholder(data: ObservableWidget) {
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Text("Widget Info", style = MaterialTheme.typography.titleMedium)
         Text("ID: ${(data as? ObservableNormalData)?.uuid ?: (data as? ObservableTextData)?.uuid ?: ""}", style = MaterialTheme.typography.bodySmall)
