@@ -1,5 +1,6 @@
 package com.epai.oblender.ui.screens.main.control_editor.edit_widget
 
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource

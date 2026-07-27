@@ -28,6 +28,7 @@ fun EditWidgetInfo(
     // Simplified - just show basic info
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Text("Widget Info", style = MaterialTheme.typography.titleMedium)
-        Text("ID: ${data.uuid}", style = MaterialTheme.typography.bodySmall)
+        val widgetId = when (data) { is ObservableNormalData -> data.uuid; is ObservableTextData -> data.uuid; else -> "" }
+        Text("ID: $widgetId", style = MaterialTheme.typography.bodySmall)
     }
 }
