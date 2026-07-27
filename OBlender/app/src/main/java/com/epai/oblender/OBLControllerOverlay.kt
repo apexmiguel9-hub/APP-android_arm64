@@ -46,6 +46,8 @@ import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.movtery.layer_controller.ControlEditorLayer
+import com.movtery.layer_controller.EDITOR_VERSION
+import com.movtery.layer_controller.data.lang.createTranslatable
 import com.movtery.layer_controller.layout.ControlLayout
 import com.movtery.layer_controller.layout.EmptyControlLayout
 import com.movtery.layer_controller.layout.createNewLayer
@@ -164,8 +166,14 @@ fun ControlOverlayContent() {
 private fun createDefaultLayout(): ControlLayout {
     val layer = createNewLayer("Guía")
     return ControlLayout(
-        info = ControlLayout.Info(name = "OBlender Controls"),
+        info = ControlLayout.Info(
+            name = createTranslatable("OBlender Controls"),
+            author = createTranslatable("User"),
+            description = createTranslatable("Default control layout"),
+            versionCode = 1,
+            versionName = "1.0"
+        ),
         layers = listOf(layer),
-        editorVersion = com.movtery.layer_controller.EDITOR_VERSION
+        editorVersion = EDITOR_VERSION
     )
 }
