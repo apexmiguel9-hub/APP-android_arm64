@@ -1,6 +1,8 @@
 package com.epai.oblender.ui.screens.main.control_editor.edit_widget
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -19,7 +21,7 @@ fun EditWidgetClickEvent(
     switchControlLayers: (ObservableNormalData, ClickEvent.Type) -> Unit,
     sendText: (ObservableNormalData) -> Unit
 ) {
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Events", style = MaterialTheme.typography.titleMedium)
         InfoLayoutSwitchItem(modifier = Modifier.fillMaxWidth(), title = stringResource(R.string.control_editor_edit_event_swipple), value = data.isSwipple, onValueChange = { data.isSwipple = it })
         InfoLayoutSwitchItem(modifier = Modifier.fillMaxWidth(), title = stringResource(R.string.control_editor_edit_event_penetrable), value = data.isPenetrable, onValueChange = { data.isPenetrable = it })
