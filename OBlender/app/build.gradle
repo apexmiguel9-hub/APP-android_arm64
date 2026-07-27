@@ -205,7 +205,3 @@ dependencies {
     implementation 'androidx.navigation3:navigation3-runtime:1.1.4'
     implementation 'androidx.navigation3:navigation3-ui:1.1.4'
 }
-
-afterEvaluate {
-    tasks.matching { it.name.contains('checkAarMetadata') }.configureEach { enabled = false }
-}

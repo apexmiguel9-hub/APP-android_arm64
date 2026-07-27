@@ -170,7 +170,7 @@ jobs:
           chmod +x gradlew
           export ANDROID_SDK_ROOT="$ANDROID_HOME"
           export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/21.4.7075529"
-          ./gradlew assembleRelease 2>&1
+          ./gradlew assembleRelease -x :app:checkReleaseAarMetadata -x :app:checkDebugAarMetadata 2>&1
 
 
       - name: Check APK exists and report size
