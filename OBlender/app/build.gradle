@@ -200,4 +200,8 @@ dependencies {
 
     // kotlinx-serialization (for LayerController JSON data)
     implementation 'org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0'
+
+    // navigation3 (for control editor)
+    implementation 'androidx.navigation3:navigation3-runtime:1.1.4'
+    implementation 'androidx.navigation3:navigation3-ui:1.1.4'
 }

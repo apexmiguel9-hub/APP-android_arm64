@@ -1,8 +1,148 @@
 <resources>
     <string name="app_name">blender on Android</string>
-    <!-- TODO: Remove or change this placeholder text -->
     <string name="hello_blank_fragment">Hello blank fragment</string>
     <string name="title_activity_startup">FullscreenActivity</string>
     <string name="dummy_button">Dummy Button</string>
     <string name="dummy_content">DUMMY\nCONTENT</string>
+
+    <!-- Generic -->
+    <string name="generic_confirm">Confirm</string>
+    <string name="generic_cancel">Cancel</string>
+    <string name="generic_setting">Setting</string>
+    <string name="generic_delete">Delete</string>
+    <string name="generic_close">Close</string>
+    <string name="generic_save">Save</string>
+    <string name="generic_warning">Warning</string>
+    <string name="generic_tip">Tip</string>
+    <string name="generic_in_progress">In progress…</string>
+    <string name="generic_expand">Expand</string>
+    <string name="generic_collapse">Collapse</string>
+    <string name="generic_unspecified">Unspecified</string>
+
+    <!-- Control Editor Menu -->
+    <string name="control_editor_menu_title">Editor</string>
+    <string name="control_editor_menu_new_widget_button">+ Button</string>
+    <string name="control_editor_menu_new_widget_text">+ Text</string>
+    <string name="control_editor_menu_preview_mode">Preview Mode</string>
+    <string name="control_editor_menu_preview_mode_scenario">Scenario</string>
+    <string name="control_editor_menu_preview_mode_in_game">In Game</string>
+    <string name="control_editor_menu_preview_mode_in_menu">In Menu</string>
+    <string name="control_editor_menu_preview_is_mouse">Using Physical Mouse</string>
+    <string name="control_editor_menu_preview_is_gamepad">Using Gamepad</string>
+    <string name="control_editor_menu_widget_snap">Widget Snap</string>
+    <string name="control_editor_menu_widget_snap_all_layers">Snap Across All Layers</string>
+    <string name="control_editor_menu_widget_snap_mode">Snap Mode</string>
+    <string name="control_editor_menu_widget_snap_mode_fullscreen">Fullscreen</string>
+    <string name="control_editor_menu_widget_snap_mode_local">Local</string>
+    <string name="control_editor_menu_save_and_exit">Save &amp; Exit</string>
+    <string name="control_editor_menu_no_layers_title">No Layers</string>
+    <string name="control_editor_menu_no_layers_message">Please create a layer first</string>
+    <string name="control_editor_menu_no_selected_layer_title">No Layer Selected</string>
+    <string name="control_editor_menu_no_selected_layer_message">Please select a layer first</string>
+
+    <!-- Control Editor Layers -->
+    <string name="control_editor_layers_title">Layers</string>
+    <string name="control_editor_layers_create">+ Add Layer</string>
+    <string name="control_editor_layers_attribute">Properties</string>
+    <string name="control_editor_layers_delete">Delete layer "%s"?</string>
+
+    <!-- Control Editor Edit Layer -->
+    <string name="control_editor_edit_layer_default">New Layer</string>
+
+    <!-- Control Editor Edit Widget -->
+    <string name="control_editor_edit_button_default">Button</string>
+    <string name="control_editor_edit_text_default">Text</string>
+    <string name="control_editor_edit_dialog_open_preview">Show Preview</string>
+    <string name="control_editor_edit_dialog_close_preview">Hide Preview</string>
+    <string name="control_editor_edit_dialog_clone_widget">Clone</string>
+    <string name="control_editor_edit_dialog_clone_widget_title">Clone to layers</string>
+    <string name="control_editor_edit_dialog_delete_widget">Delete this widget?</string>
+
+    <!-- Control Editor Edit Category -->
+    <string name="control_editor_edit_category_info">Info</string>
+    <string name="control_editor_edit_category_event">Events</string>
+    <string name="control_editor_edit_category_style">Style</string>
+
+    <!-- Control Editor Edit Visibility -->
+    <string name="control_editor_edit_visibility">Visibility</string>
+    <string name="control_editor_edit_visibility_always">Always</string>
+    <string name="control_editor_edit_visibility_in_game">In Game</string>
+    <string name="control_editor_edit_visibility_in_menu">In Menu</string>
+
+    <!-- Control Editor Edit Position -->
+    <string name="control_editor_edit_position_x">X Position</string>
+    <string name="control_editor_edit_position_y">Y Position</string>
+
+    <!-- Control Editor Edit Size -->
+    <string name="control_editor_edit_size_type">Size Type</string>
+    <string name="control_editor_edit_size_type_dp">Absolute (dp)</string>
+    <string name="control_editor_edit_size_type_percentage">Percentage</string>
+    <string name="control_editor_edit_size_type_wrap_content">Wrap Content</string>
+    <string name="control_editor_edit_size_width">Width</string>
+    <string name="control_editor_edit_size_height">Height</string>
+    <string name="control_editor_edit_size_width_reference">Width Reference</string>
+    <string name="control_editor_edit_size_height_reference">Height Reference</string>
+    <string name="control_editor_edit_size_reference_screen_width">Screen Width</string>
+    <string name="control_editor_edit_size_reference_screen_height">Screen Height</string>
+
+    <!-- Control Editor Edit Text -->
+    <string name="control_editor_edit_text">Edit Text</string>
+    <string name="control_editor_edit_text_alignment">Alignment</string>
+    <string name="control_editor_edit_text_bold">Bold</string>
+    <string name="control_editor_edit_text_italic">Italic</string>
+    <string name="control_editor_edit_text_underline">Underline</string>
+
+    <!-- Control Editor Edit Events -->
+    <string name="control_editor_edit_event_basic">Basic</string>
+    <string name="control_editor_edit_event_launcher">Launcher</string>
+    <string name="control_editor_edit_event_key">Keys</string>
+    <string name="control_editor_edit_event_swipple">Swipe to trigger</string>
+    <string name="control_editor_edit_event_penetrable">Penetrable</string>
+    <string name="control_editor_edit_event_toggleable">Toggleable</string>
+    <string name="control_editor_edit_event_launcher_switch_menu">Toggle Menu</string>
+    <string name="control_editor_edit_event_launcher_mouse_left">Mouse Left</string>
+    <string name="control_editor_edit_event_launcher_mouse_middle">Mouse Middle</string>
+    <string name="control_editor_edit_event_launcher_mouse_right">Mouse Right</string>
+    <string name="control_editor_edit_event_launcher_mouse_scroll_up">Scroll Up</string>
+    <string name="control_editor_edit_event_launcher_mouse_scroll_up_single">Scroll Up (Single)</string>
+    <string name="control_editor_edit_event_launcher_mouse_scroll_down">Scroll Down</string>
+    <string name="control_editor_edit_event_launcher_mouse_scroll_down_single">Scroll Down (Single)</string>
+    <string name="control_editor_edit_event_launcher_send_text">Send Text</string>
+    <string name="control_editor_edit_event_launcher_send_text_summary">The text will be sent when clicked.</string>
+    <string name="control_editor_edit_event_launcher_send_text_hint">Input text…</string>
+    <string name="control_editor_edit_event_key_new">+ Add Key Event</string>
+    <string name="control_editor_edit_event_key_value">Key: %s</string>
+
+    <!-- Control Editor Edit Switch Layers -->
+    <string name="control_editor_edit_switch_layers">Toggle Layers</string>
+    <string name="control_editor_edit_show_layers">Show Layers</string>
+    <string name="control_editor_edit_hide_layers">Hide Layers</string>
+
+    <!-- Control Editor Edit Style -->
+    <string name="control_editor_edit_style_config">Styles</string>
+    <string name="control_editor_edit_style_config_name">Style Name</string>
+    <string name="control_editor_edit_style_config_empty">No styles yet, tap to create</string>
+    <string name="control_editor_edit_style_config_delete">Delete style "%s"?</string>
+
+    <!-- Control Editor Special (Joystick) -->
+    <string name="control_editor_special_joystick_style">Joystick Style</string>
+    <string name="control_editor_special_joystick_style_tip_title">Joystick Style</string>
+    <string name="control_editor_special_joystick_style_tip_summary">Configure a custom style for the joystick independent of button styles.</string>
+    <string name="control_editor_special_joystick_style_create_title">Create Joystick Style</string>
+    <string name="control_editor_special_joystick_style_create_summary">Create a custom joystick style?</string>
+    <string name="control_editor_special_joystick_style_delete_title">Delete Joystick Style</string>
+    <string name="control_editor_special_joystick_style_delete_summary">Delete this joystick style?</string>
+
+    <!-- Control Editor Exit -->
+    <string name="control_editor_exit_message">You have unsaved changes. Exit anyway?</string>
+    <string name="control_editor_exit_confirm">Exit Without Saving</string>
+
+    <!-- Control Manage -->
+    <string name="control_manage_saving">Saving…</string>
+    <string name="control_manage_failed_to_save">Save Failed</string>
+    <string name="control_manage_create_new">Create</string>
+
+    <!-- Game Menu / Styles -->
+    <string name="game_menu_option_input_method">Input Method</string>
+    <string name="game_styles_joystick_enable">Enable Joystick</string>
 </resources>
