@@ -32,7 +32,6 @@ class LauncherActivity : ComponentActivity() {
 
         ScreenUtils.fullScreen(window)
 
-        // Receive paths from StartupActivity if provided; otherwise copy assets
         val fromIntent = intent
         if (fromIntent != null && fromIntent.hasExtra("HomePath")) {
             homePath = fromIntent.getStringExtra("HomePath") ?: ""
@@ -49,11 +48,11 @@ class LauncherActivity : ComponentActivity() {
         setContent {
             MaterialTheme(
                 colorScheme = darkColorScheme(
-                    primary = Color(0xFF90CAF9),
+                    primary = Color(0xFFFF9800),
                     secondary = Color(0xFF80CBC4),
                     background = Color(0xFF121212),
                     surface = Color(0xFF1E1E1E),
-                    onPrimary = Color.Black,
+                    onPrimary = Color.White,
                     onSecondary = Color.Black,
                     onBackground = Color.White,
                     onSurface = Color.White,
@@ -85,72 +84,67 @@ private fun LauncherScreen(onLaunchBlender: () -> Unit) {
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(24.dp),
-            modifier = Modifier.padding(32.dp)
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 32.dp)
         ) {
-            // App title + icon placeholder
             Text(
                 text = "Blender",
-                fontSize = 48.sp,
+                fontSize = 52.sp,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
+                color = Color(0xFFFF9800),
                 textAlign = TextAlign.Center,
             )
             Text(
                 text = "on Android",
-                fontSize = 20.sp,
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+                fontSize = 22.sp,
+                color = Color.White.copy(alpha = 0.7f),
                 textAlign = TextAlign.Center,
+                modifier = Modifier.padding(bottom = 40.dp)
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Version card
             Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp),
+                modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface
+                    containerColor = Color(0xFF1E1E1E)
                 )
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                        .padding(vertical = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
                         text = "Blender 3.6.22",
                         fontSize = 28.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface,
+                        color = Color.White,
                         textAlign = TextAlign.Center,
                     )
                     Text(
                         text = "3D Creation Suite",
                         fontSize = 16.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        color = Color.White.copy(alpha = 0.6f),
                         textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(top = 4.dp)
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(48.dp))
 
-            // Launch button
             Button(
                 onClick = onLaunchBlender,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 24.dp)
                     .height(64.dp),
                 shape = RoundedCornerShape(16.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    containerColor = Color(0xFFFF9800),
+                    contentColor = Color.White,
                 ),
             ) {
                 Text(
