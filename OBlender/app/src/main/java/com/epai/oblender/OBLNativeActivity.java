@@ -494,6 +494,7 @@ public class OBLNativeActivity extends NativeActivity
                     lp.flags = LayoutParams.FLAG_NOT_FOCUSABLE;
                     lp.flags |= LayoutParams.FLAG_LAYOUT_IN_SCREEN;
                     lp.flags |= LayoutParams.FLAG_NOT_TOUCH_MODAL;
+                    lp.format = PixelFormat.TRANSPARENT;
                     lp.gravity = Gravity.CENTER;
                     lp.width = (int)(getResources().getDisplayMetrics().widthPixels * 0.9);
                     lp.height = (int)(getResources().getDisplayMetrics().heightPixels * 0.9);
