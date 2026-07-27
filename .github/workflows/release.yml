@@ -74,26 +74,32 @@ jobs:
           find "$GITROOT/OBlender" -name "*.a" -type f -delete
           echo "Old .a files cleaned ✓"
 
-      - name: Flatten .a files to target directory
+      - name: Extract and flatten .a files
         run: |
+          ZIP_FILE=$(find /tmp/blender-libs -name "*.zip" -type f | head -1)
+          if [ -z "$ZIP_FILE" ]; then
+            echo "ERROR: No .zip found in downloaded artifact"
+            find /tmp/blender-libs -type f | head -20
+            exit 1
+          fi
+          echo "Extracting $ZIP_FILE..."
+          unzip -q "$ZIP_FILE" -d /tmp/blender-libs/extracted
+
           GITROOT="${{ github.workspace }}"
           A_DIR="$GITROOT/OBlender/app/.cxx/blender-libs/release/arm64-v8a/lib"
           mkdir -p "$A_DIR"
 
-          echo "=== .a files from Blender CI ==="
-          find /tmp/blender-libs -name "*.a" -type f | head -10
-          COUNT=$(find /tmp/blender-libs -name "*.a" -type f | wc -l)
-          echo "Total .a files found: $COUNT"
+          echo "=== .a files found ==="
+          find /tmp/blender-libs/extracted -name "*.a" -type f | head -5
+          find /tmp/blender-libs/extracted -name "*.a" -type f | wc -l
 
-          echo "=== Copiando .a a $A_DIR ==="
-          find /tmp/blender-libs -name "*.a" -type f -exec cp {} "$A_DIR/" \;
+          echo "=== Copiando a $A_DIR ==="
+          find /tmp/blender-libs/extracted -name "*.a" -type f -exec cp {} "$A_DIR/" \;
           DEPLOYED=$(ls "$A_DIR/" | wc -l)
           echo "Deployed $DEPLOYED .a files"
 
           if [ "$DEPLOYED" -eq 0 ]; then
             echo "ERROR: No .a files deployed!" >&2
-            echo "=== Full listing of /tmp/blender-libs ==="
-            find /tmp/blender-libs -type f | head -50
             exit 1
           fi
 
