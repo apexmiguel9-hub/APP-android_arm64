@@ -74,11 +74,11 @@ public class OblSettingFragment extends View {
     private int mGridBaseX = 20, mGridBaseY = 180;
     private boolean mMoveGridMode = false;
     private boolean mHitButton = false;
-    private static final float MOVE_ARROW_STEP = 10f;
+    private boolean mMoveDragging = false;
+    private float mDragStartX = 0, mDragStartY = 0;
 
-    /* Move toggle button + arrow buttons for precise move */
+    /* Move toggle button */
     private RectF mMoveToggleRect;
-    private RectF mArrowUpRect, mArrowDownRect, mArrowLeftRect, mArrowRightRect;
 
     /* Key long-press hold state */
     private final Set<Integer> mHeldKeys = new HashSet<>();
@@ -245,52 +245,6 @@ public class OblSettingFragment extends View {
         float ty = btnY + btnH / 2f + (fm.bottom - fm.top) / 2f - fm.bottom;
         c.drawText("Move", tx, ty, mPaint);
         mMoveToggleRect = new RectF(btnX, btnY, btnX + btnW, btnY + btnH);
-
-        /* Arrows at grid edges when Move mode is active */
-        if (mMoveGridMode) {
-            float arrowSz = dpToPx(22);
-            float arrowHalf = arrowSz / 2f;
-            float cx = mW / 2f;
-            float cy = gridTop + gridH / 2f;
-            float pad = dpToPx(4);
-
-            /* Left arrow (left edge, centered vertically) */
-            float lx = pad;
-            float ly = cy - arrowHalf;
-            c.drawRoundRect(lx, ly, lx + arrowSz, ly + arrowSz, 6, 6, mPaint);
-            mPaint.setColor(mBtnTxt);
-            mPaint.setTextSize(arrowSz * 0.45f);
-            Paint.FontMetrics fm2 = mPaint.getFontMetrics();
-            c.drawText("←", lx + arrowHalf, ly + arrowHalf + (fm2.bottom - fm2.top) / 2f - fm2.bottom, mPaint);
-            mArrowLeftRect = new RectF(lx, ly, lx + arrowSz, ly + arrowSz);
-            mPaint.setColor(mBtnBg);
-
-            /* Right arrow (right edge, centered vertically) */
-            float rx = mW - arrowSz - pad;
-            c.drawRoundRect(rx, ly, rx + arrowSz, ly + arrowSz, 6, 6, mPaint);
-            mPaint.setColor(mBtnTxt);
-            c.drawText("→", rx + arrowHalf, ly + arrowHalf + (fm2.bottom - fm2.top) / 2f - fm2.bottom, mPaint);
-            mArrowRightRect = new RectF(rx, ly, rx + arrowSz, ly + arrowSz);
-            mPaint.setColor(mBtnBg);
-
-            /* Up arrow (top edge of grid, centered horizontally) */
-            float ux = cx - arrowHalf;
-            float uy = gridTop + pad;
-            c.drawRoundRect(ux, uy, ux + arrowSz, uy + arrowSz, 6, 6, mPaint);
-            mPaint.setColor(mBtnTxt);
-            c.drawText("↑", ux + arrowHalf, uy + arrowHalf + (fm2.bottom - fm2.top) / 2f - fm2.bottom, mPaint);
-            mArrowUpRect = new RectF(ux, uy, ux + arrowSz, uy + arrowSz);
-            mPaint.setColor(mBtnBg);
-
-            /* Down arrow (just above Move button) */
-            float dy = btnY - arrowSz - pad;
-            float dx = cx - arrowHalf;
-            c.drawRoundRect(dx, dy, dx + arrowSz, dy + arrowSz, 6, 6, mPaint);
-            mPaint.setColor(mBtnTxt);
-            c.drawText("↓", dx + arrowHalf, dy + arrowHalf + (fm2.bottom - fm2.top) / 2f - fm2.bottom, mPaint);
-            mArrowDownRect = new RectF(dx, dy, dx + arrowSz, dy + arrowSz);
-            mPaint.setColor(mBtnBg);
-        }
     }
 
     private float dpToPx(float dp) {
@@ -433,6 +387,8 @@ public class OblSettingFragment extends View {
         switch (event.getAction()) {
             case MotionEvent.ACTION_DOWN: {
                 mHitButton = false;
+                mMoveDragging = false;
+                mDragStartX = x; mDragStartY = y;
                 cancelHoldTimer();
 
                 /* Tab bar */
@@ -451,28 +407,13 @@ public class OblSettingFragment extends View {
                     return true;
                 }
 
-                /* Move toggle button in header */
+                /* Move toggle button at the bottom */
                 if (mMoveToggleRect != null && mMoveToggleRect.contains(x, y)) {
+                    mHitButton = true;
                     mMoveGridMode = !mMoveGridMode;
                     saveCustomization();
                     invalidate();
                     return true;
-                }
-
-                /* Arrow buttons (when Move active) */
-                if (mMoveGridMode) {
-                    if (mArrowUpRect != null && mArrowUpRect.contains(x, y)) {
-                        moveGridBy(0, -MOVE_ARROW_STEP); return true;
-                    }
-                    if (mArrowDownRect != null && mArrowDownRect.contains(x, y)) {
-                        moveGridBy(0, MOVE_ARROW_STEP); return true;
-                    }
-                    if (mArrowLeftRect != null && mArrowLeftRect.contains(x, y)) {
-                        moveGridBy(-MOVE_ARROW_STEP, 0); return true;
-                    }
-                    if (mArrowRightRect != null && mArrowRightRect.contains(x, y)) {
-                        moveGridBy(MOVE_ARROW_STEP, 0); return true;
-                    }
                 }
 
                 switch (mCurrentTab) {
@@ -482,9 +423,26 @@ public class OblSettingFragment extends View {
                 break;
             }
             case MotionEvent.ACTION_MOVE: {
+                if (mMoveGridMode && !mHitButton) {
+                    float dx = x - mDragStartX;
+                    float dy = y - mDragStartY;
+                    if (Math.abs(dx) > 4f || Math.abs(dy) > 4f) {
+                        mMoveDragging = true;
+                        mGridOffsetX += dx;
+                        mGridOffsetY += dy;
+                        mDragStartX = x; mDragStartY = y;
+                        updateGridPosition();
+                        invalidate();
+                    }
+                }
                 break;
             }
             case MotionEvent.ACTION_UP: case MotionEvent.ACTION_CANCEL: {
+                if (mMoveDragging) {
+                    mMoveDragging = false;
+                    invalidate(); performClick();
+                    break;
+                }
                 if (mTouchDownOrdinal != null) {
                     cancelHoldTimer();
                     if (mListener != null) {
@@ -602,16 +560,6 @@ public class OblSettingFragment extends View {
             mHandler.removeCallbacks(mLongPressRunnable);
             mLongPressRunnable = null;
         }
-    }
-
-    /* ─── Move grid by arrow step ─── */
-
-    private void moveGridBy(float dx, float dy) {
-        mGridOffsetX += dx;
-        mGridOffsetY += dy;
-        saveCustomization();
-        updateGridPosition();
-        invalidate();
     }
 
     /* ─── Settings dialog ─── */
