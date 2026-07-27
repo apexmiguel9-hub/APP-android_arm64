@@ -69,19 +69,16 @@ public class OblSettingFragment extends View {
     private boolean mCtrlActive = false;
     private boolean mAltActive = false;
 
-    /* Grid drag-to-move state */
+    /* Grid position */
     private float mGridOffsetX = 0, mGridOffsetY = 0;
     private int mGridBaseX = 20, mGridBaseY = 180;
-    private float mDragStartX = 0, mDragStartY = 0;
-    private boolean mMoveGrid = false;
     private boolean mMoveGridMode = false;
     private boolean mHitButton = false;
-    private static final float MOVE_FACTOR = 0.3f;
     private static final float MOVE_ARROW_STEP = 10f;
 
-    /* Arrow buttons for precise move */
+    /* Move toggle button + arrow buttons for precise move */
+    private RectF mMoveToggleRect;
     private RectF mArrowUpRect, mArrowDownRect, mArrowLeftRect, mArrowRightRect;
-    private boolean mHitArrow = false;
 
     /* Key long-press hold state */
     private final Set<Integer> mHeldKeys = new HashSet<>();
@@ -206,21 +203,33 @@ public class OblSettingFragment extends View {
         Paint.FontMetrics fm = mPaint.getFontMetrics();
         float y = gy + h / 2f + (fm.bottom - fm.top) / 2f - fm.bottom;
 
-        String title;
-        switch (mCurrentTab) {
-            case KEYBOARD: title = "QWERTY"; break;
-            case NUMPAD: title = "Numpad"; break;
-            default: title = "Keyboard"; break;
+        /* Move toggle button (left side) */
+        {
+            float bw = h * 1.5f;
+            float bh = h * 0.6f;
+            float bx = 6f;
+            float by = gy + (h - bh) / 2f;
+            mPaint.setColor(mMoveGridMode ? mToggleOnBg : mBtnBg);
+            c.drawRoundRect(bx, by, bx + bw, by + bh, 6, 6, mPaint);
+            mBorderPaint.setColor(mBtnBorder);
+            mBorderPaint.setStrokeWidth(1);
+            c.drawRoundRect(bx, by, bx + bw, by + bh, 6, 6, mBorderPaint);
+            mPaint.setColor(mBtnTxt);
+            mPaint.setTextSize(h * 0.35f);
+            Paint.FontMetrics fm2 = mPaint.getFontMetrics();
+            float tx = bx + bw / 2f;
+            float ty = by + bh / 2f + (fm2.bottom - fm2.top) / 2f - fm2.bottom;
+            c.drawText("Move", tx, ty, mPaint);
+            mMoveToggleRect = new RectF(bx, by, bx + bw, by + bh);
         }
 
-        /* Draw move arrow buttons when Move mode is active */
+        /* Arrow buttons (only when Move mode is active) */
         if (mMoveGridMode) {
             float ah = h * 0.5f;
             float aw = ah;
             float aPad = 4f;
             float arrowY = gy + (h - ah) / 2f;
-            float arrowCenterY = arrowY + ah / 2f;
-            float leftX = aPad;
+            float leftX = 6f + h * 1.5f + 6f;
             float rightX = leftX + aw + aPad;
             float upX = rightX + aw + aPad;
             float downX = upX + aw + aPad;
@@ -234,14 +243,19 @@ public class OblSettingFragment extends View {
             mArrowRightRect = new RectF(rightX, arrowY, rightX + aw, arrowY + ah);
             mArrowUpRect = new RectF(upX, arrowY, upX + aw, arrowY + ah);
             mArrowDownRect = new RectF(downX, arrowY, downX + aw, arrowY + ah);
-
-            /* Push title right to make room for arrows */
-            float titleStart = downX + aw + aPad * 2;
-            c.drawText(title, titleStart + (mW - titleStart) / 2f, y, mPaint);
-        } else {
-            c.drawText(title, mW / 2f, y, mPaint);
         }
 
+        /* Title (centered) */
+        String title;
+        switch (mCurrentTab) {
+            case KEYBOARD: title = "QWERTY"; break;
+            case NUMPAD: title = "Numpad"; break;
+            default: title = "Keyboard"; break;
+        }
+        mPaint.setTextSize(h * 0.4f);
+        c.drawText(title, mW / 2f, y, mPaint);
+
+        /* Gear icon (right side) */
         float gearSize = h * 0.6f;
         float gx = mW - gearSize - 16;
         float gtx = gx + gearSize / 2f;
@@ -403,8 +417,7 @@ public class OblSettingFragment extends View {
         float x = event.getX(), y = event.getY();
         switch (event.getAction()) {
             case MotionEvent.ACTION_DOWN: {
-                mMoveGrid = false; mHitButton = false; mHitArrow = false;
-                mDragStartX = x; mDragStartY = y;
+                mHitButton = false;
                 cancelHoldTimer();
 
                 /* Tab bar */
@@ -423,19 +436,27 @@ public class OblSettingFragment extends View {
                     return true;
                 }
 
-                /* Arrow buttons (Move mode) */
+                /* Move toggle button in header */
+                if (mMoveToggleRect != null && mMoveToggleRect.contains(x, y)) {
+                    mMoveGridMode = !mMoveGridMode;
+                    saveCustomization();
+                    invalidate();
+                    return true;
+                }
+
+                /* Arrow buttons (when Move active) */
                 if (mMoveGridMode) {
                     if (mArrowUpRect != null && mArrowUpRect.contains(x, y)) {
-                        moveGridBy(0, -MOVE_ARROW_STEP); mHitArrow = true; return true;
+                        moveGridBy(0, -MOVE_ARROW_STEP); return true;
                     }
                     if (mArrowDownRect != null && mArrowDownRect.contains(x, y)) {
-                        moveGridBy(0, MOVE_ARROW_STEP); mHitArrow = true; return true;
+                        moveGridBy(0, MOVE_ARROW_STEP); return true;
                     }
                     if (mArrowLeftRect != null && mArrowLeftRect.contains(x, y)) {
-                        moveGridBy(-MOVE_ARROW_STEP, 0); mHitArrow = true; return true;
+                        moveGridBy(-MOVE_ARROW_STEP, 0); return true;
                     }
                     if (mArrowRightRect != null && mArrowRightRect.contains(x, y)) {
-                        moveGridBy(MOVE_ARROW_STEP, 0); mHitArrow = true; return true;
+                        moveGridBy(MOVE_ARROW_STEP, 0); return true;
                     }
                 }
 
@@ -446,20 +467,6 @@ public class OblSettingFragment extends View {
                 break;
             }
             case MotionEvent.ACTION_MOVE: {
-                if (!mMoveGrid) {
-                    if (mMoveGridMode && !mHitButton && !mHitArrow) {
-                        mMoveGrid = true;
-                    } else if (Math.abs(y - mDragStartY) > 20f || Math.abs(x - mDragStartX) > 20f) {
-                        mMoveGrid = true;
-                    }
-                }
-                if (mMoveGrid) {
-                    mGridOffsetX += (x - mDragStartX) * MOVE_FACTOR;
-                    mGridOffsetY += (y - mDragStartY) * MOVE_FACTOR;
-                    mDragStartX = x; mDragStartY = y;
-                    updateGridPosition();
-                    invalidate();
-                }
                 break;
             }
             case MotionEvent.ACTION_UP: case MotionEvent.ACTION_CANCEL: {

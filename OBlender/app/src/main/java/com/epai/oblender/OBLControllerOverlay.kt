@@ -12,6 +12,7 @@
 package com.epai.oblender
 
 import android.content.Context
+import android.os.Bundle
 import android.view.ViewGroup
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -23,11 +24,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.savedstate.SavedStateRegistry
-import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.movtery.layer_controller.ControlBoxLayout
@@ -45,12 +46,19 @@ import java.io.File
 private class SimpleSavedStateRegistryOwner(
     lifecycleOwner: LifecycleOwner
 ) : SavedStateRegistryOwner {
-    override val lifecycle = lifecycleOwner.lifecycle
-    private val controller = SavedStateRegistryController.create(this).also {
-        it.performRestore(null)
-    }
+    override val lifecycle: Lifecycle = lifecycleOwner.lifecycle
     override val savedStateRegistry: SavedStateRegistry
-        get() = controller.savedStateRegistry
+
+    init {
+        val reg = SavedStateRegistry()
+        try {
+            val method = SavedStateRegistry::class.java.getDeclaredMethod("performRestore", Bundle::class.java)
+            method.isAccessible = true
+            method.invoke(reg, null)
+        } catch (_: Exception) {
+        }
+        savedStateRegistry = reg
+    }
 }
 
 fun createControlOverlayView(context: Context): ComposeView {
