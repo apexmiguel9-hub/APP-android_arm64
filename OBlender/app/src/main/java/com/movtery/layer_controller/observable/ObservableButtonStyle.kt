@@ -38,6 +38,8 @@ class ObservableButtonStyle(
     var lightStyle = ObservableStyleConfig(style.lightStyle)
     var darkStyle = ObservableStyleConfig(style.darkStyle)
 
+    fun displayName(): String = name
+
     override fun pack(): ButtonStyle {
         return ButtonStyle(
             name = this.name,

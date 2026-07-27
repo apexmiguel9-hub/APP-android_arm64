@@ -13,8 +13,6 @@ import com.movtery.layer_controller.observable.*
 import com.epai.oblender.R
 import com.epai.oblender.ui.screens.main.control_editor.InfoLayoutTextItem
 
-private val ObservableButtonStyle.displayName: String get() = pack().name
-
 @Composable
 fun EditWidgetStyle(data: ObservableWidget, styles: List<ObservableButtonStyle>, openStyleList: () -> Unit) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -23,7 +21,7 @@ fun EditWidgetStyle(data: ObservableWidget, styles: List<ObservableButtonStyle>,
         } else {
             LazyColumn(modifier = Modifier.fillMaxSize().padding(16.dp)) {
                 items(styles) { style ->
-                    Text(text = style.displayName, style = MaterialTheme.typography.bodyLarge)
+                    Text(text = style.displayName(), style = MaterialTheme.typography.bodyLarge)
                     Spacer(Modifier.height(8.dp))
                 }
             }
