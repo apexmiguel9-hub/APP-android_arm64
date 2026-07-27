@@ -378,12 +378,13 @@ internal fun buttonFontSizeAsState(
 
     val fontSize: Float = remember(themeStyle, textStyle, isPressed, themeStyle.fontSize, themeStyle.pressedFontSize) {
         val defaultFontSize = textStyle.fontSize.value
+        val safeDefault = if (defaultFontSize.isNaN() || defaultFontSize <= 0f) 14f else defaultFontSize
         val size: Int? = if (isPressed) {
             themeStyle.pressedFontSize
         } else {
             themeStyle.fontSize
         }
-        size?.toFloat() ?: defaultFontSize
+        size?.toFloat() ?: safeDefault
     }
 
     return if (style.animateSwap) {
