@@ -2,6 +2,7 @@ package com.epai.oblender.ui.screens.main.control_editor.edit_widget
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -21,7 +22,7 @@ fun EditWidgetStyle(data: ObservableWidget, styles: List<ObservableButtonStyle>,
         } else {
             LazyColumn(modifier = Modifier.fillMaxSize().padding(16.dp)) {
                 items(styles) { style ->
-                    Text(text = style.displayName(), style = MaterialTheme.typography.bodyLarge)
+                    Text(text = style.uuid, style = MaterialTheme.typography.bodyLarge)
                     Spacer(Modifier.height(8.dp))
                 }
             }

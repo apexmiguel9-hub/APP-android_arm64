@@ -24,7 +24,7 @@ fun StyleListDialog(styles: List<ObservableButtonStyle>, onEditStyle: (Observabl
                 LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp)) {
                     items(styles) { style ->
                         Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text(modifier = Modifier.weight(1f), text = style.name, style = MaterialTheme.typography.bodyLarge)
+                            Text(modifier = Modifier.weight(1f), text = style.uuid, style = MaterialTheme.typography.bodyLarge)
                             TextButton(onClick = { onEditStyle(style) }) { Text("Edit") }
                             TextButton(onClick = { onClone(style) }) { Text("Clone") }
                             TextButton(onClick = { onDelete(style) }) { Text("Del") }
