@@ -49,7 +49,7 @@ android {
     buildFeatures {
         compose true
     }
-    checkAarMetadata = false
+    aarMetadata.minCompileSdk = 1
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
