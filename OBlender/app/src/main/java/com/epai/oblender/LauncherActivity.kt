@@ -13,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -21,7 +22,7 @@ import com.epai.oblfiles.InstallOBLFiles
 
 class LauncherActivity : ComponentActivity() {
     companion object {
-        private const val TAG = "LauncherActivity"
+        private const val TAG = "OBL.Launcher"
     }
 
     private var homePath: String = ""
@@ -29,6 +30,7 @@ class LauncherActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Log.d(TAG, "onCreate")
 
         ScreenUtils.fullScreen(window)
 
@@ -36,14 +38,15 @@ class LauncherActivity : ComponentActivity() {
         if (fromIntent != null && fromIntent.hasExtra("HomePath")) {
             homePath = fromIntent.getStringExtra("HomePath") ?: ""
             configPath = fromIntent.getStringExtra("ConfigPath") ?: ""
+            Log.d(TAG, "paths from intent: home=$homePath config=$configPath")
         } else {
+            Log.d(TAG, "no intent extras, installing OBL files")
             val installOBLFiles = InstallOBLFiles()
             val oblFilePath = installOBLFiles.installOBLFiles(this)
             homePath = oblFilePath.mStringHomePath
             configPath = oblFilePath.mStringConfigPath
+            Log.d(TAG, "installed paths: home=$homePath config=$configPath")
         }
-
-        Log.d(TAG, "homePath=$homePath configPath=$configPath")
 
         setContent {
             MaterialTheme(
@@ -65,12 +68,34 @@ class LauncherActivity : ComponentActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        Log.d(TAG, "onResume")
+    }
+
+    override fun onPause() {
+        super.onPause()
+        Log.d(TAG, "onPause")
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        Log.d(TAG, "onDestroy")
+    }
+
     private fun launchBlender() {
-        val intent = Intent(this, OBLNativeActivity::class.java).apply {
-            putExtra("HomePath", homePath)
-            putExtra("ConfigPath", configPath)
+        Log.d(TAG, "launchBlender() called")
+        try {
+            val intent = Intent(this, OBLNativeActivity::class.java).apply {
+                putExtra("HomePath", homePath)
+                putExtra("ConfigPath", configPath)
+            }
+            Log.d(TAG, "starting OBLNativeActivity...")
+            startActivity(intent)
+            Log.d(TAG, "startActivity returned")
+        } catch (e: Exception) {
+            Log.e(TAG, "launchBlender failed", e)
         }
-        startActivity(intent)
     }
 }
 
@@ -79,7 +104,18 @@ private fun LauncherScreen(onLaunchBlender: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
+            .background(MaterialTheme.colorScheme.background)
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val pos = event.changes.firstOrNull()
+                        if (pos != null) {
+                            Log.d("OBL.Launcher.Touch", "x=${pos.position.x} y=${pos.position.y} pressed=${pos.pressed}")
+                        }
+                    }
+                }
+            },
         contentAlignment = Alignment.Center
     ) {
         Column(
@@ -137,7 +173,10 @@ private fun LauncherScreen(onLaunchBlender: () -> Unit) {
             Spacer(modifier = Modifier.height(48.dp))
 
             Button(
-                onClick = onLaunchBlender,
+                onClick = {
+                    Log.d("OBL.Launcher", "Button clicked")
+                    onLaunchBlender()
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(64.dp),
