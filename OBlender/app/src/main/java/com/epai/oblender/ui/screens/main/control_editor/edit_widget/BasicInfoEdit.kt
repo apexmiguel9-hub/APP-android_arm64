@@ -19,11 +19,7 @@ import com.epai.oblender.ui.screens.main.control_editor.*
 
 @Composable
 fun EditWidgetInfo(
-    screenKey: com.epai.oblender.ui.screens.TitledNavKey,
-    currentKey: com.epai.oblender.ui.screens.TitledNavKey?,
-    data: ObservableWidget,
-    onPreviewRequested: () -> Unit,
-    onDismissRequested: () -> Unit
+    data: ObservableWidget
 ) {
     // Simplified - just show basic info
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {

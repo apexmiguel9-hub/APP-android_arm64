@@ -15,8 +15,6 @@ import com.epai.oblender.ui.screens.main.control_editor.InfoLayoutTextItem
 
 @Composable
 fun EditWidgetClickEvent(
-    screenKey: com.epai.oblender.ui.screens.TitledNavKey,
-    currentKey: com.epai.oblender.ui.screens.TitledNavKey?,
     data: ObservableNormalData,
     switchControlLayers: (ObservableNormalData, ClickEvent.Type) -> Unit,
     sendText: (ObservableNormalData) -> Unit
