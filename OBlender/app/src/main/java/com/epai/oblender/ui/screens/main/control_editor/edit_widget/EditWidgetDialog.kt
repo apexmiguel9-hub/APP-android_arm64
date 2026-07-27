@@ -101,6 +101,6 @@ private fun EditWidgetInfo(data: ObservableWidget) {
     // Simplified info page - just show basic info text
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Text("Widget Info", style = MaterialTheme.typography.titleMedium)
-        Text("ID: ${data.uuid}", style = MaterialTheme.typography.bodySmall)
+        Text("ID: ${(data as? ObservableNormalData)?.uuid ?: (data as? ObservableTextData)?.uuid ?: ""}", style = MaterialTheme.typography.bodySmall)
     }
 }

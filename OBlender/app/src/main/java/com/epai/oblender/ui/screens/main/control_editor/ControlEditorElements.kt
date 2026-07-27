@@ -210,7 +210,7 @@ private fun EditorMenuContent(
 }
 
 @Composable
-private fun ControlLayerMenu(
+private fun ColumnScope.ControlLayerMenu(
     layers: List<ObservableControlLayer>,
     selectedLayer: ObservableControlLayer?, onLayerSelected: (ObservableControlLayer?) -> Unit,
     createLayer: () -> Unit, onAttribute: (ObservableControlLayer) -> Unit,
@@ -228,7 +228,7 @@ private fun ControlLayerMenu(
             previousSize = currentSize
         }
     }
-    LazyColumn(modifier = Modifier.weight(1f), state = listState, contentPadding = PaddingValues(all = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth(), state = listState, contentPadding = PaddingValues(all = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         items(layers, { it.uuid }) { layer ->
             ControlLayerItem(modifier = Modifier.fillMaxWidth(), layer = layer, selected = selectedLayer == layer,
                 onSelected = { onLayerSelected(layer) }, onUnSelected = { onLayerSelected(null) },

@@ -2,6 +2,7 @@ plugins {
     id 'com.android.application'
     id 'org.jetbrains.kotlin.android'
     id 'org.jetbrains.kotlin.plugin.serialization'
+    id 'org.jetbrains.kotlin.plugin.compose'
 }
 
 android {
@@ -55,7 +56,6 @@ android {
     }
     kotlinOptions {
         jvmTarget = "17"
-        freeCompilerArgs += "-Xskip-metadata-version-check"
     }
     ndkVersion '21.4.7075529'
 	packagingOptions {
@@ -166,9 +166,6 @@ android {
         pickFirst 'lib/arm64-v8a/libfftw3.so'
         pickFirst 'lib/arm64-v8a/libopenpgl.so'
         pickFirst 'lib/arm64-v8a/libboostpython.so'
-    }
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.2"
     }
     android.applicationVariants.all {
         variant ->
