@@ -45,12 +45,6 @@ jobs:
           echo "ANDROID_HOME=$ANDROID_HOME"
           ls "$ANDROID_HOME/ndk/21.4.7075529" > /dev/null && echo "NDK 21.4.7075529 installed ✓"
 
-      - name: Switch to Java 11 (for Gradle 6.5)
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '11'
-
       - name: Get Blender CI run ID
         id: get-run
         run: |
