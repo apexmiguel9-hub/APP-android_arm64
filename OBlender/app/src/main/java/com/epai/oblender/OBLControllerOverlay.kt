@@ -43,7 +43,7 @@ private class SimpleSavedStateRegistryOwner : SavedStateRegistryOwner {
     }
 }
 
-fun createControlOverlayView(context: Context): ComposeView {
+fun createControlOverlayView(context: Context, onExit: Runnable = Runnable {}): ComposeView {
     val lifecycleOwner = ProcessLifecycleOwner.get()
     val savedStateRegistryOwner = SimpleSavedStateRegistryOwner()
 
@@ -56,7 +56,7 @@ fun createControlOverlayView(context: Context): ComposeView {
         setViewTreeLifecycleOwner(lifecycleOwner)
         setViewTreeSavedStateRegistryOwner(savedStateRegistryOwner)
         setContent {
-            ControlOverlayContent()
+            ControlOverlayContent(onExit = onExit)
         }
     }
 }
@@ -66,7 +66,7 @@ private fun getLayoutFile(context: Context): File {
 }
 
 @Composable
-fun ControlOverlayContent() {
+fun ControlOverlayContent(onExit: Runnable = Runnable {}) {
     val context = LocalContext.current
     val layoutFile = remember { getLayoutFile(context) }
     val viewModel = remember { EditorViewModel() }
@@ -99,8 +99,8 @@ fun ControlOverlayContent() {
             ControlEditor(
                 viewModel = viewModel,
                 targetFile = layoutFile,
-                exit = { Log.d("OBL.Overlay", "exit editor") },
-                menuExit = { Log.d("OBL.Overlay", "menu exit editor") }
+                exit = { onExit.run() },
+                menuExit = { onExit.run() }
             )
         }
     }

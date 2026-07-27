@@ -489,7 +489,12 @@ public class OBLNativeActivity extends NativeActivity
             @Override
             public void onClick(View v) {
                 if (mControlOverlayView == null) {
-                    mControlOverlayView = OBLControllerOverlayKt.createControlOverlayView(OBLNativeActivity.this);
+                    mControlOverlayView = OBLControllerOverlayKt.createControlOverlayView(OBLNativeActivity.this, () -> {
+                        if (getWindowManager() != null) {
+                            getWindowManager().removeViewImmediate(mControlOverlayView);
+                        }
+                        mControlOverlayView = null;
+                    });
                     LayoutParams lp = new LayoutParams();
                     lp.flags = LayoutParams.FLAG_NOT_FOCUSABLE;
                     lp.flags |= LayoutParams.FLAG_LAYOUT_IN_SCREEN;
