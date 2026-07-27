@@ -159,6 +159,8 @@ public class OblSettingFragment extends View {
                 drawNumPad(canvas, mGridTop, mH - mGridTop);
                 break;
         }
+
+        drawGridMoveControls(canvas, mGridTop, mH - mGridTop);
     }
 
     /* ─── Tab Bar ─── */
@@ -203,56 +205,12 @@ public class OblSettingFragment extends View {
         Paint.FontMetrics fm = mPaint.getFontMetrics();
         float y = gy + h / 2f + (fm.bottom - fm.top) / 2f - fm.bottom;
 
-        /* Move toggle button (left side) */
-        {
-            float bw = h * 1.5f;
-            float bh = h * 0.6f;
-            float bx = 6f;
-            float by = gy + (h - bh) / 2f;
-            mPaint.setColor(mMoveGridMode ? mToggleOnBg : mBtnBg);
-            c.drawRoundRect(bx, by, bx + bw, by + bh, 6, 6, mPaint);
-            mBorderPaint.setColor(mBtnBorder);
-            mBorderPaint.setStrokeWidth(1);
-            c.drawRoundRect(bx, by, bx + bw, by + bh, 6, 6, mBorderPaint);
-            mPaint.setColor(mBtnTxt);
-            mPaint.setTextSize(h * 0.35f);
-            Paint.FontMetrics fm2 = mPaint.getFontMetrics();
-            float tx = bx + bw / 2f;
-            float ty = by + bh / 2f + (fm2.bottom - fm2.top) / 2f - fm2.bottom;
-            c.drawText("Move", tx, ty, mPaint);
-            mMoveToggleRect = new RectF(bx, by, bx + bw, by + bh);
-        }
-
-        /* Arrow buttons (only when Move mode is active) */
-        if (mMoveGridMode) {
-            float ah = h * 0.5f;
-            float aw = ah;
-            float aPad = 4f;
-            float arrowY = gy + (h - ah) / 2f;
-            float leftX = 6f + h * 1.5f + 6f;
-            float rightX = leftX + aw + aPad;
-            float upX = rightX + aw + aPad;
-            float downX = upX + aw + aPad;
-
-            drawArrowButton(c, "←", leftX, arrowY, aw, ah, h);
-            drawArrowButton(c, "→", rightX, arrowY, aw, ah, h);
-            drawArrowButton(c, "↑", upX, arrowY, aw, ah, h);
-            drawArrowButton(c, "↓", downX, arrowY, aw, ah, h);
-
-            mArrowLeftRect = new RectF(leftX, arrowY, leftX + aw, arrowY + ah);
-            mArrowRightRect = new RectF(rightX, arrowY, rightX + aw, arrowY + ah);
-            mArrowUpRect = new RectF(upX, arrowY, upX + aw, arrowY + ah);
-            mArrowDownRect = new RectF(downX, arrowY, downX + aw, arrowY + ah);
-        }
-
-        /* Title (centered) */
         String title;
         switch (mCurrentTab) {
             case KEYBOARD: title = "QWERTY"; break;
             case NUMPAD: title = "Numpad"; break;
             default: title = "Keyboard"; break;
         }
-        mPaint.setTextSize(h * 0.4f);
         c.drawText(title, mW / 2f, y, mPaint);
 
         /* Gear icon (right side) */
@@ -267,19 +225,76 @@ public class OblSettingFragment extends View {
         c.drawText("\u2699", gtx, gy + gearSize * 0.75f, mPaint);
     }
 
-    private void drawArrowButton(Canvas c, String label, float x, float y, float w, float h, float headerH) {
-        mPaint.setColor(mBtnBg);
-        c.drawRoundRect(x, y, x + w, y + h, 6, 6, mPaint);
+    private void drawGridMoveControls(Canvas c, int gridTop, int gridH) {
+        int bottom = gridTop + gridH;
+
+        /* Move toggle button at the bottom of grid */
+        float btnW = dpToPx(52);
+        float btnH = dpToPx(20);
+        float btnX = (mW - btnW) / 2f;
+        float btnY = bottom - btnH - dpToPx(4);
+        mPaint.setColor(mMoveGridMode ? mToggleOnBg : mBtnBg);
+        c.drawRoundRect(btnX, btnY, btnX + btnW, btnY + btnH, 6, 6, mPaint);
         mBorderPaint.setColor(mBtnBorder);
         mBorderPaint.setStrokeWidth(1);
-        c.drawRoundRect(x, y, x + w, y + h, 6, 6, mBorderPaint);
+        c.drawRoundRect(btnX, btnY, btnX + btnW, btnY + btnH, 6, 6, mBorderPaint);
         mPaint.setColor(mBtnTxt);
-        float sz = Math.min(14f, headerH * 0.3f);
-        mPaint.setTextSize(sz);
+        mPaint.setTextSize(btnH * 0.45f);
         Paint.FontMetrics fm = mPaint.getFontMetrics();
-        float tx = x + w / 2f;
-        float ty = y + h / 2f + (fm.bottom - fm.top) / 2f - fm.bottom;
-        c.drawText(label, tx, ty, mPaint);
+        float tx = btnX + btnW / 2f;
+        float ty = btnY + btnH / 2f + (fm.bottom - fm.top) / 2f - fm.bottom;
+        c.drawText("Move", tx, ty, mPaint);
+        mMoveToggleRect = new RectF(btnX, btnY, btnX + btnW, btnY + btnH);
+
+        /* Arrows at grid edges when Move mode is active */
+        if (mMoveGridMode) {
+            float arrowSz = dpToPx(22);
+            float arrowHalf = arrowSz / 2f;
+            float cx = mW / 2f;
+            float cy = gridTop + gridH / 2f;
+            float pad = dpToPx(4);
+
+            /* Left arrow (left edge, centered vertically) */
+            float lx = pad;
+            float ly = cy - arrowHalf;
+            c.drawRoundRect(lx, ly, lx + arrowSz, ly + arrowSz, 6, 6, mPaint);
+            mPaint.setColor(mBtnTxt);
+            mPaint.setTextSize(arrowSz * 0.45f);
+            Paint.FontMetrics fm2 = mPaint.getFontMetrics();
+            c.drawText("←", lx + arrowHalf, ly + arrowHalf + (fm2.bottom - fm2.top) / 2f - fm2.bottom, mPaint);
+            mArrowLeftRect = new RectF(lx, ly, lx + arrowSz, ly + arrowSz);
+            mPaint.setColor(mBtnBg);
+
+            /* Right arrow (right edge, centered vertically) */
+            float rx = mW - arrowSz - pad;
+            c.drawRoundRect(rx, ly, rx + arrowSz, ly + arrowSz, 6, 6, mPaint);
+            mPaint.setColor(mBtnTxt);
+            c.drawText("→", rx + arrowHalf, ly + arrowHalf + (fm2.bottom - fm2.top) / 2f - fm2.bottom, mPaint);
+            mArrowRightRect = new RectF(rx, ly, rx + arrowSz, ly + arrowSz);
+            mPaint.setColor(mBtnBg);
+
+            /* Up arrow (top edge of grid, centered horizontally) */
+            float ux = cx - arrowHalf;
+            float uy = gridTop + pad;
+            c.drawRoundRect(ux, uy, ux + arrowSz, uy + arrowSz, 6, 6, mPaint);
+            mPaint.setColor(mBtnTxt);
+            c.drawText("↑", ux + arrowHalf, uy + arrowHalf + (fm2.bottom - fm2.top) / 2f - fm2.bottom, mPaint);
+            mArrowUpRect = new RectF(ux, uy, ux + arrowSz, uy + arrowSz);
+            mPaint.setColor(mBtnBg);
+
+            /* Down arrow (just above Move button) */
+            float dy = btnY - arrowSz - pad;
+            float dx = cx - arrowHalf;
+            c.drawRoundRect(dx, dy, dx + arrowSz, dy + arrowSz, 6, 6, mPaint);
+            mPaint.setColor(mBtnTxt);
+            c.drawText("↓", dx + arrowHalf, dy + arrowHalf + (fm2.bottom - fm2.top) / 2f - fm2.bottom, mPaint);
+            mArrowDownRect = new RectF(dx, dy, dx + arrowSz, dy + arrowSz);
+            mPaint.setColor(mBtnBg);
+        }
+    }
+
+    private float dpToPx(float dp) {
+        return dp * getResources().getDisplayMetrics().density;
     }
 
     /* ════════════════════════════════════════

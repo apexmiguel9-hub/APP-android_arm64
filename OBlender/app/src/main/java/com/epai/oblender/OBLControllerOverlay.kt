@@ -12,7 +12,6 @@
 package com.epai.oblender
 
 import android.content.Context
-import android.os.Bundle
 import android.view.ViewGroup
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -24,13 +23,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.setViewTreeLifecycleOwner
-import androidx.savedstate.SavedStateRegistry
-import androidx.savedstate.SavedStateRegistryOwner
-import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.movtery.layer_controller.ControlBoxLayout
 import com.movtery.layer_controller.event.EventHandler
 import com.movtery.layer_controller.layout.EmptyControlLayout
@@ -43,30 +37,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
-private class SimpleSavedStateRegistryOwner(
-    lifecycleOwner: LifecycleOwner
-) : SavedStateRegistryOwner {
-    override val lifecycle: Lifecycle = lifecycleOwner.lifecycle
-    override val savedStateRegistry: SavedStateRegistry
-
-    init {
-        val cls = SavedStateRegistry::class.java
-        val ctor = cls.getDeclaredConstructor()
-        ctor.isAccessible = true
-        val reg = ctor.newInstance() as SavedStateRegistry
-        try {
-            val method = cls.getDeclaredMethod("performRestore", Bundle::class.java)
-            method.isAccessible = true
-            method.invoke(reg, null)
-        } catch (_: Exception) {
-        }
-        savedStateRegistry = reg
-    }
-}
-
 fun createControlOverlayView(context: Context): ComposeView {
     val lifecycleOwner = ProcessLifecycleOwner.get()
-    val savedStateRegistryOwner = SimpleSavedStateRegistryOwner(lifecycleOwner)
 
     return ComposeView(context).apply {
         layoutParams = ViewGroup.LayoutParams(
@@ -74,7 +46,6 @@ fun createControlOverlayView(context: Context): ComposeView {
             ViewGroup.LayoutParams.MATCH_PARENT
         )
         setViewTreeLifecycleOwner(lifecycleOwner)
-        setViewTreeSavedStateRegistryOwner(savedStateRegistryOwner)
         setContent {
             ControlOverlayContent()
         }
