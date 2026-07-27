@@ -50,9 +50,12 @@ private class SimpleSavedStateRegistryOwner(
     override val savedStateRegistry: SavedStateRegistry
 
     init {
-        val reg = SavedStateRegistry()
+        val cls = SavedStateRegistry::class.java
+        val ctor = cls.getDeclaredConstructor()
+        ctor.isAccessible = true
+        val reg = ctor.newInstance() as SavedStateRegistry
         try {
-            val method = SavedStateRegistry::class.java.getDeclaredMethod("performRestore", Bundle::class.java)
+            val method = cls.getDeclaredMethod("performRestore", Bundle::class.java)
             method.isAccessible = true
             method.invoke(reg, null)
         } catch (_: Exception) {
