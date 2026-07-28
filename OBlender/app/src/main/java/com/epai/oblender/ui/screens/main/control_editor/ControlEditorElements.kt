@@ -38,6 +38,8 @@ import com.epai.oblender.ui.components.ScalingActionButton
 sealed interface EditorOperation {
     data object None : EditorOperation
     data object SelectButton : EditorOperation
+    data class EditLayer(val layer: ObservableControlLayer) : EditorOperation
+    data class DeleteLayer(val layer: ObservableControlLayer) : EditorOperation
     data object OpenStyleList : EditorOperation
     data object CreateStyle : EditorOperation
     data object EditButtonStyle : EditorOperation
@@ -61,9 +63,9 @@ sealed interface EditorWarningOperation {
     data object WarningNoSelectLayer : EditorWarningOperation
 }
 
-enum class PreviewScenario(val textRes: Int) {
-    InGame(R.string.control_editor_menu_preview_mode_in_game),
-    InMenu(R.string.control_editor_menu_preview_mode_in_menu)
+enum class PreviewScenario(val textRes: Int, val isCursorGrabbing: Boolean = false) {
+    InGame(R.string.control_editor_menu_preview_mode_in_game, isCursorGrabbing = true),
+    InMenu(R.string.control_editor_menu_preview_mode_in_menu, isCursorGrabbing = false)
 }
 
 @Composable
