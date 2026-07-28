@@ -33,6 +33,7 @@ import com.movtery.layer_controller.layout.createNewLayer
 import com.movtery.layer_controller.layout.loadLayoutFromFile
 import com.movtery.layer_controller.observable.ObservableControlLayout
 import com.movtery.layer_controller.utils.saveToFile
+import androidx.compose.ui.graphics.toArgb
 import com.epai.oblender.ui.screens.main.control_editor.ControlEditor
 import com.epai.oblender.viewmodel.EditorViewModel
 import kotlinx.coroutines.Dispatchers
@@ -136,21 +137,44 @@ fun showRuntimeButtons(context: Context) {
     for (layer in layout.layers) {
         if (layer.hide) continue
         for (btn in layer.normalButtons) {
+            // Resolve button style from layout, fallback to DefaultButtonStyle
+            val btnStyle = layout.styles.find { it.uuid == btn.styleUuid } ?: DefaultButtonStyle
+            val style = if (btnStyle.commonStyle) btnStyle.lightStyle else btnStyle.lightStyle
+
             val btnView = TextView(context).apply {
                 text = btn.text.default
-                setTextColor(android.graphics.Color.WHITE)
-                setBackgroundColor(android.graphics.Color.argb(180, 64, 64, 64))
                 gravity = Gravity.CENTER
-                textSize = 12f
-                setPadding(8, 4, 8, 4)
                 setOnClickListener {
-                    // Route first ClickEvent key to Blender
                     val ev = btn.clickEvents.firstOrNull()
                     if (ev != null) {
                         OBLNativeActivity.routeClickEvent(ev)
                     }
                 }
             }
+            // Build styled background drawable
+            val bgDrawable = android.graphics.drawable.GradientDrawable().apply {
+                val bdr = style.borderRadius
+                cornerRadii = floatArrayOf(
+                    bdr.topStart * density, bdr.topStart * density,
+                    bdr.topEnd * density, bdr.topEnd * density,
+                    bdr.bottomEnd * density, bdr.bottomEnd * density,
+                    bdr.bottomStart * density, bdr.bottomStart * density
+                )
+                setColor(style.backgroundColor.copy(alpha = style.backgroundColor.alpha * style.alpha).toArgb())
+                if (style.borderWidth > 0) {
+                    setStroke(
+                        (style.borderWidth * density).toInt(),
+                        style.borderColor.copy(alpha = style.borderColor.alpha * style.alpha).toArgb()
+                    )
+                }
+            }
+            btnView.background = bgDrawable
+            btnView.setTextColor(style.contentColor.copy(alpha = style.contentColor.alpha * style.alpha).toArgb())
+            if (style.fontSize != null) {
+                btnView.textSize = style.fontSize.toFloat()
+            }
+            btnView.setPadding(8, 4, 8, 4)
+
             // Compute pixel position and size
             val pos = btn.position
             val size = btn.buttonSize
@@ -175,17 +199,15 @@ fun showRuntimeButtons(context: Context) {
             val x = ((screenW - (if (w == ViewGroup.LayoutParams.WRAP_CONTENT) 0 else w)) * xPct).toInt()
             val y = ((screenH - (if (h == ViewGroup.LayoutParams.WRAP_CONTENT) 0 else h)) * yPct).toInt()
 
-            val lp = WindowManager.LayoutParams(
-                if (w == ViewGroup.LayoutParams.WRAP_CONTENT) ViewGroup.LayoutParams.WRAP_CONTENT else w,
-                if (h == ViewGroup.LayoutParams.WRAP_CONTENT) ViewGroup.LayoutParams.WRAP_CONTENT else h,
-                WindowManager.LayoutParams.TYPE_APPLICATION_PANEL,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-                PixelFormat.TRANSLUCENT
-            ).apply {
+            val lp = WindowManager.LayoutParams().apply {
                 gravity = Gravity.TOP or Gravity.START
+                width = if (w == ViewGroup.LayoutParams.WRAP_CONTENT) ViewGroup.LayoutParams.WRAP_CONTENT else w
+                height = if (h == ViewGroup.LayoutParams.WRAP_CONTENT) ViewGroup.LayoutParams.WRAP_CONTENT else h
                 this.x = x
                 this.y = y
+                flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                        WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+                format = PixelFormat.TRANSLUCENT
             }
             wm.addView(btnView, lp)
             OverlayState.runtimeButtonViews.add(btnView)
