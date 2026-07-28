@@ -35,12 +35,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -230,6 +233,7 @@ private val EDIT_LAYOUT: List<List<KeySpec>> = listOf(
  * @param onSwitch [isTapMode] 为 `false` 时，触摸按键的回调函数
  * @param onTap [isTapMode] 为 `true` 时，点击按键的回调函数
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun Keyboard(
     onDismissRequest: () -> Unit,
@@ -434,6 +438,7 @@ fun GamepadSpecialArea(
 }
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 private fun KeyboardNavDialog(
     tabs: List<TabItem>,
     onDismissRequest: () -> Unit,
