@@ -85,7 +85,15 @@ fun createOverlayComposeView(context: Context): ComposeView {
 
 fun showEditor(context: Context) {
     hideRuntimeButtons()
-    // Add ComposeView to WM (editor blocks all touches — no FLAG_NOT_TOUCH_MODAL)
+    // If there's already a view attached, remove it first
+    val existing = OverlayState.hostView
+    if (existing != null && existing.isAttachedToWindow) {
+        try {
+            val wm = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+            wm.removeView(existing)
+        } catch (_: Exception) {}
+        OverlayState.hostView = null
+    }
     val view = createOverlayComposeView(context)
     val wm = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     val lp = WindowManager.LayoutParams(
@@ -96,19 +104,19 @@ fun showEditor(context: Context) {
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
         PixelFormat.TRANSPARENT
     )
-    wm.addView(view, lp)
+    try { wm.addView(view, lp) } catch (_: Exception) {}
     OverlayState.isEditMode = true
 }
 
 fun hideEditor(context: Context) {
     val view = OverlayState.hostView ?: return
+    OverlayState.hostView = null
     if (view.isAttachedToWindow) {
         try {
             val wm = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
             wm.removeView(view)
         } catch (_: Exception) {}
     }
-    OverlayState.hostView = null
 }
 
 private fun getLayoutFile(context: Context): File {
@@ -172,7 +180,6 @@ fun showRuntimeButtons(context: Context) {
                 if (h == ViewGroup.LayoutParams.WRAP_CONTENT) ViewGroup.LayoutParams.WRAP_CONTENT else h,
                 WindowManager.LayoutParams.TYPE_APPLICATION_PANEL,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                        WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
                         WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
                 PixelFormat.TRANSLUCENT
             ).apply {
