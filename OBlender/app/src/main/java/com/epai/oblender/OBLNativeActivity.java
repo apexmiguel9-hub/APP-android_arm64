@@ -470,7 +470,7 @@ public class OBLNativeActivity extends NativeActivity
 
         getWindowManager().addView(toggleBtn, lp);
 
-        /* Floating ball — toggles game menu */
+        /* Floating ball — opens/closes ControlEditor */
         ImageView ballBtn = new ImageView(OBLNativeActivity.this);
         ballBtn.setImageResource(R.drawable.ic_menu);
         ballBtn.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
@@ -488,19 +488,25 @@ public class OBLNativeActivity extends NativeActivity
         ballBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                if (mControlOverlayView == null) {
-                    // Create overlay once — captures all touches via FLAG_NOT_TOUCH_MODAL
-                    mControlOverlayView = OBLControllerOverlayKt.createControlOverlayView(OBLNativeActivity.this);
-                    LayoutParams lp = new LayoutParams();
-                    lp.flags = LayoutParams.FLAG_NOT_FOCUSABLE;
-                    lp.flags |= LayoutParams.FLAG_LAYOUT_IN_SCREEN;
-                    lp.flags |= LayoutParams.FLAG_NOT_TOUCH_MODAL;
-                    lp.format = PixelFormat.TRANSPARENT;
-                    lp.width = ViewGroup.LayoutParams.MATCH_PARENT;
-                    lp.height = ViewGroup.LayoutParams.MATCH_PARENT;
-                    getWindowManager().addView(mControlOverlayView, lp);
+                if (mControlOverlayView != null && mControlOverlayView.getVisibility() == View.VISIBLE) {
+                    // Editor is visible — hide it (returns touch to Blender)
+                    mControlOverlayView.setVisibility(View.GONE);
+                    return;
                 }
-                // On subsequent taps, the Compose-side FloatingBall handles toggling the menu
+                if (mControlOverlayView != null) {
+                    // Was hidden — show again
+                    mControlOverlayView.setVisibility(View.VISIBLE);
+                    return;
+                }
+                // Create overlay — editor consumes all touches (no FLAG_NOT_TOUCH_MODAL)
+                mControlOverlayView = OBLControllerOverlayKt.createControlOverlayView(OBLNativeActivity.this);
+                LayoutParams lp = new LayoutParams();
+                lp.flags = LayoutParams.FLAG_NOT_FOCUSABLE;
+                lp.flags |= LayoutParams.FLAG_LAYOUT_IN_SCREEN;
+                lp.format = PixelFormat.TRANSPARENT;
+                lp.width = ViewGroup.LayoutParams.MATCH_PARENT;
+                lp.height = ViewGroup.LayoutParams.MATCH_PARENT;
+                getWindowManager().addView(mControlOverlayView, lp);
             }
         });
 
