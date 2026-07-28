@@ -19,10 +19,12 @@ import com.movtery.layer_controller.ControlEditorLayer
 import com.movtery.layer_controller.data.*
 import com.movtery.layer_controller.data.lang.createTranslatable
 import com.movtery.layer_controller.event.ClickEvent
+import com.movtery.layer_controller.layout.createNewLayer
 import com.movtery.layer_controller.observable.*
 import com.epai.oblender.R
 import com.epai.oblender.setting.AllSettings
 import com.epai.oblender.ui.components.*
+import com.epai.oblender.ui.screens.main.control_editor.edit_layer.EditControlLayerDialog
 import com.epai.oblender.ui.screens.main.control_editor.edit_layer.EditSwitchLayersVisibilityDialog
 import com.epai.oblender.ui.screens.main.control_editor.edit_style.StyleListDialog
 import com.epai.oblender.ui.screens.main.control_editor.edit_translatable.EditTranslatableTextDialog
@@ -38,6 +40,7 @@ fun BoxWithConstraintsScope.ControlEditor(
     val layers by viewModel.observableLayout.layers.collectAsStateWithLifecycle()
     val styles by viewModel.observableLayout.styles.collectAsStateWithLifecycle()
 
+    val defaultLayerName = stringResource(R.string.control_editor_edit_layer_default)
     val defaultButtonName = stringResource(R.string.control_editor_edit_button_default)
 
     val density = LocalDensity.current
@@ -67,6 +70,12 @@ fun BoxWithConstraintsScope.ControlEditor(
     EditorMenu(
         state = viewModel.editorMenu,
         closeScreen = { viewModel.editorMenu = MenuState.HIDE },
+        layers = layers,
+        selectedLayer = viewModel.selectedLayer,
+        onLayerSelected = { viewModel.selectedLayer = it },
+        createLayer = { viewModel.editorOperation = EditorOperation.EditLayer(viewModel.observableLayout.addLayer(layer = createNewLayer(defaultLayerName = defaultLayerName))) },
+        onAttribute = { viewModel.editorOperation = EditorOperation.EditLayer(it) },
+        onHideSwitch = { layer -> layer.editorHide = !layer.editorHide; if (layer.editorHide && viewModel.selectedWidget?.layer == layer) viewModel.selectedWidget = null },
         addNewButton = {
             viewModel.addWidget(layers) { layer ->
                 layer.addNormalButton(createWidgetWithUUID { uuid ->
@@ -98,6 +107,10 @@ fun BoxWithConstraintsScope.ControlEditor(
         openStyleList = { viewModel.editorOperation = EditorOperation.OpenStyleList })
 
     EditorOperationHandler(operation = viewModel.editorOperation, changeOperation = { viewModel.editorOperation = it },
+        onDeleteLayer = { val isWidgetLayer = viewModel.selectedWidget?.layer == it; viewModel.removeLayer(it); if (isWidgetLayer) viewModel.selectedWidget = null },
+        onMergeDownward = { viewModel.observableLayout.mergeDownward(it) },
+        onCopy = { layer -> val baseLayer = layer.pack(); viewModel.editorOperation = EditorOperation.EditLayer(viewModel.observableLayout.addLayer(layer = createNewLayer(defaultLayerName = defaultLayerName).copy(hide = baseLayer.hide, hideWhenMouse = baseLayer.hideWhenMouse, hideWhenGamepad = baseLayer.hideWhenGamepad, hideWhenJoystick = baseLayer.hideWhenJoystick, visibilityType = baseLayer.visibilityType, normalButtons = baseLayer.normalButtons, textBoxes = baseLayer.textBoxes))) },
+        onHideChange = { hide, layer -> if (hide && viewModel.selectedWidget?.layer == layer) viewModel.selectedWidget = null },
         onEditStyle = { viewModel.selectedStyle = it; viewModel.editorOperation = EditorOperation.EditButtonStyle },
         onCreateStyle = { viewModel.createNewStyle(it) }, onCloneStyle = { viewModel.cloneStyle(it) },
         onDeleteStyle = { viewModel.removeStyle(it) },
@@ -124,12 +137,26 @@ private fun ActionButton(painter: androidx.compose.ui.graphics.painter.Painter, 
 @Composable
 private fun EditorOperationHandler(
     operation: EditorOperation, changeOperation: (EditorOperation) -> Unit,
+    onDeleteLayer: (ObservableControlLayer) -> Unit, onMergeDownward: (ObservableControlLayer) -> Unit,
+    onCopy: (ObservableControlLayer) -> Unit, onHideChange: (Boolean, ObservableControlLayer) -> Unit,
     onEditStyle: (ObservableButtonStyle) -> Unit, onCreateStyle: (name: String) -> Unit,
     onCloneStyle: (ObservableButtonStyle) -> Unit, onDeleteStyle: (ObservableButtonStyle) -> Unit,
     styles: List<ObservableButtonStyle>
 ) {
     when (operation) {
         is EditorOperation.None, is EditorOperation.SelectButton, is EditorOperation.EditButtonStyle -> {}
+        is EditorOperation.EditLayer -> {
+            val layer = operation.layer
+            EditControlLayerDialog(layer = layer, onDismissRequest = { changeOperation(EditorOperation.None) },
+                onDelete = { changeOperation(EditorOperation.DeleteLayer(layer)) },
+                onMergeDownward = { onMergeDownward(layer) }, onCopy = { onCopy(layer) },
+                onHideChange = { onHideChange(it, layer) })
+        }
+        is EditorOperation.DeleteLayer -> {
+            val layer = operation.layer
+            SimpleAlertDialog(title = stringResource(R.string.generic_delete), text = stringResource(R.string.control_editor_layers_delete, layer.name),
+                onDismiss = { changeOperation(EditorOperation.None) }, onConfirm = { onDeleteLayer(layer); changeOperation(EditorOperation.None) })
+        }
         is EditorOperation.OpenStyleList -> {
             StyleListDialog(styles = styles, onEditStyle = onEditStyle,
                 onCreate = { changeOperation(EditorOperation.CreateStyle) },
