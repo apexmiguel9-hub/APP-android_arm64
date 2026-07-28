@@ -1,6 +1,7 @@
 package com.epai.oblender
 
 import android.content.Context
+import android.graphics.Color
 import android.view.ViewGroup
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,6 +18,7 @@ import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.movtery.layer_controller.EDITOR_VERSION
+import com.movtery.layer_controller.data.HideLayerWhen
 import com.movtery.layer_controller.data.lang.createTranslatable
 import com.movtery.layer_controller.layout.ControlLayout
 import com.movtery.layer_controller.layout.EmptyControlLayout
@@ -24,12 +26,18 @@ import com.movtery.layer_controller.layout.createNewLayer
 import com.movtery.layer_controller.layout.loadLayoutFromFile
 import com.movtery.layer_controller.utils.saveToFile
 import com.epai.oblender.ui.screens.main.control_editor.ControlEditor
+import com.epai.oblender.ui.screens.main.control_editor.PreviewControlBox
+import com.epai.oblender.ui.screens.main.control_editor.PreviewScenario
 import com.epai.oblender.viewmodel.EditorViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
-import android.util.Log
+
+object OverlayState {
+    @JvmStatic
+    var showEditor by mutableStateOf(false)
+}
 
 private class SimpleSavedStateRegistryOwner : SavedStateRegistryOwner {
     override val lifecycle: Lifecycle = LifecycleRegistry(this)
@@ -43,7 +51,7 @@ private class SimpleSavedStateRegistryOwner : SavedStateRegistryOwner {
     }
 }
 
-fun createControlOverlayView(context: Context, onExit: Runnable = Runnable {}): ComposeView {
+fun createControlOverlayView(context: Context): ComposeView {
     val lifecycleOwner = ProcessLifecycleOwner.get()
     val savedStateRegistryOwner = SimpleSavedStateRegistryOwner()
 
@@ -52,12 +60,10 @@ fun createControlOverlayView(context: Context, onExit: Runnable = Runnable {}): 
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT
         )
-        setBackgroundColor(android.graphics.Color.TRANSPARENT)
+        setBackgroundColor(Color.TRANSPARENT)
         setViewTreeLifecycleOwner(lifecycleOwner)
         setViewTreeSavedStateRegistryOwner(savedStateRegistryOwner)
-        setContent {
-            ControlOverlayContent(onExit = onExit)
-        }
+        setContent { OverlayContent() }
     }
 }
 
@@ -66,7 +72,7 @@ private fun getLayoutFile(context: Context): File {
 }
 
 @Composable
-fun ControlOverlayContent(onExit: Runnable = Runnable {}) {
+fun OverlayContent() {
     val context = LocalContext.current
     val layoutFile = remember { getLayoutFile(context) }
     val viewModel = remember { EditorViewModel() }
@@ -96,12 +102,28 @@ fun ControlOverlayContent(onExit: Runnable = Runnable {}) {
 
     if (layoutReady) {
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-            ControlEditor(
-                viewModel = viewModel,
-                targetFile = layoutFile,
-                exit = { onExit.run() },
-                menuExit = { onExit.run() }
-            )
+            if (OverlayState.showEditor) {
+                ControlEditor(
+                    viewModel = viewModel,
+                    targetFile = layoutFile,
+                    exit = {
+                        OverlayState.showEditor = false
+                        viewModel.isPreviewMode = true
+                    },
+                    menuExit = {
+                        OverlayState.showEditor = false
+                        viewModel.isPreviewMode = true
+                    }
+                )
+            } else {
+                PreviewControlBox(
+                    modifier = Modifier.fillMaxSize(),
+                    observableLayout = viewModel.observableLayout,
+                    previewScenario = PreviewScenario.InMenu,
+                    previewHideLayerWhen = HideLayerWhen.None,
+                    enableJoystick = false
+                )
+            }
         }
     }
 }

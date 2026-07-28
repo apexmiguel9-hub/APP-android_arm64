@@ -352,9 +352,9 @@ public class OBLNativeActivity extends NativeActivity
                 }else{
                     mBooleanLastOblSettingFragmentVisible=false;
                 }
-                if (mControlOverlayView != null && mControlOverlayView.getVisibility() == View.VISIBLE) {
+                if (mControlOverlayView != null && OverlayState.getShowEditor()) {
                     mBooleanLastOblSettingFragmentVisible = true;
-                    mControlOverlayView.setVisibility(View.INVISIBLE);
+                    OverlayState.setShowEditor(false);
                 }
                 ScreenUtils.fullScreen(getWindow());
             }
@@ -368,7 +368,7 @@ public class OBLNativeActivity extends NativeActivity
                     }
                 }
                 if (mControlOverlayView != null && mBooleanLastOblSettingFragmentVisible) {
-                    mControlOverlayView.setVisibility(View.VISIBLE);
+                    OverlayState.setShowEditor(true);
                 }
             }
         });
@@ -489,27 +489,19 @@ public class OBLNativeActivity extends NativeActivity
             @Override
             public void onClick(View v) {
                 if (mControlOverlayView == null) {
-                    mControlOverlayView = OBLControllerOverlayKt.createControlOverlayView(OBLNativeActivity.this, () -> {
-                        if (getWindowManager() != null) {
-                            getWindowManager().removeViewImmediate(mControlOverlayView);
-                        }
-                        mControlOverlayView = null;
-                    });
+                    mControlOverlayView = OBLControllerOverlayKt.createControlOverlayView(OBLNativeActivity.this);
                     LayoutParams lp = new LayoutParams();
                     lp.flags = LayoutParams.FLAG_NOT_FOCUSABLE;
                     lp.flags |= LayoutParams.FLAG_LAYOUT_IN_SCREEN;
                     lp.flags |= LayoutParams.FLAG_NOT_TOUCH_MODAL;
                     lp.format = PixelFormat.TRANSPARENT;
-                    lp.gravity = Gravity.CENTER;
-                    lp.width = (int)(getResources().getDisplayMetrics().widthPixels * 0.9);
-                    lp.height = (int)(getResources().getDisplayMetrics().heightPixels * 0.9);
+                    lp.width = ViewGroup.LayoutParams.MATCH_PARENT;
+                    lp.height = ViewGroup.LayoutParams.MATCH_PARENT;
                     getWindowManager().addView(mControlOverlayView, lp);
+                    OverlayState.setShowEditor(true);
                 } else {
-                    if (mControlOverlayView.getVisibility() == View.VISIBLE) {
-                        mControlOverlayView.setVisibility(View.INVISIBLE);
-                    } else {
-                        mControlOverlayView.setVisibility(View.VISIBLE);
-                    }
+                    boolean isOpen = OverlayState.getShowEditor();
+                    OverlayState.setShowEditor(!isOpen);
                 }
             }
         });
