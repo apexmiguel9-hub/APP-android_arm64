@@ -25,7 +25,7 @@ import com.movtery.layer_controller.EDITOR_VERSION
 import com.movtery.layer_controller.data.*
 import com.movtery.layer_controller.data.lang.createTranslatable
 import com.movtery.layer_controller.event.EventHandler
-import com.movtery.layer_controller.layout.ControlBoxLayout
+import com.movtery.layer_controller.ControlBoxLayout
 import com.movtery.layer_controller.layout.ControlLayout
 import com.movtery.layer_controller.layout.EmptyControlLayout
 import com.movtery.layer_controller.layout.createNewLayer
@@ -127,7 +127,7 @@ fun OverlayContent() {
         if (OverlayState.isEditMode) {
             Surface(
                 modifier = Modifier.fillMaxSize(),
-                color = Color(0xCC000000)
+                color = Color(0xCC000000.toInt())
             ) {
                 BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                     ControlEditor(
@@ -194,14 +194,14 @@ private fun createDefaultLayout(): ControlLayout {
             commonStyle = true,
             lightStyle = DefaultButtonStyleConfig.copy(
                 borderRadius = ButtonShape(8f),
-                backgroundColor = Color(0x80000000),
+                backgroundColor = Color(0x80000000.toInt()),
                 contentColor = Color.White,
                 borderWidth = 1f,
                 borderColor = Color.White
             ),
             darkStyle = DefaultButtonStyleConfig.copy(
                 borderRadius = ButtonShape(8f),
-                backgroundColor = Color(0x80FFFFFF),
+                backgroundColor = Color(0x80FFFFFF.toInt()),
                 contentColor = Color.Black,
                 borderWidth = 1f,
                 borderColor = Color.Black
@@ -234,12 +234,12 @@ private fun createDefaultLayout(): ControlLayout {
             commonStyle = true,
             lightStyle = DefaultButtonStyleConfig.copy(
                 borderRadius = ButtonShape(50f),
-                backgroundColor = Color(0xCC2196F3),
+                backgroundColor = Color(0xCC2196F3.toInt()),
                 contentColor = Color.White
             ),
             darkStyle = DefaultButtonStyleConfig.copy(
                 borderRadius = ButtonShape(50f),
-                backgroundColor = Color(0xCC1976D2),
+                backgroundColor = Color(0xCC1976D2.toInt()),
                 contentColor = Color.White
             )
         )
