@@ -540,7 +540,7 @@ public class OBLNativeActivity extends NativeActivity
             GodotLib.key(code, 0, 0, true, false);
             GodotLib.key(code, 0, 0, false, false);
         } catch (Exception e) {
-            Log.e(TAG, "routeClickEvent error", e);
+            Log.e("OBLNativeActivity", "routeClickEvent error", e);
         }
     }
 
