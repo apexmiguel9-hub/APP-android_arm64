@@ -488,29 +488,24 @@ public class OBLNativeActivity extends NativeActivity
         ballBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                // If Kotlin removed the view (Save & Exit), null out stale reference
                 if (mControlOverlayView != null && !mControlOverlayView.isAttachedToWindow()) {
                     mControlOverlayView = null;
                 }
-                if (mControlOverlayView != null && mControlOverlayView.getVisibility() == View.VISIBLE) {
-                    // Editor is visible — hide it (returns touch to Blender)
-                    mControlOverlayView.setVisibility(View.GONE);
-                    return;
+                if (mControlOverlayView == null) {
+                    // First click: create overlay (starts in runtime mode with FLAG_NOT_TOUCH_MODAL)
+                    mControlOverlayView = OBLControllerOverlayKt.createControlOverlayView(OBLNativeActivity.this);
+                    LayoutParams lp = new LayoutParams();
+                    lp.flags = LayoutParams.FLAG_NOT_FOCUSABLE | LayoutParams.FLAG_LAYOUT_IN_SCREEN | LayoutParams.FLAG_NOT_TOUCH_MODAL;
+                    lp.format = PixelFormat.TRANSPARENT;
+                    lp.width = ViewGroup.LayoutParams.MATCH_PARENT;
+                    lp.height = ViewGroup.LayoutParams.MATCH_PARENT;
+                    getWindowManager().addView(mControlOverlayView, lp);
+                    // Open editor after layout loads
+                    mControlOverlayView.post(() -> OBLControllerOverlayKt.setControlOverlayEditMode(true));
+                } else {
+                    // Toggle between editor and runtime
+                    OBLControllerOverlayKt.setControlOverlayEditMode(!OBLControllerOverlayKt.getControlOverlayEditMode());
                 }
-                if (mControlOverlayView != null) {
-                    // Was hidden — show again
-                    mControlOverlayView.setVisibility(View.VISIBLE);
-                    return;
-                }
-                // Create overlay — editor consumes all touches (no FLAG_NOT_TOUCH_MODAL)
-                mControlOverlayView = OBLControllerOverlayKt.createControlOverlayView(OBLNativeActivity.this);
-                LayoutParams lp = new LayoutParams();
-                lp.flags = LayoutParams.FLAG_NOT_FOCUSABLE;
-                lp.flags |= LayoutParams.FLAG_LAYOUT_IN_SCREEN;
-                lp.format = PixelFormat.TRANSPARENT;
-                lp.width = ViewGroup.LayoutParams.MATCH_PARENT;
-                lp.height = ViewGroup.LayoutParams.MATCH_PARENT;
-                getWindowManager().addView(mControlOverlayView, lp);
             }
         });
 
