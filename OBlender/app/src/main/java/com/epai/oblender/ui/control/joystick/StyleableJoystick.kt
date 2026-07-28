@@ -18,6 +18,7 @@ fun StyleableJoystick(
     style: ObservableJoystickStyle,
     modifier: Modifier = Modifier,
     size: androidx.compose.ui.unit.Dp = 100.dp,
+    isDarkTheme: Boolean = false,
     onDirectionChanged: ((direction: String) -> Unit)? = null,
     deadZoneRatio: Float = 0.1f,
     lockThreshold: Float = 0.8f,

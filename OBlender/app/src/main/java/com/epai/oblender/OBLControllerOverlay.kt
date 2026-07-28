@@ -1,7 +1,7 @@
 package com.epai.oblender
 
 import android.content.Context
-import android.graphics.Color
+import androidx.compose.ui.graphics.Color
 import android.view.ViewGroup
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -247,7 +247,7 @@ private fun GameMenuScreen(
                         onClick = onEditLayout,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        MarqueeText("Editar diseño de controles")
+                        MarqueeText(text = "Editar diseño de controles")
                     }
                 }
                 item { HorizontalDivider() }
@@ -256,7 +256,7 @@ private fun GameMenuScreen(
                         onClick = onClose,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        MarqueeText("Cerrar")
+                        MarqueeText(text = "Cerrar")
                     }
                 }
             }

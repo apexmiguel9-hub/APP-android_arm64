@@ -37,6 +37,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.Surface
@@ -88,6 +89,7 @@ enum class EditJoystickStyleMode {
  * @param mode 编辑样式的模式
  * @param onInfoButtonClick 根据模式变更文本的按钮被点击时的回调
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditJoystickStyleDialog(
     visible: Boolean,

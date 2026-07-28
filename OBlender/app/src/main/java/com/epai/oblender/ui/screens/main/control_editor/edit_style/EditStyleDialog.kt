@@ -40,6 +40,7 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SecondaryTabRow
@@ -87,6 +88,7 @@ private data class TabItem(val title: String)
  * 控件样式编辑对话框
  * **不再真正使用Dialog，真的会有性能问题！**
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditButtonStyleDialog(
     visible: Boolean,

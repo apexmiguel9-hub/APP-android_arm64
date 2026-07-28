@@ -8,8 +8,6 @@ import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.unit.dp
 import com.epai.oblender.ui.screens.TitledNavKey
 
-const val DisabledAlpha = 0.38f
-
 data class CategoryItem(
     val key: TitledNavKey,
     val icon: @Composable () -> Unit,
