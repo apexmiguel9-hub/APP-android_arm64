@@ -2,29 +2,66 @@ package com.epai.oblender.ui.screens.main.control_editor
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.SingleChoiceSegmentedButtonRowScope
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.epai.oblender.R
+import com.epai.oblender.ui.components.ColorPickerDialog
+import com.epai.oblender.ui.components.DefaultSwitch
+import com.epai.oblender.ui.components.LittleTextLabel
 import com.epai.oblender.ui.components.MarqueeText
+import com.epai.oblender.ui.components.SimpleTextSlider
+import com.epai.oblender.ui.components.SliderValueEditDialog
+import com.epai.oblender.ui.components.TransparentChecker
+import com.epai.oblender.ui.components.rememberColorPickerController
 import com.epai.oblender.ui.screens.content.elements.DisabledAlpha
+import com.epai.oblender.ui.theme.itemColor
+import com.epai.oblender.ui.theme.onItemColor
+import com.epai.oblender.utils.animation.getAnimateTween
 
 @Composable
 fun InfoLayoutSliderItem(
@@ -34,16 +71,56 @@ fun InfoLayoutSliderItem(
     onValueChange: (Float) -> Unit,
     valueRange: ClosedFloatingPointRange<Float> = 0f..1f,
     onValueChangeFinished: (() -> Unit)? = null,
+    decimalFormat: String = "#0.00",
     suffix: String? = null,
+    fineTuningControl: Boolean = true,
+    fineTuningStep: Float = 0.5f,
     enabled: Boolean = true,
-    color: Color = MaterialTheme.colorScheme.surfaceVariant,
-    contentColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    color: Color = itemColor(false),
+    contentColor: Color = onItemColor()
 ) {
-    InfoLayoutItem(modifier = modifier, onClick = {}, enabled = enabled, color = color, contentColor = contentColor) {
+    var showValueEditDialog by remember { mutableStateOf(false) }
+
+    InfoLayoutItem(
+        modifier = modifier,
+        onClick = {},
+        enabled = enabled,
+        color = color,
+        contentColor = contentColor
+    ) {
         Column {
-            Text(text = title, style = MaterialTheme.typography.bodyMedium)
-            Slider(value = value, onValueChange = onValueChange, valueRange = valueRange, onValueChangeFinished = onValueChangeFinished, enabled = enabled)
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium
+            )
+            SimpleTextSlider(
+                modifier = Modifier.fillMaxWidth(),
+                shorter = true,
+                value = value,
+                decimalFormat = decimalFormat,
+                enabled = enabled,
+                onValueChange = onValueChange,
+                valueRange = valueRange,
+                onValueChangeFinished = onValueChangeFinished,
+                onTextClick = { showValueEditDialog = true },
+                suffix = suffix,
+                fineTuningControl = fineTuningControl,
+                fineTuningStep = fineTuningStep
+            )
         }
+    }
+
+    if (showValueEditDialog) {
+        SliderValueEditDialog(
+            onDismissRequest = { showValueEditDialog = false },
+            title = title,
+            valueRange = valueRange,
+            value = value,
+            onValueChange = onValueChange,
+            onValueChangeFinished = {
+                onValueChangeFinished?.invoke()
+            }
+        )
     }
 }
 
@@ -55,28 +132,127 @@ fun <E> InfoLayoutListItem(
     selectedItem: E,
     onItemSelected: (E) -> Unit,
     getItemText: @Composable (E) -> String,
-    color: Color = MaterialTheme.colorScheme.surfaceVariant,
-    contentColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    color: Color = itemColor(false),
+    contentColor: Color = onItemColor(),
+    maxListHeight: Dp = 200.dp
 ) {
     var expanded by remember { mutableStateOf(false) }
-    Surface(modifier = modifier, shape = MaterialTheme.shapes.large, color = color, contentColor = contentColor) {
+
+    Surface(
+        modifier = modifier,
+        shape = MaterialTheme.shapes.large,
+        color = color,
+        contentColor = contentColor
+    ) {
         Column(modifier = Modifier.fillMaxWidth()) {
-            Row(modifier = Modifier.clickable { expanded = !expanded }.padding(horizontal = 12.dp, vertical = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-                MarqueeText(text = title, style = MaterialTheme.typography.bodyMedium)
-                Spacer(modifier = Modifier.weight(1f))
-                Text(text = getItemText(selectedItem), style = MaterialTheme.typography.labelSmall)
-            }
+            InfoListLayoutHeader(
+                modifier = Modifier,
+                items = items,
+                title = title,
+                selectedItemLayout = {
+                    LittleTextLabel(text = getItemText(selectedItem))
+                },
+                expanded = expanded,
+                onClick = { expanded = !expanded }
+            )
+
             if (items.isNotEmpty()) {
-                AnimatedVisibility(visible = expanded, enter = expandVertically(), exit = shrinkVertically() + fadeOut()) {
-                    LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 200.dp).padding(vertical = 4.dp), contentPadding = PaddingValues(horizontal = 4.dp)) {
-                        items(items) { item ->
-                            Row(modifier = Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium).clickable { onItemSelected(item); expanded = false }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                                RadioButton(selected = selectedItem == item, onClick = { onItemSelected(item); expanded = false })
-                                MarqueeText(text = getItemText(item), style = MaterialTheme.typography.labelMedium)
+                fun onClick(item: E) {
+                    if (expanded && selectedItem != item) {
+                        onItemSelected(item)
+                        expanded = false
+                    }
+                }
+
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    AnimatedVisibility(
+                        visible = expanded,
+                        enter = expandVertically(animationSpec = getAnimateTween()),
+                        exit = shrinkVertically(animationSpec = getAnimateTween()) + fadeOut(),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = maxListHeight)
+                                .padding(vertical = 4.dp),
+                            contentPadding = PaddingValues(horizontal = 4.dp)
+                        ) {
+                            items(items) { item ->
+                                Row(
+                                    modifier = modifier
+                                        .clip(shape = MaterialTheme.shapes.medium)
+                                        .clickable { onClick(item) },
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    RadioButton(
+                                        selected = selectedItem == item,
+                                        onClick = { onClick(item) }
+                                    )
+                                    Column(
+                                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                                        content = {
+                                            MarqueeText(
+                                                text = getItemText(item),
+                                                style = MaterialTheme.typography.labelMedium
+                                            )
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun <E> InfoListLayoutHeader(
+    modifier: Modifier = Modifier,
+    items: List<E>,
+    title: String,
+    selectedItemLayout: @Composable RowScope.() -> Unit,
+    expanded: Boolean,
+    onClick: () -> Unit = {}
+) {
+    Row(
+        modifier = modifier
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 20.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        MarqueeText(
+            text = title,
+            style = MaterialTheme.typography.bodyMedium
+        )
+        Row(
+            Modifier
+                .weight(1f)
+                .padding(horizontal = 8.dp),
+            horizontalArrangement = Arrangement.End
+        ) {
+            selectedItemLayout()
+        }
+
+        if (!items.isEmpty()) {
+            Row(
+                modifier = Modifier.padding(end = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                val rotation by animateFloatAsState(
+                    targetValue = if (expanded) -180f else 0f,
+                    animationSpec = getAnimateTween()
+                )
+                Text(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .rotate(rotation),
+                    text = if (expanded) "▾" else "▸",
+                    style = MaterialTheme.typography.titleMedium
+                )
             }
         }
     }
@@ -89,16 +265,31 @@ fun InfoLayoutSwitchItem(
     value: Boolean,
     onValueChange: (Boolean) -> Unit,
     enabled: Boolean = true,
-    color: Color = MaterialTheme.colorScheme.surfaceVariant,
-    contentColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    color: Color = itemColor(false),
+    contentColor: Color = onItemColor()
 ) {
-    InfoLayoutItem(modifier = modifier, onClick = { onValueChange(!value) }, enabled = enabled, color = color, contentColor = contentColor) {
-        MarqueeText(modifier = Modifier.weight(1f).alpha(if (enabled) 1f else DisabledAlpha), text = title, style = MaterialTheme.typography.bodyMedium)
-        Switch(checked = value, onCheckedChange = onValueChange, enabled = enabled)
+    InfoLayoutItem(
+        modifier = modifier,
+        onClick = { onValueChange(!value) },
+        enabled = enabled,
+        color = color,
+        contentColor = contentColor
+    ) {
+        MarqueeText(
+            modifier = Modifier
+                .alpha(if (enabled) 1f else DisabledAlpha)
+                .weight(1f),
+            text = title,
+            style = MaterialTheme.typography.bodyMedium
+        )
+        DefaultSwitch(
+            checked = value,
+            onCheckedChange = onValueChange,
+            enabled = enabled
+        )
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun <E> InfoLayoutSelectItem(
     modifier: Modifier = Modifier,
@@ -106,15 +297,32 @@ fun <E> InfoLayoutSelectItem(
     options: List<E>,
     current: E,
     onClick: (E) -> Unit,
-    label: @Composable RowScope.(E) -> Unit,
-    color: Color = MaterialTheme.colorScheme.surfaceVariant,
-    contentColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    label: @Composable SingleChoiceSegmentedButtonRowScope.(E) -> Unit,
+    color: Color = itemColor(false),
+    contentColor: Color = onItemColor()
 ) {
-    InfoLayoutItem(modifier = modifier, onClick = {}, color = color, contentColor = contentColor) {
-        MarqueeText(modifier = Modifier.weight(1f), text = title, style = MaterialTheme.typography.bodyMedium)
+    InfoLayoutItem(
+        modifier = modifier,
+        onClick = {},
+        color = color,
+        contentColor = contentColor
+    ) {
+        MarqueeText(
+            modifier = Modifier.weight(1f),
+            text = title,
+            style = MaterialTheme.typography.bodyMedium
+        )
         SingleChoiceSegmentedButtonRow {
             options.forEachIndexed { index, option ->
-                SegmentedButton(selected = current == option, shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size), onClick = { onClick(option) }, label = { label(option) })
+                SegmentedButton(
+                    selected = current == option,
+                    shape = SegmentedButtonDefaults.itemShape(
+                        index = index,
+                        count = options.size
+                    ),
+                    onClick = { onClick(option) },
+                    label = { label(option) }
+                )
             }
         }
     }
@@ -127,15 +335,118 @@ fun InfoLayoutTextItem(
     onClick: () -> Unit,
     showArrow: Boolean = true,
     selected: Boolean = false,
-    color: Color = MaterialTheme.colorScheme.surfaceVariant,
-    contentColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
-    enabled: Boolean = true,
+    color: Color = itemColor(false),
+    contentColor: Color = onItemColor(),
+    enabled: Boolean = true
 ) {
-    InfoLayoutItem(modifier = modifier, onClick = onClick, selected = selected, color = color, contentColor = contentColor, enabled = enabled) {
-        MarqueeText(modifier = Modifier.weight(1f).padding(vertical = 8.dp), text = title, style = MaterialTheme.typography.bodyMedium)
-        if (showArrow) {
-            Text(text = ">", style = MaterialTheme.typography.bodyLarge)
+    InfoLayoutTextItem(
+        modifier = modifier,
+        title = title,
+        icon = {
+            if (showArrow) {
+                Text(
+                    modifier = Modifier.size(28.dp),
+                    text = ">",
+                    style = MaterialTheme.typography.titleMedium
+                )
+            }
+        },
+        onClick = onClick,
+        selected = selected,
+        color = color,
+        contentColor = contentColor,
+        enabled = enabled
+    )
+}
+
+@Composable
+fun InfoLayoutTextItem(
+    modifier: Modifier = Modifier,
+    title: String,
+    icon: @Composable () -> Unit,
+    onClick: () -> Unit,
+    selected: Boolean = false,
+    color: Color = itemColor(false),
+    contentColor: Color = onItemColor(),
+    enabled: Boolean = true
+) {
+    InfoLayoutItem(
+        modifier = modifier,
+        onClick = onClick,
+        selected = selected,
+        color = color,
+        contentColor = contentColor,
+        enabled = enabled
+    ) {
+        MarqueeText(
+            modifier = Modifier
+                .padding(vertical = 8.dp)
+                .weight(1f),
+            text = title,
+            style = MaterialTheme.typography.bodyMedium
+        )
+        icon()
+    }
+}
+
+@Composable
+fun InfoLayoutColorItem(
+    modifier: Modifier = Modifier,
+    title: String,
+    color: Color,
+    onColorChanged: (Color) -> Unit
+) {
+    var showColorDialog by remember { mutableStateOf(false) }
+
+    InfoLayoutTextItem(
+        modifier = modifier,
+        title = title,
+        icon = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Box(modifier = Modifier.size(28.dp)) {
+                    TransparentChecker(
+                        modifier = Modifier.fillMaxSize(),
+                        gridSize = 18f
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(color = color)
+                    )
+                }
+                Text(
+                    modifier = Modifier.size(28.dp),
+                    text = ">",
+                    style = MaterialTheme.typography.titleMedium
+                )
+            }
+        },
+        onClick = { showColorDialog = true }
+    )
+
+    if (showColorDialog) {
+        var tempColor by remember { mutableStateOf(color) }
+        val colorController = rememberColorPickerController(initialColor = tempColor)
+        val currentColor by remember(colorController) { colorController.color }
+
+        LaunchedEffect(currentColor) {
+            onColorChanged(currentColor)
         }
+
+        ColorPickerDialog(
+            colorController = colorController,
+            onCancel = {
+                onColorChanged(colorController.getOriginalColor())
+                showColorDialog = false
+            },
+            onConfirm = { c ->
+                showColorDialog = false
+                onColorChanged(c)
+            }
+        )
     }
 }
 
@@ -147,12 +458,34 @@ fun InfoLayoutItem(
     enabled: Boolean = true,
     shape: Shape = MaterialTheme.shapes.large,
     borderColor: Color = MaterialTheme.colorScheme.primary,
-    color: Color = MaterialTheme.colorScheme.surfaceVariant,
-    contentColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    color: Color = itemColor(false),
+    contentColor: Color = onItemColor(),
     content: @Composable RowScope.() -> Unit
 ) {
-    val borderWidth by animateDpAsState(if (selected) 2.dp else 0.dp)
-    Surface(modifier = modifier.border(width = borderWidth, color = borderColor, shape = shape), color = color, contentColor = contentColor, shape = shape, onClick = onClick, enabled = enabled) {
-        Row(modifier = Modifier.fillMaxWidth().clip(shape).padding(all = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), content = content)
+    val borderWidth by animateDpAsState(
+        if (selected) 2.dp else (-1).dp
+    )
+
+    Surface(
+        modifier = modifier.border(
+            width = borderWidth,
+            color = borderColor,
+            shape = shape
+        ),
+        color = color,
+        contentColor = contentColor,
+        shape = shape,
+        onClick = onClick,
+        enabled = enabled
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(shape = MaterialTheme.shapes.large)
+                .padding(all = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            content = content
+        )
     }
 }
