@@ -25,6 +25,7 @@ fun EditTextStyle(data: ObservableWidget, onEditWidgetText: (ObservableTranslata
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 private fun LazyListScope.commonItems(onEditWidgetText: () -> Unit, textAlignment: TextAlignment, onTextAlignmentChanged: (TextAlignment) -> Unit, textBold: Boolean, onTextBoldChanged: (Boolean) -> Unit, textItalic: Boolean, onTextItalicChanged: (Boolean) -> Unit, textUnderline: Boolean, onTextUnderlineChanged: (Boolean) -> Unit) {
     item { InfoLayoutTextItem(title = stringResource(R.string.control_editor_edit_text), onClick = onEditWidgetText) }
     item { InfoLayoutSelectItem(title = stringResource(R.string.control_editor_edit_text_alignment), options = TextAlignment.entries, current = textAlignment, onClick = { if (textAlignment != it) onTextAlignmentChanged(it) }, label = { Text(it.name) }) }
