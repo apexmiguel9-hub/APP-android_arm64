@@ -138,7 +138,7 @@ fun showRuntimeButtons(context: Context) {
         if (layer.hide) continue
         for (btn in layer.normalButtons) {
             // Resolve button style from layout, fallback to DefaultButtonStyle
-            val btnStyle = layout.styles.find { it.uuid == btn.styleUuid } ?: DefaultButtonStyle
+            val btnStyle = btn.buttonStyle?.let { uuid -> layout.styles.find { it.uuid == uuid } } ?: DefaultButtonStyle
             val style = if (btnStyle.commonStyle) btnStyle.lightStyle else btnStyle.lightStyle
 
             val btnView = TextView(context).apply {
