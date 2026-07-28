@@ -1,9 +1,12 @@
 package com.epai.oblender
 
 import android.content.Context
+import android.graphics.PixelFormat
+import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
+import android.widget.TextView
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
@@ -24,8 +27,6 @@ import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.movtery.layer_controller.EDITOR_VERSION
 import com.movtery.layer_controller.data.*
 import com.movtery.layer_controller.data.lang.createTranslatable
-import com.movtery.layer_controller.event.EventHandler
-import com.movtery.layer_controller.ControlBoxLayout
 import com.movtery.layer_controller.layout.ControlLayout
 import com.movtery.layer_controller.layout.EmptyControlLayout
 import com.movtery.layer_controller.layout.createNewLayer
@@ -48,9 +49,10 @@ object OverlayState {
     var layoutReady by mutableStateOf(false)
     @JvmStatic
     var isEditMode by mutableStateOf(false)
+    /** Runtime button views managed from Java/Kotlin */
+    val runtimeButtonViews = mutableListOf<View>()
 }
 
-/** Java bridge for OverlayState.isEditMode */
 fun setControlOverlayEditMode(editMode: Boolean) { OverlayState.isEditMode = editMode }
 fun getControlOverlayEditMode(): Boolean = OverlayState.isEditMode
 
@@ -83,6 +85,88 @@ fun createControlOverlayView(context: Context): ComposeView {
 
 private fun getLayoutFile(context: Context): File {
     return File(context.filesDir, "control_layout.json")
+}
+
+fun showRuntimeButtons(context: Context) {
+    hideRuntimeButtons()
+    val file = getLayoutFile(context)
+    if (!file.exists()) return
+    val layout = try { loadLayoutFromFile(file) } catch (_: Exception) { return }
+    val wm = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+    val density = context.resources.displayMetrics.density
+    val screenW = context.resources.displayMetrics.widthPixels
+    val screenH = context.resources.displayMetrics.heightPixels
+
+    for (layer in layout.layers) {
+        if (layer.hide) continue
+        for (btn in layer.normalButtons) {
+            val btnView = TextView(context).apply {
+                text = btn.text.default
+                setTextColor(android.graphics.Color.WHITE)
+                setBackgroundColor(android.graphics.Color.argb(180, 64, 64, 64))
+                gravity = Gravity.CENTER
+                textSize = 12f
+                setPadding(8, 4, 8, 4)
+                setOnClickListener {
+                    // Route first ClickEvent key to Blender
+                    val ev = btn.clickEvents.firstOrNull()
+                    if (ev != null) {
+                        OBLNativeActivity.routeClickEvent(ev)
+                    }
+                }
+            }
+            // Compute pixel position and size
+            val pos = btn.position
+            val size = btn.buttonSize
+            val w = when (size.type) {
+                ButtonSize.Type.Dp -> (size.widthDp * density).toInt()
+                ButtonSize.Type.Percentage -> {
+                    val ref = if (size.widthReference == ButtonSize.Reference.ScreenWidth) screenW else screenH
+                    (ref * size.widthPercentage / 10000f).toInt()
+                }
+                ButtonSize.Type.WrapContent -> ViewGroup.LayoutParams.WRAP_CONTENT
+            }
+            val h = when (size.type) {
+                ButtonSize.Type.Dp -> (size.heightDp * density).toInt()
+                ButtonSize.Type.Percentage -> {
+                    val ref = if (size.heightReference == ButtonSize.Reference.ScreenHeight) screenH else screenW
+                    (ref * size.heightPercentage / 10000f).toInt()
+                }
+                ButtonSize.Type.WrapContent -> ViewGroup.LayoutParams.WRAP_CONTENT
+            }
+            val xPct = pos.xPercentage()
+            val yPct = pos.yPercentage()
+            val x = ((screenW - (if (w == ViewGroup.LayoutParams.WRAP_CONTENT) 0 else w)) * xPct).toInt()
+            val y = ((screenH - (if (h == ViewGroup.LayoutParams.WRAP_CONTENT) 0 else h)) * yPct).toInt()
+
+            val lp = WindowManager.LayoutParams(
+                if (w == ViewGroup.LayoutParams.WRAP_CONTENT) ViewGroup.LayoutParams.WRAP_CONTENT else w,
+                if (h == ViewGroup.LayoutParams.WRAP_CONTENT) ViewGroup.LayoutParams.WRAP_CONTENT else h,
+                WindowManager.LayoutParams.TYPE_APPLICATION_PANEL,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                        WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                PixelFormat.TRANSLUCENT
+            ).apply {
+                gravity = Gravity.TOP or Gravity.START
+                this.x = x
+                this.y = y
+            }
+            wm.addView(btnView, lp)
+            OverlayState.runtimeButtonViews.add(btnView)
+        }
+    }
+}
+
+fun hideRuntimeButtons() {
+    val views = OverlayState.runtimeButtonViews.toList()
+    OverlayState.runtimeButtonViews.clear()
+    for (v in views) {
+        try {
+            val wm = v.context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+            wm.removeView(v)
+        } catch (_: Exception) {}
+    }
 }
 
 @Composable
@@ -118,7 +202,7 @@ fun OverlayContent() {
 
     if (!OverlayState.layoutReady) return
 
-    // Reactively update touch modal when edit mode changes (from ball button toggle in Java)
+    // Reactively update touch modal when edit mode changes
     LaunchedEffect(OverlayState.isEditMode) {
         updateTouchModal(!OverlayState.isEditMode)
     }
@@ -136,6 +220,7 @@ fun OverlayContent() {
                         exit = {
                             OverlayState.isEditMode = false
                             updateTouchModal(true)
+                            showRuntimeButtons(context)
                         },
                         menuExit = {
                             viewModel.showExitEditorDialog(
@@ -143,23 +228,13 @@ fun OverlayContent() {
                                 onExit = {
                                     OverlayState.isEditMode = false
                                     updateTouchModal(true)
+                                    showRuntimeButtons(context)
                                 }
                             )
                         }
                     )
                 }
             }
-        } else {
-            ControlBoxLayout(
-                modifier = Modifier.fillMaxSize(),
-                observedLayout = observableLayout,
-                isUsingJoystick = false,
-                isCursorGrabbing = false,
-                checkOccupiedPointers = { false },
-                eventHandler = EventHandler { event, pressed ->
-                    // Route key events to Blender via OBLNativeActivity
-                }
-            ) { }
         }
     }
 }

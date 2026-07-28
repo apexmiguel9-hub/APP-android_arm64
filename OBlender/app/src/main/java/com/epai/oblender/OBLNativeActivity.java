@@ -492,19 +492,27 @@ public class OBLNativeActivity extends NativeActivity
                     mControlOverlayView = null;
                 }
                 if (mControlOverlayView == null) {
-                    // First click: create overlay (starts in runtime mode with FLAG_NOT_TOUCH_MODAL)
+                    // First click: create overlay (starts in editor mode)
                     mControlOverlayView = OBLControllerOverlayKt.createControlOverlayView(OBLNativeActivity.this);
                     LayoutParams lp = new LayoutParams();
-                    lp.flags = LayoutParams.FLAG_NOT_FOCUSABLE | LayoutParams.FLAG_LAYOUT_IN_SCREEN | LayoutParams.FLAG_NOT_TOUCH_MODAL;
+                    lp.flags = LayoutParams.FLAG_NOT_FOCUSABLE | LayoutParams.FLAG_LAYOUT_IN_SCREEN;
                     lp.format = PixelFormat.TRANSPARENT;
                     lp.width = ViewGroup.LayoutParams.MATCH_PARENT;
                     lp.height = ViewGroup.LayoutParams.MATCH_PARENT;
                     getWindowManager().addView(mControlOverlayView, lp);
-                    // Open editor after layout loads
+                    // Open editor once layout is ready
                     mControlOverlayView.post(() -> OBLControllerOverlayKt.setControlOverlayEditMode(true));
                 } else {
-                    // Toggle between editor and runtime
-                    OBLControllerOverlayKt.setControlOverlayEditMode(!OBLControllerOverlayKt.getControlOverlayEditMode());
+                    boolean isEditMode = OBLControllerOverlayKt.getControlOverlayEditMode();
+                    if (isEditMode) {
+                        // Exit editor → enter runtime (show floating buttons)
+                        OBLControllerOverlayKt.setControlOverlayEditMode(false);
+                        OBLControllerOverlayKt.showRuntimeButtons(OBLNativeActivity.this);
+                    } else {
+                        // Exit runtime → enter editor (hide floating buttons)
+                        OBLControllerOverlayKt.hideRuntimeButtons();
+                        OBLControllerOverlayKt.setControlOverlayEditMode(true);
+                    }
                 }
             }
         });
@@ -514,6 +522,26 @@ public class OBLNativeActivity extends NativeActivity
 
     private void initialUndoRedoButtons() {
         /* All functionality moved to the shortcut grid — no overlay buttons needed. */
+    }
+
+    /**
+     * Called from OBLControllerOverlay.kt runtime button onClick.
+     * Routes a ClickEvent's keycodes to Blender via GodotLib.key().
+     */
+    public static void routeClickEvent(Object clickEvent) {
+        // clickEvent is com.movtery.layer_controller.event.ClickEvent
+        // We dispatch via reflection to avoid Kotlin data class access issues
+        try {
+            java.lang.reflect.Method getKeycodes = clickEvent.getClass().getMethod("getKeycodes");
+            @SuppressWarnings("unchecked")
+            java.util.List<Integer> keycodes = (java.util.List<Integer>) getKeycodes.invoke(clickEvent);
+            if (keycodes == null || keycodes.isEmpty()) return;
+            int code = keycodes.get(0);
+            GodotLib.key(code, 0, 0, true, false);
+            GodotLib.key(code, 0, 0, false, false);
+        } catch (Exception e) {
+            Log.e(TAG, "routeClickEvent error", e);
+        }
     }
 
     public void showKeyboardApp(String p_existing_text, int p_type, int p_max_input_length, int p_cursor_start, int p_cursor_end) {
