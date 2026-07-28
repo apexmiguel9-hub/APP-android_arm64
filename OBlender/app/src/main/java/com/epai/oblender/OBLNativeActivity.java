@@ -81,7 +81,6 @@ public class OBLNativeActivity extends NativeActivity
     Map<Integer, WindowGLSurfaceView> mWindowFragmentMap = new HashMap<>();
 
     private OblSettingFragment mOblSettingFragment = null;
-    private View mControlOverlayView = null;
     private boolean mBooleanLastOblSettingFragmentVisible=false;
 
     public String getClipboard(boolean selection){
@@ -353,10 +352,8 @@ public class OBLNativeActivity extends NativeActivity
                 }else{
                     mBooleanLastOblSettingFragmentVisible=false;
                 }
-                if (mControlOverlayView != null && mControlOverlayView.getVisibility() == View.VISIBLE) {
-                    mBooleanLastOblSettingFragmentVisible = true;
-                    mControlOverlayView.setVisibility(View.GONE);
-                }
+                // Also hide runtime buttons when keyboard shows
+                OBLControllerOverlayKt.hideRuntimeButtons();
                 ScreenUtils.fullScreen(getWindow());
             }
 
@@ -367,9 +364,6 @@ public class OBLNativeActivity extends NativeActivity
                     if (mBooleanLastOblSettingFragmentVisible){
                         mOblSettingFragment.setVisibility(View.VISIBLE);
                     }
-                }
-                if (mControlOverlayView != null && mBooleanLastOblSettingFragmentVisible) {
-                    mControlOverlayView.setVisibility(View.VISIBLE);
                 }
             }
         });
@@ -488,31 +482,19 @@ public class OBLNativeActivity extends NativeActivity
         ballBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                if (mControlOverlayView != null && !mControlOverlayView.isAttachedToWindow()) {
-                    mControlOverlayView = null;
-                }
-                if (mControlOverlayView == null) {
-                    // First click: create overlay (starts in editor mode)
-                    mControlOverlayView = OBLControllerOverlayKt.createControlOverlayView(OBLNativeActivity.this);
-                    LayoutParams lp = new LayoutParams();
-                    lp.flags = LayoutParams.FLAG_NOT_FOCUSABLE | LayoutParams.FLAG_LAYOUT_IN_SCREEN;
-                    lp.format = PixelFormat.TRANSPARENT;
-                    lp.width = ViewGroup.LayoutParams.MATCH_PARENT;
-                    lp.height = ViewGroup.LayoutParams.MATCH_PARENT;
-                    getWindowManager().addView(mControlOverlayView, lp);
-                    // Open editor once layout is ready
-                    mControlOverlayView.post(() -> OBLControllerOverlayKt.setControlOverlayEditMode(true));
+                boolean isEditMode = OBLControllerOverlayKt.getControlOverlayEditMode();
+                if (isEditMode) {
+                    // Exit editor → enter runtime
+                    // hideEditor + showRuntimeButtons is handled by the exit lambda in Compose,
+                    // but if we toggle from the ball button directly:
+                    OBLControllerOverlayKt.setControlOverlayEditMode(false);
+                    OBLControllerOverlayKt.hideRuntimeButtons(); // clean stale
+                    OBLControllerOverlayKt.hideEditor(OBLNativeActivity.this);
+                    OBLControllerOverlayKt.showRuntimeButtons(OBLNativeActivity.this);
                 } else {
-                    boolean isEditMode = OBLControllerOverlayKt.getControlOverlayEditMode();
-                    if (isEditMode) {
-                        // Exit editor → enter runtime (show floating buttons)
-                        OBLControllerOverlayKt.setControlOverlayEditMode(false);
-                        OBLControllerOverlayKt.showRuntimeButtons(OBLNativeActivity.this);
-                    } else {
-                        // Exit runtime → enter editor (hide floating buttons)
-                        OBLControllerOverlayKt.hideRuntimeButtons();
-                        OBLControllerOverlayKt.setControlOverlayEditMode(true);
-                    }
+                    // Exit runtime → enter editor
+                    OBLControllerOverlayKt.hideRuntimeButtons();
+                    OBLControllerOverlayKt.showEditor(OBLNativeActivity.this);
                 }
             }
         });

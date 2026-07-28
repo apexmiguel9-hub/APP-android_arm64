@@ -49,7 +49,6 @@ object OverlayState {
     var layoutReady by mutableStateOf(false)
     @JvmStatic
     var isEditMode by mutableStateOf(false)
-    /** Runtime button views managed from Java/Kotlin */
     val runtimeButtonViews = mutableListOf<View>()
 }
 
@@ -67,7 +66,7 @@ private class SimpleSavedStateRegistryOwner : SavedStateRegistryOwner {
     }
 }
 
-fun createControlOverlayView(context: Context): ComposeView {
+fun createOverlayComposeView(context: Context): ComposeView {
     val lifecycleOwner = ProcessLifecycleOwner.get()
     val savedStateRegistryOwner = SimpleSavedStateRegistryOwner()
     return ComposeView(context).apply {
@@ -77,10 +76,39 @@ fun createControlOverlayView(context: Context): ComposeView {
             ViewGroup.LayoutParams.MATCH_PARENT
         )
         setBackgroundColor(android.graphics.Color.TRANSPARENT)
+        isClickable = false
         setViewTreeLifecycleOwner(lifecycleOwner)
         setViewTreeSavedStateRegistryOwner(savedStateRegistryOwner)
         setContent { OverlayContent() }
     }
+}
+
+fun showEditor(context: Context) {
+    hideRuntimeButtons()
+    // Add ComposeView to WM (editor blocks all touches — no FLAG_NOT_TOUCH_MODAL)
+    val view = createOverlayComposeView(context)
+    val wm = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+    val lp = WindowManager.LayoutParams(
+        ViewGroup.LayoutParams.MATCH_PARENT,
+        ViewGroup.LayoutParams.MATCH_PARENT,
+        WindowManager.LayoutParams.TYPE_APPLICATION_PANEL,
+        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+        PixelFormat.TRANSPARENT
+    )
+    wm.addView(view, lp)
+    OverlayState.isEditMode = true
+}
+
+fun hideEditor(context: Context) {
+    val view = OverlayState.hostView ?: return
+    if (view.isAttachedToWindow) {
+        try {
+            val wm = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+            wm.removeView(view)
+        } catch (_: Exception) {}
+    }
+    OverlayState.hostView = null
 }
 
 private fun getLayoutFile(context: Context): File {
@@ -202,53 +230,34 @@ fun OverlayContent() {
 
     if (!OverlayState.layoutReady) return
 
-    // Reactively update touch modal when edit mode changes
-    LaunchedEffect(OverlayState.isEditMode) {
-        updateTouchModal(!OverlayState.isEditMode)
-    }
-
     Box(modifier = Modifier.fillMaxSize()) {
-        if (OverlayState.isEditMode) {
-            Surface(
-                modifier = Modifier.fillMaxSize(),
-                color = Color(0xCC000000.toInt())
-            ) {
-                BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-                    ControlEditor(
-                        viewModel = viewModel,
-                        targetFile = file,
-                        exit = {
-                            OverlayState.isEditMode = false
-                            updateTouchModal(true)
-                            showRuntimeButtons(context)
-                        },
-                        menuExit = {
-                            viewModel.showExitEditorDialog(
-                                context = context,
-                                onExit = {
-                                    OverlayState.isEditMode = false
-                                    updateTouchModal(true)
-                                    showRuntimeButtons(context)
-                                }
-                            )
-                        }
-                    )
-                }
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = Color(0xCC000000.toInt())
+        ) {
+            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                ControlEditor(
+                    viewModel = viewModel,
+                    targetFile = file,
+                    exit = {
+                        OverlayState.isEditMode = false
+                        showRuntimeButtons(context)
+                        hideEditor(context)
+                    },
+                    menuExit = {
+                        viewModel.showExitEditorDialog(
+                            context = context,
+                            onExit = {
+                                OverlayState.isEditMode = false
+                                showRuntimeButtons(context)
+                                hideEditor(context)
+                            }
+                        )
+                    }
+                )
             }
         }
     }
-}
-
-private fun updateTouchModal(touchModal: Boolean) {
-    val view = OverlayState.hostView ?: return
-    val wm = view.context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager ?: return
-    val lp = view.layoutParams as? WindowManager.LayoutParams ?: return
-    if (touchModal) {
-        lp.flags = lp.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
-    } else {
-        lp.flags = lp.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL.inv()
-    }
-    try { wm.updateViewLayout(view, lp) } catch (_: Exception) {}
 }
 
 private fun createDefaultLayout(): ControlLayout {
