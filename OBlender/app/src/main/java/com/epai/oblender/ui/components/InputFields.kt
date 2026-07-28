@@ -1,21 +1,20 @@
 package com.epai.oblender.ui.components
 
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -59,25 +58,16 @@ fun OwnOutlinedTextField(
 @Composable
 fun SingleLineTextCheck(
     text: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-    modifier: Modifier = Modifier,
-    enabled: Boolean = true
+    onSingleLined: (String) -> Unit,
+    replace: String = " "
 ) {
-    Row(
-        modifier = modifier,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Checkbox(
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-            enabled = enabled
-        )
-        Spacer(Modifier.width(4.dp))
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodyMedium,
-            color = if (enabled) Color.Unspecified else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-        )
+    var checked by rememberSaveable { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        if (!checked) {
+            val singleLined = text.replace("\n", replace)
+            if (text != singleLined) onSingleLined(singleLined)
+            checked = true
+        }
     }
 }

@@ -1,6 +1,7 @@
 package com.epai.oblender.ui.components
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -44,6 +45,7 @@ fun ScalingActionButton(
     )
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MarqueeText(
     modifier: Modifier = Modifier,

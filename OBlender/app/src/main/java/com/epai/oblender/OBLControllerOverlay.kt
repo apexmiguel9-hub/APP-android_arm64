@@ -167,7 +167,7 @@ fun OverlayContent() {
         onClick = { OverlayState.showMenu = !OverlayState.showMenu },
         alpha = 1f,
         color = Color.argb(100, 64, 64, 64),
-        contentColor = Color.White
+        contentColor = Color.White.copy(alpha = 0.95f)
     ) {
         MarqueeText(
             text = "M",

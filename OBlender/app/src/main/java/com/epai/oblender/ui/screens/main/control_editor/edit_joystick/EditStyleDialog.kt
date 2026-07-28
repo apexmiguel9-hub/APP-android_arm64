@@ -52,14 +52,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.movtery.layer_controller.data.BORDER_RADIO_RANGE
 import com.movtery.layer_controller.data.SHAPE_PERCENT_RANGE
 import com.movtery.layer_controller.data.SIZE_PERCENT_RANGE
 import com.movtery.layer_controller.observable.ObservableJoystickStyle
 import com.movtery.layer_controller.observable.ObservableJoystickStyleConfig
-import com.epai.oblender.R
 import com.epai.oblender.setting.unit.toFloatRange
 import com.epai.oblender.ui.components.MarqueeText
 import com.epai.oblender.ui.control.joystick.StyleableJoystick
@@ -72,7 +70,7 @@ import com.epai.oblender.ui.theme.itemColor
 import com.epai.oblender.ui.theme.onCardColor
 import com.epai.oblender.ui.theme.onItemColor
 
-private data class TabItem(val titleRes: Int)
+private data class TabItem(val title: String)
 
 /**
  * 编辑摇杆样式模式
@@ -108,8 +106,8 @@ fun EditJoystickStyleDialog(
     ) {
         val tabs = remember {
             listOf(
-                TabItem(R.string.control_editor_edit_style_config_light),
-                TabItem(R.string.control_editor_edit_style_config_dark)
+                TabItem("Light"),
+                TabItem("Dark")
             )
         }
 
@@ -168,11 +166,11 @@ fun EditJoystickStyleDialog(
                             val buttonText = when (mode) {
                                 EditJoystickStyleMode.ControlLayout -> {
                                     //在编辑控制布局独立样式时，这里是删除样式按钮
-                                    stringResource(R.string.generic_delete)
+                                    "Delete"
                                 }
                                 EditJoystickStyleMode.Launcher -> {
                                     //在编辑启动器默认样式时，这里是保存按钮
-                                    stringResource(R.string.generic_save)
+                                    "Save"
                                 }
                             }
                             InfoLayoutTextItem(
@@ -200,7 +198,7 @@ fun EditJoystickStyleDialog(
                                             selectedTabIndex = index
                                         },
                                         text = {
-                                            MarqueeText(text = stringResource(item.titleRes))
+                                            MarqueeText(text = item.title)
                                         }
                                     )
                                 }
@@ -254,7 +252,7 @@ private fun StyleConfigEditor(
         item(key = "opacity") {
             InfoLayoutSliderItem(
                 modifier = itemModifier.animateItem(),
-                title = stringResource(R.string.control_editor_edit_style_config_alpha),
+                title = "Alpha",
                 value = config.alpha * 100f,
                 onValueChange = {
                     config.alpha = it / 100f
@@ -274,7 +272,7 @@ private fun StyleConfigEditor(
         item(key = "background_color") {
             InfoLayoutColorItem(
                 modifier = itemModifier.animateItem(),
-                title = stringResource(R.string.control_editor_edit_style_config_background_color),
+                title = "Background color",
                 color = config.backgroundColor,
                 onColorChanged = {
                     config.backgroundColor = it
@@ -286,7 +284,7 @@ private fun StyleConfigEditor(
         item(key = "joystick_color") {
             InfoLayoutColorItem(
                 modifier = itemModifier.animateItem(),
-                title = stringResource(R.string.control_editor_special_joystick_style_joystick_color),
+                title = "Joystick color",
                 color = config.joystickColor,
                 onColorChanged = {
                     config.joystickColor = it
@@ -298,7 +296,7 @@ private fun StyleConfigEditor(
         item(key = "joystick_color_can_lock") {
             InfoLayoutColorItem(
                 modifier = itemModifier.animateItem(),
-                title = stringResource(R.string.control_editor_special_joystick_style_joystick_can_lock_color),
+                title = "Can lock color",
                 color = config.joystickCanLockColor,
                 onColorChanged = {
                     config.joystickCanLockColor = it
@@ -310,7 +308,7 @@ private fun StyleConfigEditor(
         item(key = "joystick_color_locked") {
             InfoLayoutColorItem(
                 modifier = itemModifier.animateItem(),
-                title = stringResource(R.string.control_editor_special_joystick_style_joystick_locked_color),
+                title = "Locked color",
                 color = config.joystickLockedColor,
                 onColorChanged = {
                     config.joystickLockedColor = it
@@ -322,7 +320,7 @@ private fun StyleConfigEditor(
         item(key = "lock_mark_color") {
             InfoLayoutColorItem(
                 modifier = itemModifier.animateItem(),
-                title = stringResource(R.string.control_editor_special_joystick_style_lock_mark_color),
+                title = "Lock mark color",
                 color = config.lockMarkColor,
                 onColorChanged = {
                     config.lockMarkColor = it
@@ -334,7 +332,7 @@ private fun StyleConfigEditor(
         item(key = "border_color") {
             InfoLayoutColorItem(
                 modifier = itemModifier.animateItem(),
-                title = stringResource(R.string.control_editor_edit_style_config_border_color),
+                title = "Border color",
                 color = config.borderColor,
                 onColorChanged = {
                     config.borderColor = it
@@ -350,7 +348,7 @@ private fun StyleConfigEditor(
         item(key = "background_shape") {
             InfoLayoutSliderItem(
                 modifier = itemModifier,
-                title = stringResource(R.string.control_editor_special_joystick_style_background_rounded_corner),
+                title = "Background rounded corner",
                 value = config.backgroundShape.toFloat(),
                 onValueChange = {
                     config.backgroundShape = it.toInt()
@@ -366,7 +364,7 @@ private fun StyleConfigEditor(
         item(key = "border_width") {
             InfoLayoutSliderItem(
                 modifier = itemModifier.animateItem(),
-                title = stringResource(R.string.control_editor_edit_style_config_border_width),
+                title = "Border width",
                 value = config.borderWidthRatio.toFloat(),
                 onValueChange = {
                     config.borderWidthRatio = it.toInt()
@@ -382,7 +380,7 @@ private fun StyleConfigEditor(
         item(key = "joystick_shape") {
             InfoLayoutSliderItem(
                 modifier = itemModifier,
-                title = stringResource(R.string.control_editor_special_joystick_style_joystick_rounded_corner),
+                title = "Joystick rounded corner",
                 value = config.joystickShape.toFloat(),
                 onValueChange = {
                     config.joystickShape = it.toInt()
@@ -398,7 +396,7 @@ private fun StyleConfigEditor(
         item(key = "joystick_size") {
             InfoLayoutSliderItem(
                 modifier = itemModifier,
-                title = stringResource(R.string.control_editor_special_joystick_style_joystick_size),
+                title = "Joystick size",
                 value = config.joystickSize,
                 onValueChange = {
                     config.joystickSize = it

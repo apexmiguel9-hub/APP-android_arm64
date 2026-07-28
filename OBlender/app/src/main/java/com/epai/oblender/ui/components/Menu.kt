@@ -16,11 +16,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.epai.oblender.R
 import com.epai.oblender.ui.screens.content.elements.DisabledAlpha
 import kotlin.math.roundToInt
 
