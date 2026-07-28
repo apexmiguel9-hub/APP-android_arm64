@@ -27,6 +27,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewGroup.MarginLayoutParams;
 import android.widget.Button;
+import android.widget.ImageView;
 import android.view.WindowManager;
 import android.widget.LinearLayout;
 import android.view.WindowManager.LayoutParams;
@@ -352,9 +353,9 @@ public class OBLNativeActivity extends NativeActivity
                 }else{
                     mBooleanLastOblSettingFragmentVisible=false;
                 }
-                if (mControlOverlayView != null && OverlayState.getShowEditor()) {
+                if (mControlOverlayView != null && mControlOverlayView.getVisibility() == View.VISIBLE) {
                     mBooleanLastOblSettingFragmentVisible = true;
-                    OverlayState.setShowEditor(false);
+                    mControlOverlayView.setVisibility(View.GONE);
                 }
                 ScreenUtils.fullScreen(getWindow());
             }
@@ -368,7 +369,7 @@ public class OBLNativeActivity extends NativeActivity
                     }
                 }
                 if (mControlOverlayView != null && mBooleanLastOblSettingFragmentVisible) {
-                    OverlayState.setShowEditor(true);
+                    mControlOverlayView.setVisibility(View.VISIBLE);
                 }
             }
         });
@@ -469,13 +470,12 @@ public class OBLNativeActivity extends NativeActivity
 
         getWindowManager().addView(toggleBtn, lp);
 
-        /* FCL button — opens control editor overlay */
-        Button fclBtn = new Button(OBLNativeActivity.this);
-        fclBtn.setText("🎮");
-        fclBtn.setTextSize(16);
-        fclBtn.setTextColor(Color.WHITE);
-        fclBtn.setAlpha(0.5f);
-        fclBtn.setBackgroundResource(android.R.color.transparent);
+        /* Floating ball — opens control editor overlay */
+        ImageView ballBtn = new ImageView(OBLNativeActivity.this);
+        ballBtn.setImageResource(R.drawable.ic_menu);
+        ballBtn.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+        ballBtn.setPadding(14, 14, 14, 14);
+        ballBtn.setBackgroundColor(Color.argb(100, 64, 64, 64));
 
         LayoutParams lp2 = new LayoutParams();
         lp2.gravity = Gravity.RIGHT | Gravity.BOTTOM;
@@ -485,7 +485,7 @@ public class OBLNativeActivity extends NativeActivity
         lp2.y = 6;
         lp2.flags = LayoutParams.FLAG_NOT_FOCUSABLE | LayoutParams.FLAG_NOT_TOUCH_MODAL;
 
-        fclBtn.setOnClickListener(new View.OnClickListener() {
+        ballBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 if (mControlOverlayView == null) {
@@ -499,14 +499,16 @@ public class OBLNativeActivity extends NativeActivity
                     lp.height = ViewGroup.LayoutParams.MATCH_PARENT;
                     getWindowManager().addView(mControlOverlayView, lp);
                     OverlayState.setShowEditor(true);
+                    mControlOverlayView.setVisibility(View.VISIBLE);
                 } else {
                     boolean isOpen = OverlayState.getShowEditor();
                     OverlayState.setShowEditor(!isOpen);
+                    mControlOverlayView.setVisibility(isOpen ? View.GONE : View.VISIBLE);
                 }
             }
         });
 
-        getWindowManager().addView(fclBtn, lp2);
+        getWindowManager().addView(ballBtn, lp2);
     }
 
     private void initialUndoRedoButtons() {

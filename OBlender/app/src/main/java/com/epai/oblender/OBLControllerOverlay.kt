@@ -3,6 +3,7 @@ package com.epai.oblender
 import android.content.Context
 import android.graphics.Color
 import android.view.ViewGroup
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
@@ -18,7 +19,6 @@ import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.movtery.layer_controller.EDITOR_VERSION
-import com.movtery.layer_controller.data.HideLayerWhen
 import com.movtery.layer_controller.data.lang.createTranslatable
 import com.movtery.layer_controller.layout.ControlLayout
 import com.movtery.layer_controller.layout.EmptyControlLayout
@@ -26,8 +26,6 @@ import com.movtery.layer_controller.layout.createNewLayer
 import com.movtery.layer_controller.layout.loadLayoutFromFile
 import com.movtery.layer_controller.utils.saveToFile
 import com.epai.oblender.ui.screens.main.control_editor.ControlEditor
-import com.epai.oblender.ui.screens.main.control_editor.PreviewControlBox
-import com.epai.oblender.ui.screens.main.control_editor.PreviewScenario
 import com.epai.oblender.viewmodel.EditorViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -101,27 +99,17 @@ fun OverlayContent() {
     }
 
     if (layoutReady) {
-        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-            if (OverlayState.showEditor) {
+        if (OverlayState.showEditor) {
+            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                 ControlEditor(
                     viewModel = viewModel,
                     targetFile = layoutFile,
                     exit = {
                         OverlayState.showEditor = false
-                        viewModel.isPreviewMode = true
                     },
                     menuExit = {
                         OverlayState.showEditor = false
-                        viewModel.isPreviewMode = true
                     }
-                )
-            } else {
-                PreviewControlBox(
-                    modifier = Modifier.fillMaxSize(),
-                    observableLayout = viewModel.observableLayout,
-                    previewScenario = PreviewScenario.InMenu,
-                    previewHideLayerWhen = HideLayerWhen.None,
-                    enableJoystick = false
                 )
             }
         }
