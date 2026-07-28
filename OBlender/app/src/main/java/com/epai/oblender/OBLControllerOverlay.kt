@@ -3,6 +3,7 @@ package com.epai.oblender
 import android.content.Context
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowManager
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
@@ -132,7 +133,13 @@ fun OverlayContent() {
 }
 
 private fun removeEditorView() {
-    OverlayState.hostView?.visibility = View.GONE
+    OverlayState.hostView?.let { v ->
+        try {
+            val wm = v.context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager
+            wm?.removeView(v)
+        } catch (_: Exception) {}
+    }
+    OverlayState.hostView = null
 }
 
 private fun createDefaultLayout(): ControlLayout {

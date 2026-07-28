@@ -488,6 +488,10 @@ public class OBLNativeActivity extends NativeActivity
         ballBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                // If Kotlin removed the view (Save & Exit), null out stale reference
+                if (mControlOverlayView != null && !mControlOverlayView.isAttachedToWindow()) {
+                    mControlOverlayView = null;
+                }
                 if (mControlOverlayView != null && mControlOverlayView.getVisibility() == View.VISIBLE) {
                     // Editor is visible — hide it (returns touch to Blender)
                     mControlOverlayView.setVisibility(View.GONE);

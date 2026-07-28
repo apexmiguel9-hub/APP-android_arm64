@@ -122,10 +122,14 @@ class EditorViewModel : ViewModel() {
             runCatching {
                 layout.saveToFile(targetFile)
             }.onFailure { e ->
-                editorOperation = EditorOperation.SaveFailed(e)
+                withContext(Dispatchers.Main) {
+                    editorOperation = EditorOperation.SaveFailed(e)
+                }
             }.onSuccess {
-                editorOperation = EditorOperation.None
-                onSaved()
+                withContext(Dispatchers.Main) {
+                    editorOperation = EditorOperation.None
+                    onSaved()
+                }
             }
         }
     }
