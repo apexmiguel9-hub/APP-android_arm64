@@ -470,7 +470,7 @@ public class OBLNativeActivity extends NativeActivity
 
         getWindowManager().addView(toggleBtn, lp);
 
-        /* Floating ball — opens control editor overlay */
+        /* Floating ball — toggles editor/widget display mode */
         ImageView ballBtn = new ImageView(OBLNativeActivity.this);
         ballBtn.setImageResource(R.drawable.ic_menu);
         ballBtn.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
@@ -489,26 +489,42 @@ public class OBLNativeActivity extends NativeActivity
             @Override
             public void onClick(View v) {
                 if (mControlOverlayView == null) {
+                    // Create overlay once — initially in widget display mode (NOT_TOUCHABLE)
                     mControlOverlayView = OBLControllerOverlayKt.createControlOverlayView(OBLNativeActivity.this);
                     LayoutParams lp = new LayoutParams();
                     lp.flags = LayoutParams.FLAG_NOT_FOCUSABLE;
                     lp.flags |= LayoutParams.FLAG_LAYOUT_IN_SCREEN;
-                    lp.flags |= LayoutParams.FLAG_NOT_TOUCH_MODAL;
+                    lp.flags |= LayoutParams.FLAG_NOT_TOUCHABLE;
                     lp.format = PixelFormat.TRANSPARENT;
                     lp.width = ViewGroup.LayoutParams.MATCH_PARENT;
                     lp.height = ViewGroup.LayoutParams.MATCH_PARENT;
                     getWindowManager().addView(mControlOverlayView, lp);
-                    OverlayState.setShowEditor(true);
-                    mControlOverlayView.setVisibility(View.VISIBLE);
+                    OverlayState.setShowEditor(false);
                 } else {
+                    // Toggle between widget display and editor mode
                     boolean isOpen = OverlayState.getShowEditor();
                     OverlayState.setShowEditor(!isOpen);
-                    mControlOverlayView.setVisibility(isOpen ? View.GONE : View.VISIBLE);
+                    updateOverlayFlags(!isOpen);
                 }
             }
         });
 
         getWindowManager().addView(ballBtn, lp2);
+    }
+
+    private void updateOverlayFlags(boolean editorMode) {
+        if (mControlOverlayView == null) return;
+        WindowManager.LayoutParams lp = (WindowManager.LayoutParams) mControlOverlayView.getLayoutParams();
+        if (editorMode) {
+            // Editor mode: capture touches inside editor
+            lp.flags &= ~WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE;
+            lp.flags |= WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL;
+        } else {
+            // Widget display mode: touch pass-through to Blender
+            lp.flags |= WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE;
+            lp.flags &= ~WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL;
+        }
+        getWindowManager().updateViewLayout(mControlOverlayView, lp);
     }
 
     private void initialUndoRedoButtons() {

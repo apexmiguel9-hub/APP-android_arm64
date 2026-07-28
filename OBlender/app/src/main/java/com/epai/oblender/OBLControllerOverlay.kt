@@ -3,7 +3,6 @@ package com.epai.oblender
 import android.content.Context
 import android.graphics.Color
 import android.view.ViewGroup
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
@@ -19,11 +18,15 @@ import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.movtery.layer_controller.EDITOR_VERSION
+import com.movtery.layer_controller.ControlBoxLayout
+import com.movtery.layer_controller.data.HideLayerWhen
 import com.movtery.layer_controller.data.lang.createTranslatable
+import com.movtery.layer_controller.event.EventHandler
 import com.movtery.layer_controller.layout.ControlLayout
 import com.movtery.layer_controller.layout.EmptyControlLayout
 import com.movtery.layer_controller.layout.createNewLayer
 import com.movtery.layer_controller.layout.loadLayoutFromFile
+import com.movtery.layer_controller.observable.ObservableControlLayout
 import com.movtery.layer_controller.utils.saveToFile
 import com.epai.oblender.ui.screens.main.control_editor.ControlEditor
 import com.epai.oblender.viewmodel.EditorViewModel
@@ -35,6 +38,11 @@ import java.io.File
 object OverlayState {
     @JvmStatic
     var showEditor by mutableStateOf(false)
+
+    @JvmStatic
+    var eventHandler: EventHandler = EventHandler { event, pressed ->
+        android.util.Log.d("OBL.Widget", "Event: ${event.type} key=${event.key} pressed=$pressed")
+    }
 }
 
 private class SimpleSavedStateRegistryOwner : SavedStateRegistryOwner {
@@ -76,6 +84,7 @@ fun OverlayContent() {
     val viewModel = remember { EditorViewModel() }
     val coroutineScope = rememberCoroutineScope()
     var layoutReady by remember { mutableStateOf(false) }
+    var observableLayout by remember { mutableStateOf<ObservableControlLayout?>(null) }
 
     DisposableEffect(Unit) {
         val job = coroutineScope.launch {
@@ -87,11 +96,12 @@ fun OverlayContent() {
                 } else {
                     try {
                         loadLayoutFromFile(layoutFile)
-                    } catch (e: Exception) {
+                    } catch (_: Exception) {
                         EmptyControlLayout
                     }
                 }
             }
+            observableLayout = ObservableControlLayout(layout)
             viewModel.initLayout(layout)
             layoutReady = true
         }
@@ -104,13 +114,27 @@ fun OverlayContent() {
                 ControlEditor(
                     viewModel = viewModel,
                     targetFile = layoutFile,
-                    exit = {
-                        OverlayState.showEditor = false
-                    },
+                    exit = { OverlayState.showEditor = false },
                     menuExit = {
-                        OverlayState.showEditor = false
+                        viewModel.showExitEditorDialog(
+                            context = context,
+                            onExit = { OverlayState.showEditor = false }
+                        )
                     }
                 )
+            }
+        } else {
+            ControlBoxLayout(
+                modifier = Modifier.fillMaxSize(),
+                observedLayout = observableLayout,
+                eventHandler = OverlayState.eventHandler,
+                isUsingJoystick = false,
+                isCursorGrabbing = false,
+                checkOccupiedPointers = { false },
+                opacity = 1f,
+                hideLayerWhen = HideLayerWhen.None,
+                isDark = false
+            ) {
             }
         }
     }
