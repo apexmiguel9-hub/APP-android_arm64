@@ -3,6 +3,7 @@ package com.epai.oblender.ui.screens.main.control_editor.edit_widget
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -13,6 +14,7 @@ import com.movtery.layer_controller.observable.*
 import com.epai.oblender.R
 import com.epai.oblender.ui.screens.main.control_editor.*
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditTextStyle(data: ObservableWidget, onEditWidgetText: (ObservableTranslatableString) -> Unit) {
     LazyColumn(modifier = Modifier.fillMaxSize().padding(start = 4.dp, end = 8.dp), contentPadding = PaddingValues(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {

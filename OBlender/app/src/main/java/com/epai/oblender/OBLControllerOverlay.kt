@@ -101,7 +101,7 @@ fun createControlOverlayView(context: Context): ComposeView {
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT
         )
-        setBackgroundColor(Color.TRANSPARENT)
+        setBackgroundColor(android.graphics.Color.TRANSPARENT)
         setViewTreeLifecycleOwner(lifecycleOwner)
         setViewTreeSavedStateRegistryOwner(savedStateRegistryOwner)
         setContent { OverlayContent() }
@@ -166,7 +166,7 @@ fun OverlayContent() {
         onSavePos = {},
         onClick = { OverlayState.showMenu = !OverlayState.showMenu },
         alpha = 1f,
-        color = Color.argb(100, 64, 64, 64),
+        color = Color(0x64404040),
         contentColor = Color.White.copy(alpha = 0.95f)
     ) {
         MarqueeText(
@@ -232,7 +232,7 @@ private fun GameMenuScreen(
 ) {
     Surface(
         modifier = Modifier.fillMaxSize(),
-        color = Color.argb(180, 0, 0, 0)
+        color = Color(0xB4000000)
     ) {
         Column(
             modifier = Modifier.padding(16.dp)
