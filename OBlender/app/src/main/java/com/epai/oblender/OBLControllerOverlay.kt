@@ -196,14 +196,14 @@ private fun createDefaultLayout(): ControlLayout {
                 borderRadius = ButtonShape(8f),
                 backgroundColor = Color(0x80000000.toInt()),
                 contentColor = Color.White,
-                borderWidth = 1f,
+                borderWidth = 1,
                 borderColor = Color.White
             ),
             darkStyle = DefaultButtonStyleConfig.copy(
                 borderRadius = ButtonShape(8f),
                 backgroundColor = Color(0x80FFFFFF.toInt()),
                 contentColor = Color.Black,
-                borderWidth = 1f,
+                borderWidth = 1,
                 borderColor = Color.Black
             )
         ),
@@ -215,14 +215,14 @@ private fun createDefaultLayout(): ControlLayout {
             lightStyle = DefaultButtonStyleConfig.copy(
                 backgroundColor = Color.Transparent,
                 contentColor = Color.White,
-                borderWidth = 2f,
+                borderWidth = 2,
                 borderColor = Color.White,
                 borderRadius = ButtonShape(4f)
             ),
             darkStyle = DefaultButtonStyleConfig.copy(
                 backgroundColor = Color.Transparent,
                 contentColor = Color.Black,
-                borderWidth = 2f,
+                borderWidth = 2,
                 borderColor = Color.Black,
                 borderRadius = ButtonShape(4f)
             )
