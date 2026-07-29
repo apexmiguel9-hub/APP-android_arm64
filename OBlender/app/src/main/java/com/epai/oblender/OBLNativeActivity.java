@@ -325,6 +325,9 @@ public class OBLNativeActivity extends NativeActivity
         initialKeyboardToggle();
         initialUndoRedoButtons();
 
+        // Initialize cursor mode manager
+        CursorModeManager.init(this);
+
         // Example of a call to a native method
 
         AssetManager assetManager=getAssets();
@@ -551,6 +554,11 @@ public class OBLNativeActivity extends NativeActivity
      * @param clickEvents list of ClickEvents from the button
      * @param pressed true = press modifiers / send keys; false = release modifiers only
      */
+    /** Static helper for callbacks from Compose overlays (VirtualPointerOverlay). */
+    public static void oblSetValueStatic(String value) {
+        if (sActivity != null) sActivity.oblSetValue(value);
+    }
+
     public static void routeClickEvents(List<?> clickEvents, boolean pressed) {
         if (sActivity == null || clickEvents.isEmpty()) return;
         try {

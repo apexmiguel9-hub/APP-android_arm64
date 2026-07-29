@@ -62,11 +62,7 @@ object OverlayState {
     @JvmStatic
     var cursorY = 0
     @JvmStatic
-    var crosshairView: View? = null
-    @JvmStatic
-    var crosshairDragOffsetX = 0
-    @JvmStatic
-    var crosshairDragOffsetY = 0
+    var virtualPointerView: View? = null
 }
 
 fun setControlOverlayEditMode(editMode: Boolean) { OverlayState.isEditMode = editMode }
@@ -151,6 +147,13 @@ fun showRuntimeButtons(context: Context) {
     val density = context.resources.displayMetrics.density
     val screenW = context.resources.displayMetrics.widthPixels
     val screenH = context.resources.displayMetrics.heightPixels
+
+    // Show virtual pointer overlay FIRST (below buttons) if mode is Virtual
+    if (CursorModeManager.getMode() == CURSOR_MODE_VIRTUAL) {
+        OverlayState.virtualCursorActive = true
+        showVirtualPointerOverlay(context)
+    }
+
     // Per-button toggle state (UUID → pressed)
     val toggleStates = mutableMapOf<String, Boolean>()
 
@@ -304,14 +307,14 @@ fun showRuntimeButtons(context: Context) {
         setImageBitmap(cursorBitmap)
         alpha = if (OverlayState.virtualCursorActive) 0.6f else 1.0f
         setOnClickListener {
-            OverlayState.virtualCursorActive = !OverlayState.virtualCursorActive
-            alpha = if (OverlayState.virtualCursorActive) 0.6f else 1.0f
-            if (OverlayState.virtualCursorActive) {
-                OverlayState.cursorX = screenW / 2
-                OverlayState.cursorY = screenH / 2
-                showCrosshair(context)
+            val newActive = !OverlayState.virtualCursorActive
+            OverlayState.virtualCursorActive = newActive
+            CursorModeManager.setMode(if (newActive) CURSOR_MODE_VIRTUAL else CURSOR_MODE_TOUCH)
+            alpha = if (newActive) 0.6f else 1.0f
+            if (newActive) {
+                showVirtualPointerOverlay(context)
             } else {
-                removeCrosshair()
+                hideVirtualPointerOverlay()
             }
         }
     }
@@ -329,14 +332,10 @@ fun showRuntimeButtons(context: Context) {
     wm.addView(cursorBtnView, cursorLp)
     OverlayState.runtimeButtonViews.add(cursorBtnView)
 
-    // Restore crosshair if active
-    if (OverlayState.virtualCursorActive) {
-        showCrosshair(context)
-    }
 }
 
 fun hideRuntimeButtons() {
-    removeCrosshair()
+    hideVirtualPointerOverlay()
     val views = OverlayState.runtimeButtonViews.toList()
     OverlayState.runtimeButtonViews.clear()
     for (v in views) {
@@ -347,97 +346,20 @@ fun hideRuntimeButtons() {
     }
 }
 
-fun removeCrosshair() {
-    val oldCrosshair = OverlayState.crosshairView
-    if (oldCrosshair != null) {
-        OverlayState.crosshairView = null
-        try {
-            val wm = oldCrosshair.context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
-            wm.removeView(oldCrosshair)
-        } catch (_: Exception) {}
-    }
+fun showVirtualPointerOverlay(context: Context) {
+    hideVirtualPointerOverlay()
+    OverlayState.virtualPointerView = createVirtualPointerOverlay(context)
 }
 
-fun showCrosshair(context: Context) {
-    removeCrosshair()
-    val density = context.resources.displayMetrics.density
-    val crosshairSize = (30 * density).toInt()
-
-    val bitmap = Bitmap.createBitmap(crosshairSize, crosshairSize, Bitmap.Config.ARGB_8888)
-    Canvas(bitmap).apply {
-        val cx = crosshairSize / 2f
-        val cy = crosshairSize / 2f
-        // Circle
-        Paint(Paint.ANTI_ALIAS_FLAG).let { p ->
-            p.color = android.graphics.Color.argb(120, 255, 255, 255)
-            p.style = Paint.Style.STROKE
-            p.strokeWidth = 2f
-            drawCircle(cx, cy, cx - 4f, p)
-        }
-        // Crosshair lines
-        Paint(Paint.ANTI_ALIAS_FLAG).let { p ->
-            p.color = android.graphics.Color.argb(180, 255, 255, 255)
-            p.strokeWidth = 2f
-            drawLine(cx, 2f, cx, cy - 4f, p)
-            drawLine(cx, cy + 4f, cx, crosshairSize - 2f, p)
-            drawLine(2f, cy, cx - 4f, cy, p)
-            drawLine(cx + 4f, cy, crosshairSize - 2f, cy, p)
-            // Center dot
-            drawCircle(cx, cy, 3f, p.apply { style = Paint.Style.FILL })
-        }
+fun hideVirtualPointerOverlay() {
+    val old = OverlayState.virtualPointerView
+    if (old != null) {
+        OverlayState.virtualPointerView = null
+        try {
+            val wm = old.context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+            wm.removeView(old)
+        } catch (_: Exception) {}
     }
-
-    val crosshairView = ImageView(context).apply {
-        setImageBitmap(bitmap)
-        setOnTouchListener { v, event ->
-            when (event.action) {
-                android.view.MotionEvent.ACTION_DOWN -> {
-                    OverlayState.crosshairDragOffsetX = event.x.toInt()
-                    OverlayState.crosshairDragOffsetY = event.y.toInt()
-                    true
-                }
-                android.view.MotionEvent.ACTION_MOVE -> {
-                    val rawX = event.rawX.toInt() - OverlayState.crosshairDragOffsetX
-                    val rawY = event.rawY.toInt() - OverlayState.crosshairDragOffsetY
-                    val screenW = context.resources.displayMetrics.widthPixels
-                    val screenH = context.resources.displayMetrics.heightPixels
-                    val newX = rawX.coerceIn(0, screenW - crosshairSize)
-                    val newY = rawY.coerceIn(0, screenH - crosshairSize)
-                    OverlayState.cursorX = newX + crosshairSize / 2
-                    OverlayState.cursorY = newY + crosshairSize / 2
-                    val lp = v.layoutParams as WindowManager.LayoutParams
-                    lp.x = newX
-                    lp.y = newY
-                    val wm = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
-                    try { wm.updateViewLayout(v, lp) } catch (_: Exception) {}
-                    true
-                }
-                else -> false
-            }
-        }
-    }
-
-    val crosshairSizePx = crosshairSize
-    var startX = OverlayState.cursorX - crosshairSizePx / 2
-    var startY = OverlayState.cursorY - crosshairSizePx / 2
-    val screenW = context.resources.displayMetrics.widthPixels
-    val screenH = context.resources.displayMetrics.heightPixels
-    startX = startX.coerceIn(0, screenW - crosshairSizePx)
-    startY = startY.coerceIn(0, screenH - crosshairSizePx)
-
-    val lp = WindowManager.LayoutParams().apply {
-        gravity = Gravity.TOP or Gravity.START
-        width = crosshairSizePx
-        height = crosshairSizePx
-        this.x = startX
-        this.y = startY
-        flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
-        format = PixelFormat.TRANSLUCENT
-    }
-    val wm = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
-    try { wm.addView(crosshairView, lp) } catch (_: Exception) {}
-    OverlayState.crosshairView = crosshairView
 }
 
 @Composable

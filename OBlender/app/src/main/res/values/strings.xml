@@ -20,6 +20,12 @@
     <string name="generic_collapse">Collapse</string>
     <string name="generic_unspecified">Unspecified</string>
 
+    <!-- Cursor Mode -->
+    <string name="cursor_mode">Cursor Mode</string>
+    <string name="cursor_mode_touch">Touch</string>
+    <string name="cursor_mode_virtual">Virtual</string>
+    <string name="cursor_mode_precision">Precision</string>
+
     <!-- Control Editor Menu -->
     <string name="control_editor_menu_title">Editor</string>
     <string name="control_editor_menu_new_widget_button">+ Button</string>
