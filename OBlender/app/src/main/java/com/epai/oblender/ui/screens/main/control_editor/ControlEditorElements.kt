@@ -16,6 +16,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
@@ -128,6 +129,9 @@ fun EditorMenu(
     addNewButton: () -> Unit,
     saveAndExit: () -> Unit
 ) {
+    val context = LocalContext.current
+    LaunchedEffect(Unit) { CursorModeManager.init(context) }
+
     var selectedTab by remember { mutableIntStateOf(0) }
 
     DualMenuSubscreen(

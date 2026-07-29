@@ -140,6 +140,7 @@ private fun getLayoutFile(context: Context): File {
 
 fun showRuntimeButtons(context: Context) {
     hideRuntimeButtons()
+    CursorModeManager.init(context)
     val file = getLayoutFile(context)
     if (!file.exists()) return
     val layout = try { loadLayoutFromFile(file) } catch (_: Exception) { return }
