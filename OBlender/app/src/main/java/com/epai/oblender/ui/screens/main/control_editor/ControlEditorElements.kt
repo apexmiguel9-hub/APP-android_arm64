@@ -114,6 +114,7 @@ fun MenuBox(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditorMenu(
     state: MenuState,
