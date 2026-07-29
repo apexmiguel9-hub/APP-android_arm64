@@ -27,10 +27,15 @@ import com.movtery.layer_controller.observable.ObservableControlLayer
 import com.movtery.layer_controller.observable.ObservableNormalData
 import com.movtery.layer_controller.observable.ObservableTranslatableString
 import com.movtery.layer_controller.observable.ObservableWidget
+import com.epai.oblender.CURSOR_MODE_PRECISION
+import com.epai.oblender.CURSOR_MODE_TOUCH
+import com.epai.oblender.CURSOR_MODE_VIRTUAL
+import com.epai.oblender.CursorModeManager
 import com.epai.oblender.R
 import com.epai.oblender.ui.components.DualMenuSubscreen
 import com.epai.oblender.ui.components.FloatingBall
 import com.epai.oblender.ui.components.MarqueeText
+import com.epai.oblender.ui.components.MenuListLayout
 import com.epai.oblender.ui.components.MenuState
 import com.epai.oblender.ui.components.MenuTextButton
 import com.epai.oblender.ui.components.ScalingActionButton
@@ -122,21 +127,48 @@ fun EditorMenu(
     addNewButton: () -> Unit,
     saveAndExit: () -> Unit
 ) {
+    var selectedTab by remember { mutableIntStateOf(0) }
+
     DualMenuSubscreen(
         state = state, closeScreen = closeScreen,
         leftMenuTitle = { Text(modifier = Modifier.padding(all = 8.dp), text = stringResource(R.string.control_editor_menu_title), style = MaterialTheme.typography.titleMedium) },
         leftMenuContent = {
             Column(modifier = Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                MenuTextButton(
-                    modifier = Modifier.fillMaxWidth(),
-                    text = stringResource(R.string.control_editor_menu_new_widget_button),
-                    onClick = { addNewButton(); closeScreen() }
-                )
-                MenuTextButton(
-                    modifier = Modifier.fillMaxWidth(),
-                    text = stringResource(R.string.control_editor_menu_save_and_exit),
-                    onClick = { saveAndExit() }
-                )
+                SecondaryTabRow(selectedTabIndex = selectedTab, containerColor = MaterialTheme.colorScheme.surface) {
+                    Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text(stringResource(R.string.editor_tab_editor)) })
+                    Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text(stringResource(R.string.editor_tab_mouse)) })
+                }
+                when (selectedTab) {
+                    0 -> {
+                        MenuTextButton(
+                            modifier = Modifier.fillMaxWidth(),
+                            text = stringResource(R.string.control_editor_menu_new_widget_button),
+                            onClick = { addNewButton(); closeScreen() }
+                        )
+                        MenuTextButton(
+                            modifier = Modifier.fillMaxWidth(),
+                            text = stringResource(R.string.control_editor_menu_save_and_exit),
+                            onClick = { saveAndExit() }
+                        )
+                    }
+                    1 -> {
+                        MenuListLayout(
+                            modifier = Modifier.fillMaxWidth(),
+                            title = stringResource(R.string.cursor_mode),
+                            items = listOf(CURSOR_MODE_TOUCH, CURSOR_MODE_VIRTUAL, CURSOR_MODE_PRECISION),
+                            currentItem = CursorModeManager.getMode(),
+                            onItemChange = { mode -> CursorModeManager.setMode(mode) },
+                            getItemText = { mode ->
+                                when (mode) {
+                                    CURSOR_MODE_TOUCH -> stringResource(R.string.cursor_mode_touch)
+                                    CURSOR_MODE_VIRTUAL -> stringResource(R.string.cursor_mode_virtual)
+                                    CURSOR_MODE_PRECISION -> stringResource(R.string.cursor_mode_precision)
+                                    else -> "?"
+                                }
+                            }
+                        )
+                    }
+                }
             }
         },
         rightMenuTitle = {

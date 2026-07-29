@@ -37,10 +37,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.movtery.layer_controller.event.ClickEvent
 import com.movtery.layer_controller.observable.ObservableNormalData
-import com.epai.oblender.CURSOR_MODE_PRECISION
-import com.epai.oblender.CURSOR_MODE_TOUCH
-import com.epai.oblender.CURSOR_MODE_VIRTUAL
-import com.epai.oblender.CursorModeManager
 import com.epai.oblender.R
 import com.epai.oblender.game.keycodes.ControlEventKeyName
 import com.epai.oblender.game.keycodes.ControlEventKeycode
@@ -50,7 +46,6 @@ import com.epai.oblender.ui.control.event.LAUNCHER_EVENT_SCROLL_DOWN
 import com.epai.oblender.ui.control.event.LAUNCHER_EVENT_SCROLL_UP
 import com.epai.oblender.ui.control.event.LAUNCHER_EVENT_SCROLL_DOWN
 import com.epai.oblender.ui.screens.main.control_editor.InfoLayoutItem
-import com.epai.oblender.ui.screens.main.control_editor.InfoLayoutSelectItem
 import com.epai.oblender.ui.screens.main.control_editor.InfoLayoutSwitchItem
 import com.epai.oblender.ui.screens.main.control_editor.InfoLayoutTextItem
 
@@ -156,7 +151,6 @@ private data class LauncherEventData(
     val mouseScrollDown: Boolean = false
 )
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun EditLauncherEvent(
     modifier: Modifier = Modifier,
@@ -191,33 +185,6 @@ private fun EditLauncherEvent(
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // Global cursor mode selector
-        var cursorMode by remember { mutableIntStateOf(CursorModeManager.getMode()) }
-
-        InfoLayoutSelectItem(
-            modifier = Modifier.fillMaxWidth(),
-            title = stringResource(R.string.cursor_mode),
-            options = listOf(CURSOR_MODE_TOUCH, CURSOR_MODE_VIRTUAL, CURSOR_MODE_PRECISION),
-            current = cursorMode,
-            onClick = { mode ->
-                cursorMode = mode
-                CursorModeManager.setMode(mode)
-            },
-            label = { mode ->
-                Text(
-                    text = when (mode) {
-                        CURSOR_MODE_TOUCH -> stringResource(R.string.cursor_mode_touch)
-                        CURSOR_MODE_VIRTUAL -> stringResource(R.string.cursor_mode_virtual)
-                        CURSOR_MODE_PRECISION -> stringResource(R.string.cursor_mode_precision)
-                        else -> "?"
-                    },
-                    maxLines = 1
-                )
-            }
-        )
-
         Spacer(modifier = Modifier.height(8.dp))
 
         InfoLayoutSwitchItem(
