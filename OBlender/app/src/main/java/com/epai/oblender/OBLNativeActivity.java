@@ -59,8 +59,10 @@ import org.xmlpull.v1.XmlPullParser;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import android.content.ClipboardManager;
 import android.content.ClipData;
@@ -303,6 +305,9 @@ public class OBLNativeActivity extends NativeActivity
 
     public native void updateSurfaceDestroyed(Surface surface);
 
+    /** Static reference for routeClickEvent to call instance native methods */
+    private static OBLNativeActivity sActivity = null;
+
     public native void oblSetValue(String stringValue);
 
     public native void oblSetValueOn(String stringValue);
@@ -311,11 +316,8 @@ public class OBLNativeActivity extends NativeActivity
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        sActivity = this;
         setContentView(R.layout.activity_main);
-//        android.app.FragmentTransaction fragmentTransaction=getFragmentManager().beginTransaction();
-//        fragmentTransaction.add(fragment,"Fragment");
-//        fragmentTransaction.commit();
-//        fragment.show(getFilesDir(),"43");
 
         hideToolbar();
 
@@ -508,9 +510,16 @@ public class OBLNativeActivity extends NativeActivity
 
     /**
      * Called from OBLControllerOverlay.kt runtime button onClick.
-     * Routes a ClickEvent's keycodes to Blender via GodotLib.key().
+     * Routes a ClickEvent to Blender via the OBLButtonID ordinal system:
+     *   - Modifier keys (Shift/Ctrl/Alt) → toggle with oblSetValueOn/Off (sticky)
+     *   - Regular keys → oblSetValue (press+release)
+     *   - LauncherEvent → oblSetValue("1000x,") for mouse/scroll
      */
     public static void routeClickEvent(Object clickEvent) {
+        if (sActivity == null) {
+            Log.w("OBL", "routeClickEvent: no sActivity");
+            return;
+        }
         try {
             java.lang.reflect.Method getType = clickEvent.getClass().getMethod("getType");
             java.lang.reflect.Method getKey = clickEvent.getClass().getMethod("getKey");
@@ -520,130 +529,165 @@ public class OBLNativeActivity extends NativeActivity
             if (type == null || key == null) return;
 
             switch (type.toString()) {
-                case "Key": {
-                    int androidCode = glfwNameToAndroidKeycode(key);
-                    if (androidCode > 0) {
-                        GodotLib.key(androidCode, 0, 0, true, false);
-                        GodotLib.key(androidCode, 0, 0, false, false);
-                    }
-                    break;
-                }
-                case "LauncherEvent": {
-                    handleLauncherEvent(key);
-                    break;
-                }
-                // SwitchLayer / ShowLayer / HideLayer / SendText — ignored for now
+                case "Key":           sActivity.handleKeyEvent(key); break;
+                case "LauncherEvent": sActivity.handleLauncherEvent(key); break;
             }
         } catch (Exception e) {
-            Log.e("OBLNativeActivity", "routeClickEvent error", e);
+            Log.e("OBL", "routeClickEvent error", e);
         }
     }
 
-    /** Map GLFW key name string to Android KeyEvent keycode */
-    private static int glfwNameToAndroidKeycode(String name) {
-        // Letter keys: "GLFW_KEY_A" .. "GLFW_KEY_Z"
-        if (name.startsWith("GLFW_KEY_") && name.length() == 10) {
-            char c = name.charAt(9);
-            if (c >= 'A' && c <= 'Z') return KeyEvent.KEYCODE_A + (c - 'A');
+    // ── Modifier toggle state ──
+
+    private static final Set<Integer> heldMods = new HashSet<>();
+    private static final int MOD_SHIFT = 0;
+    private static final int MOD_CTRL  = 1;
+    private static final int MOD_ALT   = 2;
+
+    // ── Key event routing ──
+
+    private void handleKeyEvent(String glfwKey) {
+        int modOrd = modifierOrdinal(glfwKey);
+        if (modOrd >= 0) {
+            /* Toggle modifier (sticky) */
+            if (heldMods.contains(modOrd)) {
+                heldMods.remove(modOrd);
+                oblSetValueOff(String.valueOf(modOrd));
+                Log.d("OBL", "mod OFF ordinal=" + modOrd);
+            } else {
+                heldMods.add(modOrd);
+                oblSetValueOn(String.valueOf(modOrd));
+                Log.d("OBL", "mod ON  ordinal=" + modOrd);
+            }
+            return;
         }
-        // Digit keys: "GLFW_KEY_0" .. "GLFW_KEY_9"
-        if (name.startsWith("GLFW_KEY_") && name.length() == 10) {
-            char d = name.charAt(9);
-            if (d >= '0' && d <= '9') return KeyEvent.KEYCODE_0 + (d - '0');
+
+        int ord = glfwToOrdinal(glfwKey);
+        if (ord >= 0) {
+            oblSetValue(String.valueOf(ord));
+            Log.d("OBL", "key ordinal=" + ord);
+        } else {
+            Log.w("OBL", "unknown key=" + glfwKey);
         }
-        // Numpad: "GLFW_KEY_KP_0" .. "GLFW_KEY_KP_9"
-        if (name.startsWith("GLFW_KEY_KP_") && name.length() == 12) {
-            char k = name.charAt(11);
-            if (k >= '0' && k <= '9') return KeyEvent.KEYCODE_NUMPAD_0 + (k - '0');
+    }
+
+    /** Return modifier ordinal (0,1,2) or -1 if not a modifier */
+    private static int modifierOrdinal(String glfwKey) {
+        switch (glfwKey) {
+            case "GLFW_KEY_LEFT_SHIFT":
+            case "GLFW_KEY_RIGHT_SHIFT":   return MOD_SHIFT;
+            case "GLFW_KEY_LEFT_CONTROL":
+            case "GLFW_KEY_RIGHT_CONTROL":  return MOD_CTRL;
+            case "GLFW_KEY_LEFT_ALT":
+            case "GLFW_KEY_RIGHT_ALT":      return MOD_ALT;
+            default: return -1;
         }
-        // Named keys
-        switch (name) {
-            case "GLFW_KEY_SPACE":      return KeyEvent.KEYCODE_SPACE;
+    }
+
+    /** Map GLFW key name → OBLButtonID ordinal. Returns -1 if unknown. */
+    private static int glfwToOrdinal(String key) {
+        switch (key) {
+            // ── Letters ──
+            case "GLFW_KEY_A": return 25; case "GLFW_KEY_B": return 52;
+            case "GLFW_KEY_C": return 29; case "GLFW_KEY_D": return 48;
+            case "GLFW_KEY_E": return 51; case "GLFW_KEY_F": return 53;
+            case "GLFW_KEY_G": return 45; case "GLFW_KEY_H": return 46;
+            case "GLFW_KEY_I": return 23; case "GLFW_KEY_J": return 49;
+            case "GLFW_KEY_K": return 71; case "GLFW_KEY_L": return 72;
+            case "GLFW_KEY_M": return 31; case "GLFW_KEY_N": return 30;
+            case "GLFW_KEY_O": return 24; case "GLFW_KEY_P": return 73;
+            case "GLFW_KEY_Q": return 20; case "GLFW_KEY_R": return 43;
+            case "GLFW_KEY_S": return 44; case "GLFW_KEY_T": return 22;
+            case "GLFW_KEY_U": return 74; case "GLFW_KEY_V": return 50;
+            case "GLFW_KEY_W": return 21; case "GLFW_KEY_X": return 27;
+            case "GLFW_KEY_Y": return 28; case "GLFW_KEY_Z": return 26;
+
+            // ── Top-row numbers ──
+            case "GLFW_KEY_0": return 66; case "GLFW_KEY_1": return 15;
+            case "GLFW_KEY_2": return 16; case "GLFW_KEY_3": return 17;
+            case "GLFW_KEY_4": return 18; case "GLFW_KEY_5": return 19;
+            case "GLFW_KEY_6": return 67; case "GLFW_KEY_7": return 68;
+            case "GLFW_KEY_8": return 69; case "GLFW_KEY_9": return 70;
+
+            // ── Navigation & editing ──
+            case "GLFW_KEY_ESCAPE":      return 7;
             case "GLFW_KEY_ENTER":
-            case "GLFW_KEY_KP_ENTER":   return KeyEvent.KEYCODE_ENTER;
-            case "GLFW_KEY_BACKSPACE":  return KeyEvent.KEYCODE_DEL;
-            case "GLFW_KEY_TAB":        return KeyEvent.KEYCODE_TAB;
-            case "GLFW_KEY_ESCAPE":     return KeyEvent.KEYCODE_ESCAPE;
-            case "GLFW_KEY_LEFT":       return KeyEvent.KEYCODE_DPAD_LEFT;
-            case "GLFW_KEY_RIGHT":      return KeyEvent.KEYCODE_DPAD_RIGHT;
-            case "GLFW_KEY_UP":         return KeyEvent.KEYCODE_DPAD_UP;
-            case "GLFW_KEY_DOWN":       return KeyEvent.KEYCODE_DPAD_DOWN;
-            case "GLFW_KEY_PAGE_UP":    return KeyEvent.KEYCODE_PAGE_UP;
-            case "GLFW_KEY_PAGE_DOWN":  return KeyEvent.KEYCODE_PAGE_DOWN;
-            case "GLFW_KEY_HOME":       return KeyEvent.KEYCODE_MOVE_HOME;
-            case "GLFW_KEY_END":        return KeyEvent.KEYCODE_MOVE_END;
-            case "GLFW_KEY_INSERT":     return KeyEvent.KEYCODE_INSERT;
-            case "GLFW_KEY_DELETE":     return KeyEvent.KEYCODE_FORWARD_DEL;
-            case "GLFW_KEY_CAPS_LOCK":  return KeyEvent.KEYCODE_CAPS_LOCK;
-            case "GLFW_KEY_NUM_LOCK":   return KeyEvent.KEYCODE_NUM_LOCK;
-            case "GLFW_KEY_SCROLL_LOCK": return KeyEvent.KEYCODE_SCROLL_LOCK;
-            case "GLFW_KEY_PRINT_SCREEN": return KeyEvent.KEYCODE_SYSRQ;
-            case "GLFW_KEY_PAUSE":      return KeyEvent.KEYCODE_BREAK;
-            case "GLFW_KEY_LEFT_SHIFT": return KeyEvent.KEYCODE_SHIFT_LEFT;
-            case "GLFW_KEY_RIGHT_SHIFT": return KeyEvent.KEYCODE_SHIFT_RIGHT;
-            case "GLFW_KEY_LEFT_CONTROL": return KeyEvent.KEYCODE_CTRL_LEFT;
-            case "GLFW_KEY_RIGHT_CONTROL": return KeyEvent.KEYCODE_CTRL_RIGHT;
-            case "GLFW_KEY_LEFT_ALT":   return KeyEvent.KEYCODE_ALT_LEFT;
-            case "GLFW_KEY_RIGHT_ALT":  return KeyEvent.KEYCODE_ALT_RIGHT;
-            case "GLFW_KEY_LEFT_SUPER": return KeyEvent.KEYCODE_META_LEFT;
-            case "GLFW_KEY_RIGHT_SUPER": return KeyEvent.KEYCODE_META_RIGHT;
-            case "GLFW_KEY_MENU":       return KeyEvent.KEYCODE_MENU;
-            // F1..F12
-            case "GLFW_KEY_F1":  return KeyEvent.KEYCODE_F1;
-            case "GLFW_KEY_F2":  return KeyEvent.KEYCODE_F2;
-            case "GLFW_KEY_F3":  return KeyEvent.KEYCODE_F3;
-            case "GLFW_KEY_F4":  return KeyEvent.KEYCODE_F4;
-            case "GLFW_KEY_F5":  return KeyEvent.KEYCODE_F5;
-            case "GLFW_KEY_F6":  return KeyEvent.KEYCODE_F6;
-            case "GLFW_KEY_F7":  return KeyEvent.KEYCODE_F7;
-            case "GLFW_KEY_F8":  return KeyEvent.KEYCODE_F8;
-            case "GLFW_KEY_F9":  return KeyEvent.KEYCODE_F9;
-            case "GLFW_KEY_F10": return KeyEvent.KEYCODE_F10;
-            case "GLFW_KEY_F11": return KeyEvent.KEYCODE_F11;
-            case "GLFW_KEY_F12": return KeyEvent.KEYCODE_F12;
-            // Numpad symbols
-            case "GLFW_KEY_KP_DECIMAL":  return KeyEvent.KEYCODE_NUMPAD_DOT;
-            case "GLFW_KEY_KP_DIVIDE":   return KeyEvent.KEYCODE_NUMPAD_DIVIDE;
-            case "GLFW_KEY_KP_MULTIPLY": return KeyEvent.KEYCODE_NUMPAD_MULTIPLY;
-            case "GLFW_KEY_KP_SUBTRACT": return KeyEvent.KEYCODE_NUMPAD_SUBTRACT;
-            case "GLFW_KEY_KP_ADD":      return KeyEvent.KEYCODE_NUMPAD_ADD;
-            case "GLFW_KEY_KP_EQUAL":    return KeyEvent.KEYCODE_NUMPAD_EQUALS;
-            // Punctuation
-            case "GLFW_KEY_APOSTROPHE":  return KeyEvent.KEYCODE_APOSTROPHE;
-            case "GLFW_KEY_COMMA":       return KeyEvent.KEYCODE_COMMA;
-            case "GLFW_KEY_MINUS":       return KeyEvent.KEYCODE_MINUS;
-            case "GLFW_KEY_PERIOD":      return KeyEvent.KEYCODE_PERIOD;
-            case "GLFW_KEY_SLASH":       return KeyEvent.KEYCODE_SLASH;
-            case "GLFW_KEY_SEMICOLON":   return KeyEvent.KEYCODE_SEMICOLON;
-            case "GLFW_KEY_EQUAL":       return KeyEvent.KEYCODE_EQUALS;
-            case "GLFW_KEY_LEFT_BRACKET":  return KeyEvent.KEYCODE_LEFT_BRACKET;
-            case "GLFW_KEY_RIGHT_BRACKET": return KeyEvent.KEYCODE_RIGHT_BRACKET;
-            case "GLFW_KEY_BACKSLASH":     return KeyEvent.KEYCODE_BACKSLASH;
-            case "GLFW_KEY_GRAVE_ACCENT":  return KeyEvent.KEYCODE_GRAVE;
-            default: return 0;
+            case "GLFW_KEY_KP_ENTER":    return 13;
+            case "GLFW_KEY_TAB":         return 41;
+            case "GLFW_KEY_SPACE":       return 34;
+            case "GLFW_KEY_BACKSPACE":   return 42;
+            case "GLFW_KEY_DELETE":      return 42;  // forward delete → backspace ordinal
+            case "GLFW_KEY_INSERT":      return 89;
+            case "GLFW_KEY_HOME":        return 12;
+            case "GLFW_KEY_END":         return 90;
+            case "GLFW_KEY_PAGE_UP":     return 35;
+            case "GLFW_KEY_PAGE_DOWN":   return 36;
+            case "GLFW_KEY_UP":          return 37;
+            case "GLFW_KEY_DOWN":        return 38;
+            case "GLFW_KEY_LEFT":        return 39;
+            case "GLFW_KEY_RIGHT":       return 40;
+
+            // ── Function keys ──
+            case "GLFW_KEY_F1":  return 75;  case "GLFW_KEY_F2":  return 8;
+            case "GLFW_KEY_F3":  return 9;   case "GLFW_KEY_F4":  return 10;
+            case "GLFW_KEY_F5":  return 76;  case "GLFW_KEY_F6":  return 77;
+            case "GLFW_KEY_F7":  return 78;  case "GLFW_KEY_F8":  return 79;
+            case "GLFW_KEY_F9":  return 80;  case "GLFW_KEY_F10": return 81;
+            case "GLFW_KEY_F11": return 82;  case "GLFW_KEY_F12": return 11;
+
+            // ── Numpad ──
+            case "GLFW_KEY_KP_0":   return 54;  case "GLFW_KEY_KP_1": return 55;
+            case "GLFW_KEY_KP_2":   return 56;  case "GLFW_KEY_KP_3": return 57;
+            case "GLFW_KEY_KP_4":   return 58;  case "GLFW_KEY_KP_5": return 59;
+            case "GLFW_KEY_KP_6":   return 90;
+            case "GLFW_KEY_KP_7":   return 91;  case "GLFW_KEY_KP_8": return 92;
+            case "GLFW_KEY_KP_9":   return 93;
+            case "GLFW_KEY_KP_ADD":      return 60;
+            case "GLFW_KEY_KP_SUBTRACT": return 61;
+            case "GLFW_KEY_KP_MULTIPLY": return 62;
+            case "GLFW_KEY_KP_DIVIDE":   return 63;
+            case "GLFW_KEY_KP_DECIMAL":  return 64;
+            case "GLFW_KEY_KP_EQUAL":    return 94;
+
+            // ── Punctuation ──
+            case "GLFW_KEY_APOSTROPHE":   return 88;
+            case "GLFW_KEY_COMMA":        return 32;
+            case "GLFW_KEY_MINUS":        return 83;
+            case "GLFW_KEY_PERIOD":       return 33;
+            case "GLFW_KEY_SLASH":        return 47;
+            case "GLFW_KEY_SEMICOLON":    return 87;
+            case "GLFW_KEY_EQUAL":        return 84;
+            case "GLFW_KEY_LEFT_BRACKET":  return 85;
+            case "GLFW_KEY_RIGHT_BRACKET": return 86;
+            case "GLFW_KEY_BACKSLASH":     return 47;
+            case "GLFW_KEY_GRAVE_ACCENT":  return 14;
+
+            // ── Lock keys ──
+            case "GLFW_KEY_CAPS_LOCK":    return 95;
+            case "GLFW_KEY_SCROLL_LOCK":  return 96;
+            case "GLFW_KEY_NUM_LOCK":     return 97;
+            case "GLFW_KEY_PRINT_SCREEN": return 98;
+            case "GLFW_KEY_PAUSE":        return 99;
+
+            // ── Super/Meta/Menu → fallback to Alt ──
+            case "GLFW_KEY_LEFT_SUPER":
+            case "GLFW_KEY_RIGHT_SUPER":
+            case "GLFW_KEY_MENU":         return MOD_ALT;
+
+            default: return -1;
         }
     }
 
     /** Handle LauncherEvent type click events */
-    private static void handleLauncherEvent(String key) {
+    private void handleLauncherEvent(String key) {
         switch (key) {
-            case "GLFW_MOUSE_BUTTON_LEFT":
-                // Blender needs left mouse click at current cursor
-                break;
-            case "GLFW_MOUSE_BUTTON_RIGHT":
-                break;
-            case "GLFW_MOUSE_BUTTON_MIDDLE":
-                break;
-            case "launcher.event.scroll_up":
-                GodotLib.key(KeyEvent.KEYCODE_DPAD_UP, 0, 0, true, false);
-                GodotLib.key(KeyEvent.KEYCODE_DPAD_UP, 0, 0, false, false);
-                break;
-            case "launcher.event.scroll_down":
-                GodotLib.key(KeyEvent.KEYCODE_DPAD_DOWN, 0, 0, true, false);
-                GodotLib.key(KeyEvent.KEYCODE_DPAD_DOWN, 0, 0, false, false);
-                break;
-            // switch_ime / switch_menu — ignored for now
+            case "GLFW_MOUSE_BUTTON_LEFT":   oblSetValue("10000,"); break;
+            case "GLFW_MOUSE_BUTTON_RIGHT":  oblSetValue("10001,"); break;
+            case "GLFW_MOUSE_BUTTON_MIDDLE": oblSetValue("10006,"); break;
+            case "launcher.event.scroll_up":   oblSetValue("10002,"); break;
+            case "launcher.event.scroll_down": oblSetValue("10003,"); break;
         }
+        Log.d("OBL", "launcher=" + key);
     }
 
     public void showKeyboardApp(String p_existing_text, int p_type, int p_max_input_length, int p_cursor_start, int p_cursor_end) {
