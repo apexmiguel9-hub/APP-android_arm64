@@ -15,7 +15,6 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.ProcessLifecycleOwner
 import kotlinx.coroutines.coroutineScope
 
 /**
@@ -203,7 +202,6 @@ fun VirtualPointerContent(
 
 fun createVirtualPointerOverlay(context: android.content.Context): ComposeView {
     val composeView = ComposeView(context).apply {
-        setViewTreeLifecycleOwner(ProcessLifecycleOwner.get())
         setContent {
             VirtualPointerContent(
                 onLeftClick = { x, y ->
