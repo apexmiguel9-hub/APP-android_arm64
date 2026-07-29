@@ -136,12 +136,10 @@ fun showRuntimeButtons(context: Context) {
     val screenW = context.resources.displayMetrics.widthPixels
     val screenH = context.resources.displayMetrics.heightPixels
 
-    // Zalith approach: single full-screen container with child views
-    val container = FrameLayout(context).apply {
-        setBackgroundColor(android.graphics.Color.TRANSPARENT)
-        isClickable = false
-        isFocusable = false
-    }
+    // First pass: collect all visible button screen positions+sizes to compute bounding box,
+    // and build all button views with their screen-absolute positions.
+    data class BtnSlot(val view: TextView, val screenX: Int, val screenY: Int, val w: Int, val h: Int)
+    val slots = mutableListOf<BtnSlot>()
 
     for (layer in layout.layers) {
         if (layer.hide) continue
@@ -207,26 +205,61 @@ fun showRuntimeButtons(context: Context) {
             val x = ((screenW - (if (w == ViewGroup.LayoutParams.WRAP_CONTENT) 0 else w)) * xPct).toInt()
             val y = ((screenH - (if (h == ViewGroup.LayoutParams.WRAP_CONTENT) 0 else h)) * yPct).toInt()
 
-            val lp = FrameLayout.LayoutParams(
-                if (w == ViewGroup.LayoutParams.WRAP_CONTENT) ViewGroup.LayoutParams.WRAP_CONTENT else w,
-                if (h == ViewGroup.LayoutParams.WRAP_CONTENT) ViewGroup.LayoutParams.WRAP_CONTENT else h
-            ).apply {
-                leftMargin = x
-                topMargin = y
-            }
-            container.addView(btnView, lp)
+            slots.add(BtnSlot(btnView, x, y, w, h))
         }
     }
 
+    if (slots.isEmpty()) return
+
+    // Compute bounding box of all buttons (container will be exactly this rect)
+    var minX = Int.MAX_VALUE
+    var minY = Int.MAX_VALUE
+    var maxX = Int.MIN_VALUE
+    var maxY = Int.MIN_VALUE
+    val estMinW = (72 * density).toInt()
+    val estMinH = (36 * density).toInt()
+    for (s in slots) {
+        val sx = if (s.w == ViewGroup.LayoutParams.WRAP_CONTENT) 0 else s.w
+        val sy = if (s.h == ViewGroup.LayoutParams.WRAP_CONTENT) 0 else s.h
+        if (s.screenX < minX) minX = s.screenX
+        if (s.screenY < minY) minY = s.screenY
+        if (s.screenX + sx > maxX) maxX = s.screenX + sx
+        if (s.screenY + sy > maxY) maxY = s.screenY + sy
+    }
+    var cw = maxX - minX
+    var ch = maxY - minY
+    if (cw <= 0) cw = 1
+    if (ch <= 0) ch = 1
+
+    // Create container sized to bounding box, positioned at (minX, minY)
+    val container = FrameLayout(context).apply {
+        setBackgroundColor(android.graphics.Color.TRANSPARENT)
+        isClickable = false
+        isFocusable = false
+    }
+    for (s in slots) {
+        val lp = FrameLayout.LayoutParams(
+            if (s.w == ViewGroup.LayoutParams.WRAP_CONTENT) ViewGroup.LayoutParams.WRAP_CONTENT else s.w,
+            if (s.h == ViewGroup.LayoutParams.WRAP_CONTENT) ViewGroup.LayoutParams.WRAP_CONTENT else s.h
+        ).apply {
+            leftMargin = s.screenX - minX
+            topMargin = s.screenY - minY
+        }
+        container.addView(s.view, lp)
+    }
+
     val containerLp = WindowManager.LayoutParams(
-        ViewGroup.LayoutParams.MATCH_PARENT,
-        ViewGroup.LayoutParams.MATCH_PARENT,
+        cw, ch,
         WindowManager.LayoutParams.TYPE_APPLICATION_PANEL,
         WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
         PixelFormat.TRANSPARENT
-    )
+    ).apply {
+        gravity = Gravity.TOP or Gravity.START
+        x = minX
+        y = minY
+    }
     wm.addView(container, containerLp)
     OverlayState.runtimeContainer = container
 }
