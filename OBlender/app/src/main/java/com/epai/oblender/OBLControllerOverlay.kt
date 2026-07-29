@@ -234,8 +234,10 @@ fun showRuntimeButtons(context: Context) {
             val btnView = ImageView(context).apply {
                 setImageBitmap(bitmap)
                 setOnClickListener {
-                    val ev = btn.clickEvents.firstOrNull()
-                    if (ev != null) OBLNativeActivity.routeClickEvent(ev)
+                    // Dispatch ALL clickEvents in order (supports combinations like [Shift, A])
+                    for (ev in btn.clickEvents) {
+                        OBLNativeActivity.routeClickEvent(ev)
+                    }
                 }
             }
 
