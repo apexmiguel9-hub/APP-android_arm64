@@ -201,18 +201,22 @@ fun VirtualPointerContent(
 }
 
 fun createVirtualPointerOverlay(context: android.content.Context): ComposeView {
+    android.util.Log.d("OBL", "createVirtualPointerOverlay: start")
     val composeView = ComposeView(context).apply {
         setContent {
             VirtualPointerContent(
                 onLeftClick = { x, y ->
+                    android.util.Log.d("OBL", "VirtualPointer: leftClick at $x,$y")
                     OBLNativeActivity.oblSetValueStatic("10010,$x,$y")
                     OBLNativeActivity.oblSetValueStatic("10000,")
                 },
                 onRightClick = { x, y ->
+                    android.util.Log.d("OBL", "VirtualPointer: rightClick at $x,$y")
                     OBLNativeActivity.oblSetValueStatic("10010,$x,$y")
                     OBLNativeActivity.oblSetValueStatic("10001,")
                 },
                 onScroll = { delta ->
+                    android.util.Log.d("OBL", "VirtualPointer: scroll delta=$delta")
                     if (delta > 0) OBLNativeActivity.oblSetValueStatic("10002,")
                     else OBLNativeActivity.oblSetValueStatic("10003,")
                 }
@@ -232,9 +236,11 @@ fun createVirtualPointerOverlay(context: android.content.Context): ComposeView {
     )
 
     try {
+        android.util.Log.d("OBL", "createVirtualPointerOverlay: adding to WindowManager")
         wm.addView(composeView, lp)
+        android.util.Log.d("OBL", "createVirtualPointerOverlay: added successfully")
     } catch (e: Exception) {
-        e.printStackTrace()
+        android.util.Log.e("OBL", "createVirtualPointerOverlay: FAILED", e)
     }
 
     return composeView

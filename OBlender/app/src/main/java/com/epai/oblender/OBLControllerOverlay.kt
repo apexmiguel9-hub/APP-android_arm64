@@ -150,8 +150,11 @@ fun showRuntimeButtons(context: Context) {
     val screenH = context.resources.displayMetrics.heightPixels
 
     // Show virtual pointer overlay FIRST (below buttons) if mode is Virtual
-    if (CursorModeManager.getMode() == CURSOR_MODE_VIRTUAL) {
+    val mode = CursorModeManager.getMode()
+    android.util.Log.d("OBL", "showRuntimeButtons: cursorMode=$mode")
+    if (mode == CURSOR_MODE_VIRTUAL) {
         OverlayState.virtualCursorActive = true
+        android.util.Log.d("OBL", "showRuntimeButtons: showing virtual pointer overlay")
         showVirtualPointerOverlay(context)
     }
 

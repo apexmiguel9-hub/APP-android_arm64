@@ -162,7 +162,10 @@ fun EditorMenu(
                             title = stringResource(R.string.cursor_mode),
                             items = listOf(CURSOR_MODE_TOUCH, CURSOR_MODE_VIRTUAL, CURSOR_MODE_PRECISION),
                             currentItem = CursorModeManager.getMode(),
-                            onItemChange = { mode -> CursorModeManager.setMode(mode) },
+                            onItemChange = { mode ->
+                                android.util.Log.d("OBL", "EditorMenu: cursorMode changed to $mode")
+                                CursorModeManager.setMode(mode)
+                            },
                             getItemText = { mode ->
                                 when (mode) {
                                     CURSOR_MODE_TOUCH -> stringResource(R.string.cursor_mode_touch)
