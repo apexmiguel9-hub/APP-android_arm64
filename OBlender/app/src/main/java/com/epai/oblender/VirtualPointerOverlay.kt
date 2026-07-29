@@ -1,5 +1,7 @@
 package com.epai.oblender
 
+import android.os.Handler
+import android.os.Looper
 import android.view.WindowManager
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
@@ -238,12 +240,14 @@ fun createVirtualPointerOverlay(context: android.content.Context, lifecycleOwner
         android.graphics.PixelFormat.TRANSPARENT
     )
 
-    try {
-        android.util.Log.d("OBL", "createVirtualPointerOverlay: adding to WindowManager")
-        wm.addView(composeView, lp)
-        android.util.Log.d("OBL", "createVirtualPointerOverlay: added successfully")
-    } catch (e: Exception) {
-        android.util.Log.e("OBL", "createVirtualPointerOverlay: FAILED", e)
+    Handler(Looper.getMainLooper()).post {
+        try {
+            android.util.Log.d("OBL", "createVirtualPointerOverlay: adding to WindowManager on UI thread")
+            wm.addView(composeView, lp)
+            android.util.Log.d("OBL", "createVirtualPointerOverlay: added successfully")
+        } catch (e: Exception) {
+            android.util.Log.e("OBL", "createVirtualPointerOverlay: ADD FAILED", e)
+        }
     }
 
     return composeView

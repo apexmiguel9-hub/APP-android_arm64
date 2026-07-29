@@ -1,6 +1,8 @@
 package com.epai.oblender
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -358,14 +360,19 @@ fun showVirtualPointerOverlay(context: Context, lifecycleOwner: LifecycleOwner) 
 }
 
 fun hideVirtualPointerOverlay() {
-    val old = OverlayState.virtualPointerView
-    if (old != null) {
-        OverlayState.virtualPointerView = null
+    val old = OverlayState.virtualPointerView ?: return
+    android.util.Log.d("OBL", "hideVirtualPointerOverlay: removing view, thread=${Thread.currentThread().name}")
+    
+    Handler(Looper.getMainLooper()).post {
         try {
             val wm = old.context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
             wm.removeView(old)
-        } catch (_: Exception) {}
+            android.util.Log.d("OBL", "hideVirtualPointerOverlay: removed successfully")
+        } catch (e: Exception) {
+            android.util.Log.e("OBL", "hideVirtualPointerOverlay: REMOVE FAILED", e)
+        }
     }
+    OverlayState.virtualPointerView = null
 }
 
 @Composable
