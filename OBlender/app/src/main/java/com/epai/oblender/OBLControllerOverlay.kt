@@ -157,7 +157,7 @@ fun showRuntimeButtons(context: Context, lifecycleOwner: LifecycleOwner) {
     if (mode == CURSOR_MODE_VIRTUAL) {
         OverlayState.virtualCursorActive = true
         android.util.Log.d("OBL", "showRuntimeButtons: showing virtual pointer overlay")
-        showVirtualPointerOverlay(context)
+        showVirtualPointerOverlay(context, lifecycleOwner)
     }
 
     // Per-button toggle state (UUID → pressed)
@@ -371,6 +371,7 @@ fun hideVirtualPointerOverlay() {
 @Composable
 fun OverlayContent() {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val file = remember { getLayoutFile(context) }
     val viewModel = remember { EditorViewModel() }
     val coroutineScope = rememberCoroutineScope()
@@ -412,7 +413,7 @@ fun OverlayContent() {
                     targetFile = file,
                     exit = {
                         OverlayState.isEditMode = false
-                        showRuntimeButtons(context, LocalLifecycleOwner.current)
+                        showRuntimeButtons(context, lifecycleOwner)
                         hideEditor(context)
                     },
                     menuExit = {
@@ -420,7 +421,7 @@ fun OverlayContent() {
                             context = context,
                             onExit = {
                                 OverlayState.isEditMode = false
-                                showRuntimeButtons(context, LocalLifecycleOwner.current)
+                                showRuntimeButtons(context, lifecycleOwner)
                                 hideEditor(context)
                             }
                         )
