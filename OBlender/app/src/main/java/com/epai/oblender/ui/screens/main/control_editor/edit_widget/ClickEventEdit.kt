@@ -42,9 +42,6 @@ import com.epai.oblender.game.keycodes.ControlEventKeyName
 import com.epai.oblender.game.keycodes.ControlEventKeycode
 import com.epai.oblender.ui.components.MarqueeText
 import com.epai.oblender.ui.control.Keyboard
-import com.epai.oblender.ui.control.event.LAUNCHER_EVENT_CURSOR_PRECISION
-import com.epai.oblender.ui.control.event.LAUNCHER_EVENT_CURSOR_TOUCH
-import com.epai.oblender.ui.control.event.LAUNCHER_EVENT_CURSOR_VIRTUAL
 import com.epai.oblender.ui.control.event.LAUNCHER_EVENT_SCROLL_DOWN
 import com.epai.oblender.ui.control.event.LAUNCHER_EVENT_SCROLL_UP
 import com.epai.oblender.ui.control.event.LAUNCHER_EVENT_SCROLL_DOWN
@@ -151,10 +148,7 @@ private data class LauncherEventData(
     val mouseMiddle: Boolean = false,
     val mouseRight: Boolean = false,
     val mouseScrollUp: Boolean = false,
-    val mouseScrollDown: Boolean = false,
-    val cursorTouch: Boolean = false,
-    val cursorVirtual: Boolean = false,
-    val cursorPrecision: Boolean = false
+    val mouseScrollDown: Boolean = false
 )
 
 @Composable
@@ -170,9 +164,6 @@ private fun EditLauncherEvent(
         var mouseRight = false
         var mouseScrollUp = false
         var mouseScrollDown = false
-        var cursorTouch = false
-        var cursorVirtual = false
-        var cursorPrecision = false
         data.clickEvents.forEach { event ->
             if (event.type == ClickEvent.Type.LauncherEvent) {
                 if (!mouseLeft) mouseLeft = event.key == ControlEventKeycode.GLFW_MOUSE_BUTTON_LEFT
@@ -180,15 +171,11 @@ private fun EditLauncherEvent(
                 if (!mouseRight) mouseRight = event.key == ControlEventKeycode.GLFW_MOUSE_BUTTON_RIGHT
                 if (!mouseScrollUp) mouseScrollUp = event.key == LAUNCHER_EVENT_SCROLL_UP
                 if (!mouseScrollDown) mouseScrollDown = event.key == LAUNCHER_EVENT_SCROLL_DOWN
-                if (!cursorTouch) cursorTouch = event.key == LAUNCHER_EVENT_CURSOR_TOUCH
-                if (!cursorVirtual) cursorVirtual = event.key == LAUNCHER_EVENT_CURSOR_VIRTUAL
-                if (!cursorPrecision) cursorPrecision = event.key == LAUNCHER_EVENT_CURSOR_PRECISION
             }
         }
         eventData = LauncherEventData(
             mouseLeft = mouseLeft, mouseMiddle = mouseMiddle, mouseRight = mouseRight,
-            mouseScrollUp = mouseScrollUp, mouseScrollDown = mouseScrollDown,
-            cursorTouch = cursorTouch, cursorVirtual = cursorVirtual, cursorPrecision = cursorPrecision
+            mouseScrollUp = mouseScrollUp, mouseScrollDown = mouseScrollDown
         )
     }
 
@@ -248,38 +235,6 @@ private fun EditLauncherEvent(
             value = eventData.mouseScrollDown,
             onValueChange = { value ->
                 val event = ClickEvent(ClickEvent.Type.LauncherEvent, LAUNCHER_EVENT_SCROLL_DOWN)
-                if (value) data.addEvent(event) else data.removeEvent(event)
-            }
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        InfoLayoutSwitchItem(
-            modifier = Modifier.fillMaxWidth(),
-            title = stringResource(R.string.control_editor_edit_event_launcher_cursor_touch),
-            value = eventData.cursorTouch,
-            onValueChange = { value ->
-                val event = ClickEvent(ClickEvent.Type.LauncherEvent, LAUNCHER_EVENT_CURSOR_TOUCH)
-                if (value) data.addEvent(event) else data.removeEvent(event)
-            }
-        )
-
-        InfoLayoutSwitchItem(
-            modifier = Modifier.fillMaxWidth(),
-            title = stringResource(R.string.control_editor_edit_event_launcher_cursor_virtual),
-            value = eventData.cursorVirtual,
-            onValueChange = { value ->
-                val event = ClickEvent(ClickEvent.Type.LauncherEvent, LAUNCHER_EVENT_CURSOR_VIRTUAL)
-                if (value) data.addEvent(event) else data.removeEvent(event)
-            }
-        )
-
-        InfoLayoutSwitchItem(
-            modifier = Modifier.fillMaxWidth(),
-            title = stringResource(R.string.control_editor_edit_event_launcher_cursor_precision),
-            value = eventData.cursorPrecision,
-            onValueChange = { value ->
-                val event = ClickEvent(ClickEvent.Type.LauncherEvent, LAUNCHER_EVENT_CURSOR_PRECISION)
                 if (value) data.addEvent(event) else data.removeEvent(event)
             }
         )

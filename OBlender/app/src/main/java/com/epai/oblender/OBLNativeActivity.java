@@ -697,42 +697,7 @@ public class OBLNativeActivity extends NativeActivity
     }
 
     /** Handle LauncherEvent type click events */
-    private void setCursorMode(String mode) {
-        switch (mode) {
-            case "touch":
-                OverlayState.cursorMode = 0;
-                OverlayState.virtualCursorActive = false;
-                OBLControllerOverlayKt.removeCrosshair();
-                break;
-            case "virtual":
-                OverlayState.cursorMode = 1;
-                OverlayState.virtualCursorActive = true;
-                if (OverlayState.crosshairView == null) {
-                    OverlayState.cursorX = getResources().getDisplayMetrics().widthPixels / 2;
-                    OverlayState.cursorY = getResources().getDisplayMetrics().heightPixels / 2;
-                    OBLControllerOverlayKt.showCrosshair(this);
-                }
-                break;
-            case "precision":
-                OverlayState.cursorMode = 2;
-                OverlayState.virtualCursorActive = false;
-                OBLControllerOverlayKt.removeCrosshair();
-                break;
-        }
-    }
-
     private void handleLauncherEvent(String key) {
-        switch (key) {
-            case "launcher.event.cursor_touch":
-                setCursorMode("touch");
-                return;
-            case "launcher.event.cursor_virtual":
-                setCursorMode("virtual");
-                return;
-            case "launcher.event.cursor_precision":
-                setCursorMode("precision");
-                return;
-        }
         // When virtual cursor is active, reposition cursor before mouse clicks
         if (OverlayState.virtualCursorActive) {
             switch (key) {

@@ -108,9 +108,6 @@
     <string name="control_editor_edit_event_launcher_mouse_scroll_up_single">Scroll Up (Single)</string>
     <string name="control_editor_edit_event_launcher_mouse_scroll_down">Scroll Down</string>
     <string name="control_editor_edit_event_launcher_mouse_scroll_down_single">Scroll Down (Single)</string>
-    <string name="control_editor_edit_event_launcher_cursor_touch">Cursor: Touch</string>
-    <string name="control_editor_edit_event_launcher_cursor_virtual">Cursor: Virtual</string>
-    <string name="control_editor_edit_event_launcher_cursor_precision">Cursor: Precision</string>
     <string name="control_editor_edit_event_launcher_send_text">Send Text</string>
     <string name="control_editor_edit_event_launcher_send_text_summary">The text will be sent when clicked.</string>
     <string name="control_editor_edit_event_launcher_send_text_hint">Input text…</string>
