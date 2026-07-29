@@ -547,13 +547,12 @@ public class OBLNativeActivity extends NativeActivity
     }
 
     /**
-     * Called from OBLControllerOverlay.kt for batch dispatch (button with multiple
-     * ClickEvents). ALL events are processed as one atomic combination:
-     * modifiers are pressed before each regular key and auto-released at the end.
+     * Called from OBLControllerOverlay.kt for batch dispatch.
+     * @param clickEvents list of ClickEvents from the button
+     * @param pressed true = press modifiers / send keys; false = release modifiers only
      */
-    public static void routeClickEvents(List<?> clickEvents) {
+    public static void routeClickEvents(List<?> clickEvents, boolean pressed) {
         if (sActivity == null || clickEvents.isEmpty()) return;
-        Set<Integer> batchMods = new HashSet<>();
         try {
             for (Object clickEvent : clickEvents) {
                 java.lang.reflect.Method getType = clickEvent.getClass().getMethod("getType");
@@ -566,26 +565,21 @@ public class OBLNativeActivity extends NativeActivity
                     case "Key": {
                         int mod = modifierOrdinal(key);
                         if (mod >= 0) {
-                            sActivity.oblSetValueOn(String.valueOf(mod));
-                            batchMods.add(mod);
-                        } else {
+                            if (pressed) sActivity.oblSetValueOn(String.valueOf(mod));
+                            else sActivity.oblSetValueOff(String.valueOf(mod));
+                        } else if (pressed) {
                             int ord = glfwToOrdinal(key);
                             if (ord >= 0) sActivity.oblSetValue(String.valueOf(ord));
                         }
                         break;
                     }
                     case "LauncherEvent":
+                        // Launcher events are always press+release (one-shot even in toggle)
                         sActivity.handleLauncherEvent(key);
                         break;
                 }
             }
         } catch (Exception ignored) {}
-
-        // Auto-release modifiers pressed in this batch
-        for (int mod : batchMods) {
-            sActivity.oblSetValueOff(String.valueOf(mod));
-        }
-        batchMods.clear();
     }
 
     // ── Modifier toggle state (for sticky standalone buttons) ──
