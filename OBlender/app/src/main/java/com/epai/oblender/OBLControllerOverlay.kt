@@ -6,6 +6,7 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
+import android.widget.FrameLayout
 import android.widget.TextView
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -50,7 +51,8 @@ object OverlayState {
     var layoutReady by mutableStateOf(false)
     @JvmStatic
     var isEditMode by mutableStateOf(false)
-    val runtimeButtonViews = mutableListOf<View>()
+    @JvmStatic
+    var runtimeContainer: FrameLayout? = null
 }
 
 fun setControlOverlayEditMode(editMode: Boolean) { OverlayState.isEditMode = editMode }
@@ -134,10 +136,16 @@ fun showRuntimeButtons(context: Context) {
     val screenW = context.resources.displayMetrics.widthPixels
     val screenH = context.resources.displayMetrics.heightPixels
 
+    // Zalith approach: single full-screen container with child views
+    val container = FrameLayout(context).apply {
+        setBackgroundColor(android.graphics.Color.TRANSPARENT)
+        isClickable = false
+        isFocusable = false
+    }
+
     for (layer in layout.layers) {
         if (layer.hide) continue
         for (btn in layer.normalButtons) {
-            // Resolve button style from layout, fallback to DefaultButtonStyle
             val btnStyle = btn.buttonStyle?.let { uuid -> layout.styles.find { it.uuid == uuid } } ?: DefaultButtonStyle
             val style = if (btnStyle.commonStyle) btnStyle.lightStyle else btnStyle.lightStyle
 
@@ -199,30 +207,39 @@ fun showRuntimeButtons(context: Context) {
             val x = ((screenW - (if (w == ViewGroup.LayoutParams.WRAP_CONTENT) 0 else w)) * xPct).toInt()
             val y = ((screenH - (if (h == ViewGroup.LayoutParams.WRAP_CONTENT) 0 else h)) * yPct).toInt()
 
-            val lp = WindowManager.LayoutParams().apply {
-                gravity = Gravity.TOP or Gravity.START
-                width = if (w == ViewGroup.LayoutParams.WRAP_CONTENT) ViewGroup.LayoutParams.WRAP_CONTENT else w
-                height = if (h == ViewGroup.LayoutParams.WRAP_CONTENT) ViewGroup.LayoutParams.WRAP_CONTENT else h
-                this.x = x
-                this.y = y
-                flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                        WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
-                format = PixelFormat.TRANSLUCENT
+            val lp = FrameLayout.LayoutParams(
+                if (w == ViewGroup.LayoutParams.WRAP_CONTENT) ViewGroup.LayoutParams.WRAP_CONTENT else w,
+                if (h == ViewGroup.LayoutParams.WRAP_CONTENT) ViewGroup.LayoutParams.WRAP_CONTENT else h
+            ).apply {
+                leftMargin = x
+                topMargin = y
             }
-            wm.addView(btnView, lp)
-            OverlayState.runtimeButtonViews.add(btnView)
+            container.addView(btnView, lp)
         }
     }
+
+    val containerLp = WindowManager.LayoutParams(
+        ViewGroup.LayoutParams.MATCH_PARENT,
+        ViewGroup.LayoutParams.MATCH_PARENT,
+        WindowManager.LayoutParams.TYPE_APPLICATION_PANEL,
+        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+        PixelFormat.TRANSPARENT
+    )
+    wm.addView(container, containerLp)
+    OverlayState.runtimeContainer = container
 }
 
 fun hideRuntimeButtons() {
-    val views = OverlayState.runtimeButtonViews.toList()
-    OverlayState.runtimeButtonViews.clear()
-    for (v in views) {
-        try {
-            val wm = v.context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
-            wm.removeView(v)
-        } catch (_: Exception) {}
+    OverlayState.runtimeContainer?.let { container ->
+        OverlayState.runtimeContainer = null
+        if (container.isAttachedToWindow) {
+            try {
+                val wm = container.context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+                wm.removeView(container)
+            } catch (_: Exception) {}
+        }
     }
 }
 
