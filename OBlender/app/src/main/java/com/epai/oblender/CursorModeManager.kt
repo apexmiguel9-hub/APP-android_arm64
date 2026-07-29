@@ -13,12 +13,15 @@ object CursorModeManager {
 
     private var prefs: SharedPreferences? = null
 
+    @JvmStatic
     fun init(context: Context) {
         prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     }
 
+    @JvmStatic
     fun getMode(): Int = prefs?.getInt(KEY_MODE, CURSOR_MODE_TOUCH) ?: CURSOR_MODE_TOUCH
 
+    @JvmStatic
     fun setMode(mode: Int) {
         prefs?.edit()?.putInt(KEY_MODE, mode)?.apply()
     }

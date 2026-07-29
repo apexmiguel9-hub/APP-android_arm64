@@ -55,13 +55,13 @@ object OverlayState {
     @JvmStatic
     var isEditMode by mutableStateOf(false)
     val runtimeButtonViews = mutableListOf<View>()
-    @JvmStatic
+    @JvmField
     var virtualCursorActive = false
-    @JvmStatic
+    @JvmField
     var cursorX = 0
-    @JvmStatic
+    @JvmField
     var cursorY = 0
-    @JvmStatic
+    @JvmField
     var virtualPointerView: View? = null
 }
 
