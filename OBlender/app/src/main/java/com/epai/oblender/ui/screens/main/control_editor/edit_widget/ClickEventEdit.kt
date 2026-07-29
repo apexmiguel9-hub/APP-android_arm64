@@ -156,6 +156,7 @@ private data class LauncherEventData(
     val mouseScrollDown: Boolean = false
 )
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun EditLauncherEvent(
     modifier: Modifier = Modifier,
