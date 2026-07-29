@@ -56,6 +56,8 @@ object OverlayState {
     var isEditMode by mutableStateOf(false)
     val runtimeButtonViews = mutableListOf<View>()
     @JvmStatic
+    var cursorMode = 0 // 0=Touch, 1=Virtual, 2=Precision
+    @JvmStatic
     var virtualCursorActive = false
     @JvmStatic
     var cursorX = 0
@@ -304,9 +306,11 @@ fun showRuntimeButtons(context: Context) {
         setImageBitmap(cursorBitmap)
         alpha = if (OverlayState.virtualCursorActive) 0.6f else 1.0f
         setOnClickListener {
-            OverlayState.virtualCursorActive = !OverlayState.virtualCursorActive
-            alpha = if (OverlayState.virtualCursorActive) 0.6f else 1.0f
-            if (OverlayState.virtualCursorActive) {
+            val newActive = !OverlayState.virtualCursorActive
+            OverlayState.virtualCursorActive = newActive
+            OverlayState.cursorMode = if (newActive) 1 else 0
+            alpha = if (newActive) 0.6f else 1.0f
+            if (newActive) {
                 OverlayState.cursorX = screenW / 2
                 OverlayState.cursorY = screenH / 2
                 showCrosshair(context)
