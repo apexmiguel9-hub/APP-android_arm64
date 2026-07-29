@@ -137,43 +137,9 @@ private fun EditBasicEvent(
 
         InfoLayoutSwitchItem(
             modifier = Modifier.fillMaxWidth(),
-            title = stringResource(R.string.control_editor_edit_event_swipple),
-            value = data.isSwipple,
-            onValueChange = { value -> data.isSwipple = value }
-        )
-
-        InfoLayoutSwitchItem(
-            modifier = Modifier.fillMaxWidth(),
-            title = stringResource(R.string.control_editor_edit_event_penetrable),
-            value = data.isPenetrable,
-            onValueChange = { value -> data.isPenetrable = value }
-        )
-
-        InfoLayoutSwitchItem(
-            modifier = Modifier.fillMaxWidth(),
             title = stringResource(R.string.control_editor_edit_event_toggleable),
             value = data.isToggleable,
             onValueChange = { value -> data.isToggleable = value }
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        InfoLayoutTextItem(
-            modifier = Modifier.fillMaxWidth(),
-            title = stringResource(R.string.control_editor_edit_switch_layers),
-            onClick = { switchControlLayers(data, ClickEvent.Type.SwitchLayer) }
-        )
-
-        InfoLayoutTextItem(
-            modifier = Modifier.fillMaxWidth(),
-            title = stringResource(R.string.control_editor_edit_show_layers),
-            onClick = { switchControlLayers(data, ClickEvent.Type.ShowLayer) }
-        )
-
-        InfoLayoutTextItem(
-            modifier = Modifier.fillMaxWidth(),
-            title = stringResource(R.string.control_editor_edit_hide_layers),
-            onClick = { switchControlLayers(data, ClickEvent.Type.HideLayer) }
         )
 
         Spacer(Modifier)
@@ -181,15 +147,11 @@ private fun EditBasicEvent(
 }
 
 private data class LauncherEventData(
-    val switchIme: Boolean = false,
-    val switchMenu: Boolean = false,
     val mouseLeft: Boolean = false,
     val mouseMiddle: Boolean = false,
     val mouseRight: Boolean = false,
     val mouseScrollUp: Boolean = false,
-    val mouseScrollUpSingle: Boolean = false,
-    val mouseScrollDown: Boolean = false,
-    val mouseScrollDownSingle: Boolean = false
+    val mouseScrollDown: Boolean = false
 )
 
 @Composable
@@ -200,33 +162,23 @@ private fun EditLauncherEvent(
 ) {
     var eventData by remember { mutableStateOf(LauncherEventData()) }
     LaunchedEffect(data.clickEvents) {
-        var switchIme = false
-        var switchMenu = false
         var mouseLeft = false
         var mouseMiddle = false
         var mouseRight = false
         var mouseScrollUp = false
-        var mouseScrollUpSingle = false
         var mouseScrollDown = false
-        var mouseScrollDownSingle = false
         data.clickEvents.forEach { event ->
             if (event.type == ClickEvent.Type.LauncherEvent) {
-                if (!switchIme) switchIme = event.key == LAUNCHER_EVENT_SWITCH_IME
-                if (!switchMenu) switchMenu = event.key == LAUNCHER_EVENT_SWITCH_MENU
                 if (!mouseLeft) mouseLeft = event.key == ControlEventKeycode.GLFW_MOUSE_BUTTON_LEFT
                 if (!mouseMiddle) mouseMiddle = event.key == ControlEventKeycode.GLFW_MOUSE_BUTTON_MIDDLE
                 if (!mouseRight) mouseRight = event.key == ControlEventKeycode.GLFW_MOUSE_BUTTON_RIGHT
                 if (!mouseScrollUp) mouseScrollUp = event.key == LAUNCHER_EVENT_SCROLL_UP
-                if (!mouseScrollUpSingle) mouseScrollUpSingle = event.key == LAUNCHER_EVENT_SCROLL_UP_SINGLE
                 if (!mouseScrollDown) mouseScrollDown = event.key == LAUNCHER_EVENT_SCROLL_DOWN
-                if (!mouseScrollDownSingle) mouseScrollDownSingle = event.key == LAUNCHER_EVENT_SCROLL_DOWN_SINGLE
             }
         }
         eventData = LauncherEventData(
-            switchIme = switchIme, switchMenu = switchMenu,
             mouseLeft = mouseLeft, mouseMiddle = mouseMiddle, mouseRight = mouseRight,
-            mouseScrollUp = mouseScrollUp, mouseScrollUpSingle = mouseScrollUpSingle,
-            mouseScrollDown = mouseScrollDown, mouseScrollDownSingle = mouseScrollDownSingle
+            mouseScrollUp = mouseScrollUp, mouseScrollDown = mouseScrollDown
         )
     }
 
@@ -236,28 +188,6 @@ private fun EditLauncherEvent(
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Spacer(Modifier)
-
-        InfoLayoutSwitchItem(
-            modifier = Modifier.fillMaxWidth(),
-            title = stringResource(R.string.game_menu_option_input_method),
-            value = eventData.switchIme,
-            onValueChange = { value ->
-                val event = ClickEvent(ClickEvent.Type.LauncherEvent, LAUNCHER_EVENT_SWITCH_IME)
-                if (value) data.addEvent(event) else data.removeEvent(event)
-            }
-        )
-
-        InfoLayoutSwitchItem(
-            modifier = Modifier.fillMaxWidth(),
-            title = stringResource(R.string.control_editor_edit_event_launcher_switch_menu),
-            value = eventData.switchMenu,
-            onValueChange = { value ->
-                val event = ClickEvent(ClickEvent.Type.LauncherEvent, LAUNCHER_EVENT_SWITCH_MENU)
-                if (value) data.addEvent(event) else data.removeEvent(event)
-            }
-        )
-
         Spacer(modifier = Modifier.height(8.dp))
 
         InfoLayoutSwitchItem(
@@ -304,27 +234,7 @@ private fun EditLauncherEvent(
 
         InfoLayoutSwitchItem(
             modifier = Modifier.fillMaxWidth(),
-            title = stringResource(R.string.control_editor_edit_event_launcher_mouse_scroll_up_single),
-            value = eventData.mouseScrollUpSingle,
-            onValueChange = { value ->
-                val event = ClickEvent(ClickEvent.Type.LauncherEvent, LAUNCHER_EVENT_SCROLL_UP_SINGLE)
-                if (value) data.addEvent(event) else data.removeEvent(event)
-            }
-        )
-
-        InfoLayoutSwitchItem(
-            modifier = Modifier.fillMaxWidth(),
             title = stringResource(R.string.control_editor_edit_event_launcher_mouse_scroll_down),
-            value = eventData.mouseScrollDown,
-            onValueChange = { value ->
-                val event = ClickEvent(ClickEvent.Type.LauncherEvent, LAUNCHER_EVENT_SCROLL_DOWN)
-                if (value) data.addEvent(event) else data.removeEvent(event)
-            }
-        )
-
-        InfoLayoutSwitchItem(
-            modifier = Modifier.fillMaxWidth(),
-            title = stringResource(R.string.control_editor_edit_event_launcher_mouse_scroll_down_single),
             value = eventData.mouseScrollDownSingle,
             onValueChange = { value ->
                 val event = ClickEvent(ClickEvent.Type.LauncherEvent, LAUNCHER_EVENT_SCROLL_DOWN_SINGLE)

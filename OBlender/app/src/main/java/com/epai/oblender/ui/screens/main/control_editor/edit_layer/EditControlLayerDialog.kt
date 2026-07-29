@@ -12,14 +12,19 @@ import com.movtery.layer_controller.observable.ObservableControlLayer
 import com.epai.oblender.R
 import com.epai.oblender.ui.screens.main.control_editor.InfoLayoutTextItem
 import com.epai.oblender.ui.screens.main.control_editor.InfoLayoutSwitchItem
+import com.epai.oblender.ui.components.SimpleEditDialog
 
 @Composable
 fun EditControlLayerDialog(layer: ObservableControlLayer, onDismissRequest: () -> Unit, onDelete: () -> Unit, onMergeDownward: () -> Unit, onCopy: () -> Unit, onHideChange: (Boolean) -> Unit) {
+    var showRename by remember { mutableStateOf(false) }
+    var renameText by remember { mutableStateOf(layer.name) }
+
     Dialog(onDismissRequest = onDismissRequest) {
         Surface(shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface, shadowElevation = 6.dp) {
             Column(modifier = Modifier.padding(16.dp).widthIn(max = 350.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(text = layer.name, style = MaterialTheme.typography.titleMedium)
                 InfoLayoutSwitchItem(modifier = Modifier.fillMaxWidth(), title = "Hide", value = layer.editorHide, onValueChange = onHideChange)
+                InfoLayoutTextItem(modifier = Modifier.fillMaxWidth(), title = stringResource(R.string.generic_rename), onClick = { renameText = layer.name; showRename = true })
                 InfoLayoutTextItem(modifier = Modifier.fillMaxWidth(), title = stringResource(R.string.generic_delete), onClick = onDelete)
                 InfoLayoutTextItem(modifier = Modifier.fillMaxWidth(), title = "Merge Downward", onClick = onMergeDownward)
                 InfoLayoutTextItem(modifier = Modifier.fillMaxWidth(), title = "Copy", onClick = onCopy)
@@ -28,5 +33,15 @@ fun EditControlLayerDialog(layer: ObservableControlLayer, onDismissRequest: () -
                 }
             }
         }
+    }
+
+    if (showRename) {
+        SimpleEditDialog(
+            title = "Rename Layer",
+            value = renameText,
+            onValueChange = { renameText = it },
+            onDismissRequest = { showRename = false },
+            onConfirm = { layer.name = renameText; showRename = false }
+        )
     }
 }
