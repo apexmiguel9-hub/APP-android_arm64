@@ -510,66 +510,90 @@ public class OBLNativeActivity extends NativeActivity
 
     /**
      * Called from OBLControllerOverlay.kt runtime button onClick.
-     * Routes a ClickEvent to Blender via the OBLButtonID ordinal system:
-     *   - Modifier keys (Shift/Ctrl/Alt) → toggle with oblSetValueOn/Off (sticky)
-     *   - Regular keys → oblSetValue (press+release)
-     *   - LauncherEvent → oblSetValue("1000x,") for mouse/scroll
+     * Dispatches a single ClickEvent. Modifiers act as sticky toggles
+     * (for standalone modifier buttons).
      */
     public static void routeClickEvent(Object clickEvent) {
-        if (sActivity == null) {
-            Log.w("OBL", "routeClickEvent: no sActivity");
-            return;
-        }
+        if (sActivity == null) return;
         try {
             java.lang.reflect.Method getType = clickEvent.getClass().getMethod("getType");
             java.lang.reflect.Method getKey = clickEvent.getClass().getMethod("getKey");
             Object type = getType.invoke(clickEvent);
             String key = (String) getKey.invoke(clickEvent);
-
             if (type == null || key == null) return;
 
             switch (type.toString()) {
-                case "Key":           sActivity.handleKeyEvent(key); break;
-                case "LauncherEvent": sActivity.handleLauncherEvent(key); break;
+                case "Key":
+                    int mod = modifierOrdinal(key);
+                    if (mod >= 0) {
+                        // Sticky toggle for standalone modifier button
+                        if (heldMods.contains(mod)) {
+                            heldMods.remove(mod);
+                            sActivity.oblSetValueOff(String.valueOf(mod));
+                        } else {
+                            heldMods.add(mod);
+                            sActivity.oblSetValueOn(String.valueOf(mod));
+                        }
+                    } else {
+                        int ord = glfwToOrdinal(key);
+                        if (ord >= 0) sActivity.oblSetValue(String.valueOf(ord));
+                    }
+                    break;
+                case "LauncherEvent":
+                    sActivity.handleLauncherEvent(key);
+                    break;
             }
-        } catch (Exception e) {
-            Log.e("OBL", "routeClickEvent error", e);
-        }
+        } catch (Exception ignored) {}
     }
 
-    // ── Modifier toggle state ──
+    /**
+     * Called from OBLControllerOverlay.kt for batch dispatch (button with multiple
+     * ClickEvents). ALL events are processed as one atomic combination:
+     * modifiers are pressed before each regular key and auto-released at the end.
+     */
+    public static void routeClickEvents(List<?> clickEvents) {
+        if (sActivity == null || clickEvents.isEmpty()) return;
+        Set<Integer> batchMods = new HashSet<>();
+        try {
+            for (Object clickEvent : clickEvents) {
+                java.lang.reflect.Method getType = clickEvent.getClass().getMethod("getType");
+                java.lang.reflect.Method getKey = clickEvent.getClass().getMethod("getKey");
+                Object type = getType.invoke(clickEvent);
+                String key = (String) getKey.invoke(clickEvent);
+                if (type == null || key == null) continue;
+
+                switch (type.toString()) {
+                    case "Key": {
+                        int mod = modifierOrdinal(key);
+                        if (mod >= 0) {
+                            sActivity.oblSetValueOn(String.valueOf(mod));
+                            batchMods.add(mod);
+                        } else {
+                            int ord = glfwToOrdinal(key);
+                            if (ord >= 0) sActivity.oblSetValue(String.valueOf(ord));
+                        }
+                        break;
+                    }
+                    case "LauncherEvent":
+                        sActivity.handleLauncherEvent(key);
+                        break;
+                }
+            }
+        } catch (Exception ignored) {}
+
+        // Auto-release modifiers pressed in this batch
+        for (int mod : batchMods) {
+            sActivity.oblSetValueOff(String.valueOf(mod));
+        }
+        batchMods.clear();
+    }
+
+    // ── Modifier toggle state (for sticky standalone buttons) ──
 
     private static final Set<Integer> heldMods = new HashSet<>();
     private static final int MOD_SHIFT = 0;
     private static final int MOD_CTRL  = 1;
     private static final int MOD_ALT   = 2;
-
-    // ── Key event routing ──
-
-    private void handleKeyEvent(String glfwKey) {
-        int modOrd = modifierOrdinal(glfwKey);
-        if (modOrd >= 0) {
-            /* Toggle modifier (sticky) */
-            if (heldMods.contains(modOrd)) {
-                heldMods.remove(modOrd);
-                oblSetValueOff(String.valueOf(modOrd));
-                Log.d("OBL", "mod OFF ordinal=" + modOrd);
-            } else {
-                heldMods.add(modOrd);
-                oblSetValueOn(String.valueOf(modOrd));
-                Log.d("OBL", "mod ON  ordinal=" + modOrd);
-            }
-            return;
-        }
-
-        int ord = glfwToOrdinal(glfwKey);
-        if (ord >= 0) {
-            oblSetValue(String.valueOf(ord));
-            Log.d("OBL", "key ordinal=" + ord);
-        } else {
-            Log.w("OBL", "unknown key=" + glfwKey);
-        }
-    }
 
     /** Return modifier ordinal (0,1,2) or -1 if not a modifier */
     private static int modifierOrdinal(String glfwKey) {
