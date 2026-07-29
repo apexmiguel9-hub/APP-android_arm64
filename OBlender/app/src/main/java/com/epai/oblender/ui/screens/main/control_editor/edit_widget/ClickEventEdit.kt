@@ -43,11 +43,8 @@ import com.epai.oblender.game.keycodes.ControlEventKeycode
 import com.epai.oblender.ui.components.MarqueeText
 import com.epai.oblender.ui.control.Keyboard
 import com.epai.oblender.ui.control.event.LAUNCHER_EVENT_SCROLL_DOWN
-import com.epai.oblender.ui.control.event.LAUNCHER_EVENT_SCROLL_DOWN_SINGLE
 import com.epai.oblender.ui.control.event.LAUNCHER_EVENT_SCROLL_UP
-import com.epai.oblender.ui.control.event.LAUNCHER_EVENT_SCROLL_UP_SINGLE
-import com.epai.oblender.ui.control.event.LAUNCHER_EVENT_SWITCH_IME
-import com.epai.oblender.ui.control.event.LAUNCHER_EVENT_SWITCH_MENU
+import com.epai.oblender.ui.control.event.LAUNCHER_EVENT_SCROLL_DOWN
 import com.epai.oblender.ui.screens.main.control_editor.InfoLayoutItem
 import com.epai.oblender.ui.screens.main.control_editor.InfoLayoutSwitchItem
 import com.epai.oblender.ui.screens.main.control_editor.InfoLayoutTextItem
@@ -235,9 +232,9 @@ private fun EditLauncherEvent(
         InfoLayoutSwitchItem(
             modifier = Modifier.fillMaxWidth(),
             title = stringResource(R.string.control_editor_edit_event_launcher_mouse_scroll_down),
-            value = eventData.mouseScrollDownSingle,
+            value = eventData.mouseScrollDown,
             onValueChange = { value ->
-                val event = ClickEvent(ClickEvent.Type.LauncherEvent, LAUNCHER_EVENT_SCROLL_DOWN_SINGLE)
+                val event = ClickEvent(ClickEvent.Type.LauncherEvent, LAUNCHER_EVENT_SCROLL_DOWN)
                 if (value) data.addEvent(event) else data.removeEvent(event)
             }
         )
