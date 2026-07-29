@@ -3,6 +3,7 @@ package com.epai.oblender
 import android.content.Context
 import android.graphics.PixelFormat
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
@@ -53,6 +54,9 @@ object OverlayState {
     var isEditMode by mutableStateOf(false)
     @JvmStatic
     var runtimeContainer: FrameLayout? = null
+    // Manual hit-test state
+    var pressedView: View? = null
+    var buttonClickEvents: Map<View, List<com.movtery.layer_controller.event.ClickEvent>> = emptyMap()
 }
 
 fun setControlOverlayEditMode(editMode: Boolean) { OverlayState.isEditMode = editMode }
@@ -136,9 +140,7 @@ fun showRuntimeButtons(context: Context) {
     val screenW = context.resources.displayMetrics.widthPixels
     val screenH = context.resources.displayMetrics.heightPixels
 
-    // First pass: collect all visible button screen positions+sizes to compute bounding box,
-    // and build all button views with their screen-absolute positions.
-    data class BtnSlot(val view: TextView, val screenX: Int, val screenY: Int, val w: Int, val h: Int)
+    data class BtnSlot(val view: TextView, val screenX: Int, val screenY: Int, val w: Int, val h: Int, val clickEvents: List<com.movtery.layer_controller.event.ClickEvent>)
     val slots = mutableListOf<BtnSlot>()
 
     for (layer in layout.layers) {
@@ -150,12 +152,7 @@ fun showRuntimeButtons(context: Context) {
             val btnView = TextView(context).apply {
                 text = btn.text.default
                 gravity = Gravity.CENTER
-                setOnClickListener {
-                    val ev = btn.clickEvents.firstOrNull()
-                    if (ev != null) {
-                        OBLNativeActivity.routeClickEvent(ev)
-                    }
-                }
+                isClickable = false  // clicks handled manually via container OnTouchListener
             }
             // Build styled background drawable
             val bgDrawable = android.graphics.drawable.GradientDrawable().apply {
@@ -205,19 +202,17 @@ fun showRuntimeButtons(context: Context) {
             val x = ((screenW - (if (w == ViewGroup.LayoutParams.WRAP_CONTENT) 0 else w)) * xPct).toInt()
             val y = ((screenH - (if (h == ViewGroup.LayoutParams.WRAP_CONTENT) 0 else h)) * yPct).toInt()
 
-            slots.add(BtnSlot(btnView, x, y, w, h))
+            slots.add(BtnSlot(btnView, x, y, w, h, btn.clickEvents))
         }
     }
 
     if (slots.isEmpty()) return
 
-    // Compute bounding box of all buttons (container will be exactly this rect)
+    // Compute bounding box of all buttons
     var minX = Int.MAX_VALUE
     var minY = Int.MAX_VALUE
     var maxX = Int.MIN_VALUE
     var maxY = Int.MIN_VALUE
-    val estMinW = (72 * density).toInt()
-    val estMinH = (36 * density).toInt()
     for (s in slots) {
         val sx = if (s.w == ViewGroup.LayoutParams.WRAP_CONTENT) 0 else s.w
         val sy = if (s.h == ViewGroup.LayoutParams.WRAP_CONTENT) 0 else s.h
@@ -231,12 +226,58 @@ fun showRuntimeButtons(context: Context) {
     if (cw <= 0) cw = 1
     if (ch <= 0) ch = 1
 
+    // Build click events map
+    val clickMap = mutableMapOf<View, List<com.movtery.layer_controller.event.ClickEvent>>()
+
     // Create container sized to bounding box, positioned at (minX, minY)
     val container = FrameLayout(context).apply {
         setBackgroundColor(android.graphics.Color.TRANSPARENT)
         isClickable = false
         isFocusable = false
+
+        // Manual hit-test: no setOnClickListener on children — WM sub-windows
+        // don't dispatch touch reliably to child views on this device.
+        // We catch all touches here and route to the correct child manually.
+        setOnTouchListener { v, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    val tx = event.x
+                    val ty = event.y
+                    for (i in 0 until (v as ViewGroup).childCount) {
+                        val child = v.getChildAt(i)
+                        if (child.visibility == View.VISIBLE &&
+                            tx >= child.left && tx < child.right &&
+                            ty >= child.top && ty < child.bottom) {
+                            child.isPressed = true
+                            OverlayState.pressedView = child
+                            return@setOnTouchListener true
+                        }
+                    }
+                    OverlayState.pressedView = null
+                    false
+                }
+                MotionEvent.ACTION_UP -> {
+                    val pressed = OverlayState.pressedView
+                    if (pressed != null) {
+                        pressed.isPressed = false
+                        val events = OverlayState.buttonClickEvents[pressed]
+                        val ev = events?.firstOrNull()
+                        if (ev != null) OBLNativeActivity.routeClickEvent(ev)
+                        OverlayState.pressedView = null
+                        return@setOnTouchListener true
+                    }
+                    false
+                }
+                MotionEvent.ACTION_CANCEL -> {
+                    OverlayState.pressedView?.isPressed = false
+                    OverlayState.pressedView = null
+                    true
+                }
+                else -> true
+            }
+        }
     }
+
     for (s in slots) {
         val lp = FrameLayout.LayoutParams(
             if (s.w == ViewGroup.LayoutParams.WRAP_CONTENT) ViewGroup.LayoutParams.WRAP_CONTENT else s.w,
@@ -246,7 +287,10 @@ fun showRuntimeButtons(context: Context) {
             topMargin = s.screenY - minY
         }
         container.addView(s.view, lp)
+        clickMap[s.view] = s.clickEvents
     }
+
+    OverlayState.buttonClickEvents = clickMap
 
     val containerLp = WindowManager.LayoutParams(
         cw, ch,
