@@ -511,16 +511,21 @@ public class OBLNativeActivity extends NativeActivity
      * Routes a ClickEvent's keycodes to Blender via GodotLib.key().
      */
     public static void routeClickEvent(Object clickEvent) {
-        // clickEvent is com.movtery.layer_controller.event.ClickEvent
-        // We dispatch via reflection to avoid Kotlin data class access issues
         try {
-            java.lang.reflect.Method getKeycodes = clickEvent.getClass().getMethod("getKeycodes");
-            @SuppressWarnings("unchecked")
-            java.util.List<Integer> keycodes = (java.util.List<Integer>) getKeycodes.invoke(clickEvent);
-            if (keycodes == null || keycodes.isEmpty()) return;
-            int code = keycodes.get(0);
-            GodotLib.key(code, 0, 0, true, false);
-            GodotLib.key(code, 0, 0, false, false);
+            // ClickEvent has fields: type (enum Type), key (String)
+            java.lang.reflect.Method getType = clickEvent.getClass().getMethod("getType");
+            java.lang.reflect.Method getKey = clickEvent.getClass().getMethod("getKey");
+            Object type = getType.invoke(clickEvent);   // ClickEvent.Type enum
+            String key = (String) getKey.invoke(clickEvent);
+
+            // Handle only Key type events — send the converted GLFW keycode to Godot
+            if (type != null && type.toString().equals("Key")) {
+                Short code = com.epai.oblender.game.keycodes.ControlEventKeycode.getKeycodeFromEvent(key);
+                if (code != null) {
+                    GodotLib.key(code.intValue(), 0, 0, true, false);
+                    GodotLib.key(code.intValue(), 0, 0, false, false);
+                }
+            }
         } catch (Exception e) {
             Log.e("OBLNativeActivity", "routeClickEvent error", e);
         }
