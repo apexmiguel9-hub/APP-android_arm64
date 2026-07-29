@@ -20,7 +20,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.setViewTreeLifecycleOwner
@@ -138,7 +140,7 @@ private fun getLayoutFile(context: Context): File {
     return File(context.filesDir, "control_layout.json")
 }
 
-fun showRuntimeButtons(context: Context) {
+fun showRuntimeButtons(context: Context, lifecycleOwner: LifecycleOwner) {
     hideRuntimeButtons()
     CursorModeManager.init(context)
     val file = getLayoutFile(context)
@@ -316,7 +318,7 @@ fun showRuntimeButtons(context: Context) {
             CursorModeManager.setMode(if (newActive) CURSOR_MODE_VIRTUAL else CURSOR_MODE_TOUCH)
             alpha = if (newActive) 0.6f else 1.0f
             if (newActive) {
-                showVirtualPointerOverlay(context)
+        showVirtualPointerOverlay(context, lifecycleOwner)
             } else {
                 hideVirtualPointerOverlay()
             }
@@ -350,9 +352,9 @@ fun hideRuntimeButtons() {
     }
 }
 
-fun showVirtualPointerOverlay(context: Context) {
+fun showVirtualPointerOverlay(context: Context, lifecycleOwner: LifecycleOwner) {
     hideVirtualPointerOverlay()
-    OverlayState.virtualPointerView = createVirtualPointerOverlay(context)
+    OverlayState.virtualPointerView = createVirtualPointerOverlay(context, lifecycleOwner)
 }
 
 fun hideVirtualPointerOverlay() {
@@ -410,7 +412,7 @@ fun OverlayContent() {
                     targetFile = file,
                     exit = {
                         OverlayState.isEditMode = false
-                        showRuntimeButtons(context)
+                        showRuntimeButtons(context, LocalLifecycleOwner.current)
                         hideEditor(context)
                     },
                     menuExit = {
@@ -418,7 +420,7 @@ fun OverlayContent() {
                             context = context,
                             onExit = {
                                 OverlayState.isEditMode = false
-                                showRuntimeButtons(context)
+                                showRuntimeButtons(context, LocalLifecycleOwner.current)
                                 hideEditor(context)
                             }
                         )

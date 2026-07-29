@@ -14,7 +14,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.LifecycleOwner
 import kotlinx.coroutines.coroutineScope
 
 /**
@@ -200,9 +202,10 @@ fun VirtualPointerContent(
     }
 }
 
-fun createVirtualPointerOverlay(context: android.content.Context): ComposeView {
-    android.util.Log.d("OBL", "createVirtualPointerOverlay: start")
+fun createVirtualPointerOverlay(context: android.content.Context, lifecycleOwner: LifecycleOwner): ComposeView {
+    android.util.Log.d("OBL", "createVirtualPointerOverlay: start, lifecycleOwner=$lifecycleOwner")
     val composeView = ComposeView(context).apply {
+        setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
         setContent {
             VirtualPointerContent(
                 onLeftClick = { x, y ->
