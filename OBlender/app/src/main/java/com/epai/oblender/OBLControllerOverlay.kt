@@ -241,8 +241,8 @@ fun showRuntimeButtons(context: Context) {
                 gravity = Gravity.TOP or Gravity.START
                 width = actualW
                 height = actualH
-                x = x
-                y = y
+                this.x = x
+                this.y = y
                 flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                         WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
                 format = PixelFormat.TRANSLUCENT
