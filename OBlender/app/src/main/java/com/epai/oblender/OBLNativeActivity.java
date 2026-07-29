@@ -8,6 +8,7 @@ import android.content.DialogInterface;
 import android.content.pm.PackageManager;
 import android.content.res.AssetManager;
 import android.graphics.Color;
+import androidx.lifecycle.ProcessLifecycleOwner;
 import android.graphics.PixelFormat;
 import android.net.Uri;
 import android.os.Build;
@@ -495,7 +496,7 @@ public class OBLNativeActivity extends NativeActivity
                     OBLControllerOverlayKt.setControlOverlayEditMode(false);
                     OBLControllerOverlayKt.hideRuntimeButtons(); // clean stale
                     OBLControllerOverlayKt.hideEditor(OBLNativeActivity.this);
-                    OBLControllerOverlayKt.showRuntimeButtons(OBLNativeActivity.this, OBLNativeActivity.this);
+                    OBLControllerOverlayKt.showRuntimeButtons(OBLNativeActivity.this, ProcessLifecycleOwner.get());
                 } else {
                     // Exit runtime → enter editor
                     OBLControllerOverlayKt.hideRuntimeButtons();
