@@ -90,6 +90,7 @@ fun createOverlayComposeView(context: Context): ComposeView {
 
 fun showEditor(context: Context) {
     hideRuntimeButtons()
+    OverlayState.layoutReady = false
     // If there's already a view attached, remove it first
     val existing = OverlayState.hostView
     if (existing != null && existing.isAttachedToWindow) {
@@ -115,6 +116,7 @@ fun showEditor(context: Context) {
 
 fun hideEditor(context: Context) {
     val view = OverlayState.hostView ?: return
+    OverlayState.layoutReady = false
     OverlayState.hostView = null
     if (view.isAttachedToWindow) {
         try {
