@@ -495,7 +495,7 @@ public class OBLNativeActivity extends NativeActivity
                     OBLControllerOverlayKt.setControlOverlayEditMode(false);
                     OBLControllerOverlayKt.hideRuntimeButtons(); // clean stale
                     OBLControllerOverlayKt.hideEditor(OBLNativeActivity.this);
-                    OBLControllerOverlayKt.showRuntimeButtons(OBLNativeActivity.this);
+                    OBLControllerOverlayKt.showRuntimeButtons(OBLNativeActivity.this, OBLNativeActivity.this);
                 } else {
                     // Exit runtime → enter editor
                     OBLControllerOverlayKt.hideRuntimeButtons();
