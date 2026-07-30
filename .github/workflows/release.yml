@@ -49,7 +49,7 @@ jobs:
         id: get-run
         run: |
             LATEST_BLENDER_RUN="30513327183"
-           if [ -n "${{ inputs.blender_run_id }}" ]; then
+            if [ -n "${{ inputs.blender_run_id }}" ]; then
              echo "run_id=${{ inputs.blender_run_id }}" >> $GITHUB_OUTPUT
              echo "Using specified run: ${{ inputs.blender_run_id }}"
            else
