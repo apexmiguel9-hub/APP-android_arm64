@@ -39,6 +39,7 @@ import com.epai.oblender.ui.components.FloatingBall
 import com.epai.oblender.ui.components.MarqueeText
 import com.epai.oblender.ui.components.MenuListLayout
 import com.epai.oblender.ui.components.MenuState
+import kotlin.math.roundToInt
 import com.epai.oblender.ui.components.MenuTextButton
 import com.epai.oblender.ui.components.ScalingActionButton
 
