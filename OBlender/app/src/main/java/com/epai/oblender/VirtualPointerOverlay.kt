@@ -107,10 +107,8 @@ fun VirtualPointerContent(
                                 if (id == fingerId) {
                                     val prev = prevPos[id]
                                     val elapsed = System.currentTimeMillis() - touchDownTime
-                                    val dist = (pos - touchDownPos).getDistance()
 
-                                    if (!leftDownSent &&
-                                        (elapsed > 300 || dist > 16f)) {
+                                    if (!leftDownSent && elapsed > 500) {
                                         OBLNativeActivity.oblSetValueStatic("10004,")
                                         leftDownSent = true
                                     }
