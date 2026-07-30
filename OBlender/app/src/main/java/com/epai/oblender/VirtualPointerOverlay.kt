@@ -51,6 +51,12 @@ fun VirtualPointerContent(
 
     var lastTwoFingerDist by remember { mutableStateOf(0f) }
 
+    val stillnessTimeMs = remember { VirtualPointerSettings.getStillnessTimeMs() }
+    val stillnessThresholdPx = remember { VirtualPointerSettings.getStillnessThresholdPx().toFloat() }
+    val tapMaxDistPx = remember { VirtualPointerSettings.getTapMaxDistPx().toFloat() }
+    val tapMaxTimeMs = remember { VirtualPointerSettings.getTapMaxTimeMs() }
+    val sensitivity = remember { VirtualPointerSettings.getSensitivity() }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -79,10 +85,10 @@ fun VirtualPointerContent(
                                     OBLNativeActivity.oblSetValueStatic("10005,")
                                     leftDownSent = false
                                 } else if (touchDownTime > 0 &&
-                                    System.currentTimeMillis() - touchDownTime < 300) {
+                                    System.currentTimeMillis() - touchDownTime < tapMaxTimeMs) {
                                     val downPos = touchDownPos
                                     val dist = (pointerMap.values.firstOrNull() ?: downPos) - downPos
-                                    if (dist.getDistance() < 16f) {
+                                    if (dist.getDistance() < tapMaxDistPx) {
                                         OBLNativeActivity.oblSetValueStatic(
                                             "10010,${OverlayState.cursorX},${OverlayState.cursorY}")
                                         OBLNativeActivity.oblSetValueStatic("10004,")
@@ -116,20 +122,20 @@ fun VirtualPointerContent(
                                         val delta = pos - prev
                                         val moved = delta.getDistance()
 
-                                        if (moved > 4f) {
+                                        if (moved > stillnessThresholdPx) {
                                             stillStart = -1L
-                                        } else if (stillStart < 0 && moved <= 4f && elapsed > 50) {
+                                        } else if (stillStart < 0 && moved <= stillnessThresholdPx && elapsed > 50) {
                                             stillStart = now
                                         }
 
-                                        if (!leftDownSent && stillStart > 0 && (now - stillStart) > 700) {
+                                        if (!leftDownSent && stillStart > 0 && (now - stillStart) > stillnessTimeMs) {
                                             OBLNativeActivity.oblSetValueStatic("10004,")
                                             leftDownSent = true
                                         }
 
                                         pointerPosition = Offset(
-                                            x = (pointerPosition.x + delta.x).coerceIn(0f, screenW),
-                                            y = (pointerPosition.y + delta.y).coerceIn(0f, screenH)
+                                            x = (pointerPosition.x + delta.x * sensitivity).coerceIn(0f, screenW),
+                                            y = (pointerPosition.y + delta.y * sensitivity).coerceIn(0f, screenH)
                                         )
                                         OverlayState.cursorX = pointerPosition.x.toInt()
                                         OverlayState.cursorY = pointerPosition.y.toInt()
@@ -178,6 +184,7 @@ fun VirtualPointerContent(
 
 fun createVirtualPointerOverlay(context: android.content.Context, lifecycleOwner: LifecycleOwner): ComposeView {
     android.util.Log.d("OBL", "createVirtualPointerOverlay: start")
+    VirtualPointerSettings.init(context)
     val composeView = ComposeView(context).apply {
         setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
         setContent {

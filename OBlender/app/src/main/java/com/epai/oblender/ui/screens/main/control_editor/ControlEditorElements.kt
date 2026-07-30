@@ -33,6 +33,7 @@ import com.epai.oblender.CURSOR_MODE_TOUCH
 import com.epai.oblender.CURSOR_MODE_VIRTUAL
 import com.epai.oblender.CursorModeManager
 import com.epai.oblender.R
+import com.epai.oblender.VirtualPointerSettings
 import com.epai.oblender.ui.components.DualMenuSubscreen
 import com.epai.oblender.ui.components.FloatingBall
 import com.epai.oblender.ui.components.MarqueeText
@@ -130,7 +131,10 @@ fun EditorMenu(
     saveAndExit: () -> Unit
 ) {
     val context = LocalContext.current
-    LaunchedEffect(Unit) { CursorModeManager.init(context) }
+    LaunchedEffect(Unit) {
+        CursorModeManager.init(context)
+        VirtualPointerSettings.init(context)
+    }
 
     var selectedTab by remember { mutableIntStateOf(0) }
 
@@ -157,11 +161,14 @@ fun EditorMenu(
                         )
                     }
                     1 -> {
+                        val currentMode = CursorModeManager.getMode()
+                        val showVirtualSettings = currentMode == CURSOR_MODE_VIRTUAL || currentMode == CURSOR_MODE_PRECISION
+
                         MenuListLayout(
                             modifier = Modifier.fillMaxWidth(),
                             title = stringResource(R.string.cursor_mode),
                             items = listOf(CURSOR_MODE_TOUCH, CURSOR_MODE_VIRTUAL, CURSOR_MODE_PRECISION),
-                            currentItem = CursorModeManager.getMode(),
+                            currentItem = currentMode,
                             onItemChange = { mode ->
                                 android.util.Log.d("OBL", "EditorMenu: cursorMode changed to $mode")
                                 CursorModeManager.setMode(mode)
@@ -175,6 +182,10 @@ fun EditorMenu(
                                 }
                             }
                         )
+                        if (showVirtualSettings) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            VirtualPointerSettingsPanel()
+                        }
                     }
                 }
             }
@@ -233,6 +244,96 @@ private fun ColumnScope.ControlLayerMenu(
     }
     ScalingActionButton(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp).padding(bottom = 4.dp), onClick = createLayer) {
         MarqueeText(text = stringResource(R.string.control_editor_layers_create))
+    }
+}
+
+@Composable
+private fun ColumnScope.VirtualPointerSettingsPanel() {
+    Text(
+        text = stringResource(R.string.virtual_pointer_settings),
+        style = MaterialTheme.typography.titleSmall,
+        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+    )
+
+    var stillnessTime by remember { mutableIntStateOf(VirtualPointerSettings.getStillnessTimeMs()) }
+    var stillnessThresh by remember { mutableIntStateOf(VirtualPointerSettings.getStillnessThresholdPx()) }
+    var tapMaxDist by remember { mutableIntStateOf(VirtualPointerSettings.getTapMaxDistPx()) }
+    var tapMaxTime by remember { mutableIntStateOf(VirtualPointerSettings.getTapMaxTimeMs()) }
+    var sens by remember { mutableFloatStateOf(VirtualPointerSettings.getSensitivity()) }
+
+    SettingSlider(
+        label = stringResource(R.string.setting_stillness_time),
+        value = stillnessTime.toFloat(),
+        valueRange = 200f..1500f,
+        step = 50f,
+        valueDisplay = "${stillnessTime}ms",
+        onValueChange = { stillnessTime = it.roundToInt(); VirtualPointerSettings.setStillnessTimeMs(it.roundToInt()) }
+    )
+    SettingSlider(
+        label = stringResource(R.string.setting_stillness_threshold),
+        value = stillnessThresh.toFloat(),
+        valueRange = 1f..20f,
+        step = 1f,
+        valueDisplay = "${stillnessThresh}px",
+        onValueChange = { stillnessThresh = it.roundToInt(); VirtualPointerSettings.setStillnessThresholdPx(it.roundToInt()) }
+    )
+    SettingSlider(
+        label = stringResource(R.string.setting_tap_max_dist),
+        value = tapMaxDist.toFloat(),
+        valueRange = 4f..40f,
+        step = 2f,
+        valueDisplay = "${tapMaxDist}px",
+        onValueChange = { tapMaxDist = it.roundToInt(); VirtualPointerSettings.setTapMaxDistPx(it.roundToInt()) }
+    )
+    SettingSlider(
+        label = stringResource(R.string.setting_tap_max_time),
+        value = tapMaxTime.toFloat(),
+        valueRange = 100f..600f,
+        step = 50f,
+        valueDisplay = "${tapMaxTime}ms",
+        onValueChange = { tapMaxTime = it.roundToInt(); VirtualPointerSettings.setTapMaxTimeMs(it.roundToInt()) }
+    )
+    SettingSlider(
+        label = stringResource(R.string.setting_cursor_sensitivity),
+        value = sens,
+        valueRange = 0.25f..3.0f,
+        step = 0.25f,
+        valueDisplay = "%.2f".format(sens),
+        onValueChange = { sens = it; VirtualPointerSettings.setSensitivity(it) }
+    )
+}
+
+@Composable
+private fun ColumnScope.SettingSlider(
+    label: String,
+    value: Float,
+    valueRange: ClosedFloatingPointRange<Float>,
+    step: Float,
+    valueDisplay: String,
+    onValueChange: (Float) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = valueDisplay,
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.width(56.dp)
+        )
+        Slider(
+            value = value,
+            onValueChange = onValueChange,
+            valueRange = valueRange,
+            steps = if (step > 0f && valueRange.endInclusive - valueRange.start > step * 2)
+                ((valueRange.endInclusive - valueRange.start) / step).toInt() - 1 else 0,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.width(80.dp)
+        )
     }
 }
 

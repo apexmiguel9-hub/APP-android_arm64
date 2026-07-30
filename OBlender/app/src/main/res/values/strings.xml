@@ -154,4 +154,12 @@
     <!-- Game Menu / Styles -->
     <string name="game_menu_option_input_method">Input Method</string>
     <string name="game_styles_joystick_enable">Enable Joystick</string>
+
+    <!-- Virtual Pointer Settings -->
+    <string name="virtual_pointer_settings">Virtual Cursor</string>
+    <string name="setting_stillness_time">Hold to draw</string>
+    <string name="setting_stillness_threshold">Stillness threshold</string>
+    <string name="setting_tap_max_dist">Tap max dist</string>
+    <string name="setting_tap_max_time">Tap max time</string>
+    <string name="setting_cursor_sensitivity">Sensitivity</string>
 </resources>
