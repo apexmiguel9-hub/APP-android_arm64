@@ -7,7 +7,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
-import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.PointerType
@@ -54,6 +55,7 @@ fun VirtualPointerContent(
             .fillMaxSize()
             .pointerInput(Unit) {
                 awaitPointerEventScope {
+                    var prevPos = mutableMapOf<Long, Offset>()
                     while (true) {
                         val event = awaitPointerEvent()
                         val currentPointers = event.changes.filter { it.pressed }
@@ -66,16 +68,23 @@ fun VirtualPointerContent(
 
                         when (currentPointers.size) {
                             1 -> {
-                                val pos = pointerMap.entries.first().value
-                                pointerPosition = Offset(
-                                    x = pos.x.coerceIn(0f, screenW),
-                                    y = pos.y.coerceIn(0f, screenH)
-                                )
-                                OverlayState.cursorX = pointerPosition.x.toInt()
-                                OverlayState.cursorY = pointerPosition.y.toInt()
-                                OBLNativeActivity.oblSetValueStatic(
-                                    "10010,${pointerPosition.x.toInt()},${pointerPosition.y.toInt()}"
-                                )
+                                val entry = pointerMap.entries.first()
+                                val id = entry.key
+                                val pos = entry.value
+                                val prev = prevPos[id]
+                                if (prev != null) {
+                                    val delta = pos - prev
+                                    pointerPosition = Offset(
+                                        x = (pointerPosition.x + delta.x).coerceIn(0f, screenW),
+                                        y = (pointerPosition.y + delta.y).coerceIn(0f, screenH)
+                                    )
+                                    OverlayState.cursorX = pointerPosition.x.toInt()
+                                    OverlayState.cursorY = pointerPosition.y.toInt()
+                                    OBLNativeActivity.oblSetValueStatic(
+                                        "10010,${pointerPosition.x.toInt()},${pointerPosition.y.toInt()}"
+                                    )
+                                }
+                                prevPos[id] = pos
                             }
                             2 -> {
                                 val entries = pointerMap.entries.toList()
@@ -84,9 +93,13 @@ fun VirtualPointerContent(
                                 val dist = (p1 - p2).getDistance()
                                 if (lastTwoFingerDist > 0f) onScroll((dist - lastTwoFingerDist) * 0.05f)
                                 lastTwoFingerDist = dist
+                                for (entry in pointerMap.entries) prevPos[entry.key] = entry.value
                             }
                             else -> {
-                                if (currentPointers.isEmpty()) lastTwoFingerDist = 0f
+                                if (currentPointers.isEmpty()) {
+                                    lastTwoFingerDist = 0f
+                                    prevPos.clear()
+                                }
                             }
                         }
                         for (change in event.changes) change.consume()
@@ -97,12 +110,14 @@ fun VirtualPointerContent(
         Image(
             painter = painterResource(id = R.drawable.img_cursor),
             contentDescription = "Virtual Cursor",
-            modifier = Modifier.offset {
-                IntOffset(
-                    (pointerPosition.x).roundToInt(),
-                    (pointerPosition.y).roundToInt()
-                )
-            }
+            modifier = Modifier
+                .size(32.dp)
+                .offset {
+                    IntOffset(
+                        (pointerPosition.x).roundToInt(),
+                        (pointerPosition.y).roundToInt()
+                    )
+                }
         )
     }
 }
