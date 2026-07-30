@@ -66,8 +66,6 @@ object OverlayState {
     @JvmField
     var cursorY = 0
     @JvmField
-    var virtualPointerView: View? = null
-    @JvmField
     var leftMouseHeld = false
 }
 
@@ -160,8 +158,7 @@ fun showRuntimeButtons(context: Context, lifecycleOwner: LifecycleOwner) {
     android.util.Log.d("OBL", "showRuntimeButtons: cursorMode=$mode")
     if (mode == CURSOR_MODE_VIRTUAL) {
         OverlayState.virtualCursorActive = true
-        android.util.Log.d("OBL", "showRuntimeButtons: showing virtual pointer overlay")
-        showVirtualPointerOverlay(context, lifecycleOwner)
+        android.util.Log.d("OBL", "showRuntimeButtons: virtual cursor mode active (no overlay)")
     }
 
     // Per-button toggle state (UUID → pressed)
@@ -319,12 +316,12 @@ fun showRuntimeButtons(context: Context, lifecycleOwner: LifecycleOwner) {
         setOnClickListener {
             val newActive = !OverlayState.virtualCursorActive
             OverlayState.virtualCursorActive = newActive
+            if (!newActive) OverlayState.leftMouseHeld = false
             CursorModeManager.setMode(if (newActive) CURSOR_MODE_VIRTUAL else CURSOR_MODE_TOUCH)
             alpha = if (newActive) 0.6f else 1.0f
             if (newActive) {
-        showVirtualPointerOverlay(context, lifecycleOwner)
+                // virtual cursor mode — onTouchEvent handles cursor movement
             } else {
-                hideVirtualPointerOverlay()
             }
         }
     }
@@ -345,7 +342,6 @@ fun showRuntimeButtons(context: Context, lifecycleOwner: LifecycleOwner) {
 }
 
 fun hideRuntimeButtons() {
-    hideVirtualPointerOverlay()
     val views = OverlayState.runtimeButtonViews.toList()
     OverlayState.runtimeButtonViews.clear()
     for (v in views) {
@@ -354,27 +350,6 @@ fun hideRuntimeButtons() {
             wm.removeView(v)
         } catch (_: Exception) {}
     }
-}
-
-fun showVirtualPointerOverlay(context: Context, lifecycleOwner: LifecycleOwner) {
-    hideVirtualPointerOverlay()
-    OverlayState.virtualPointerView = createVirtualPointerOverlay(context, lifecycleOwner)
-}
-
-fun hideVirtualPointerOverlay() {
-    val old = OverlayState.virtualPointerView ?: return
-    android.util.Log.d("OBL", "hideVirtualPointerOverlay: removing view, thread=${Thread.currentThread().name}")
-    
-    Handler(Looper.getMainLooper()).post {
-        try {
-            val wm = old.context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
-            wm.removeView(old)
-            android.util.Log.d("OBL", "hideVirtualPointerOverlay: removed successfully")
-        } catch (e: Exception) {
-            android.util.Log.e("OBL", "hideVirtualPointerOverlay: REMOVE FAILED", e)
-        }
-    }
-    OverlayState.virtualPointerView = null
 }
 
 @Composable

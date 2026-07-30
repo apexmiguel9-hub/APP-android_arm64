@@ -707,10 +707,20 @@ public class OBLNativeActivity extends NativeActivity
 
     /** Handle LauncherEvent type click events */
     private void handleLauncherEvent(String key) {
-        // When virtual cursor is active, reposition cursor before mouse clicks
+        if (OverlayState.virtualCursorActive && key.equals("GLFW_MOUSE_BUTTON_LEFT")) {
+            // Toggle left mouse: 10004 = down, 10005 = up
+            OverlayState.leftMouseHeld = !OverlayState.leftMouseHeld;
+            oblSetValue("10010," + OverlayState.cursorX + "," + OverlayState.cursorY);
+            if (OverlayState.leftMouseHeld) {
+                oblSetValue("10004,");
+            } else {
+                oblSetValue("10005,");
+            }
+            Log.d("OBL", "launcher=" + key + " toggle=" + OverlayState.leftMouseHeld);
+            return;
+        }
         if (OverlayState.virtualCursorActive) {
             switch (key) {
-                case "GLFW_MOUSE_BUTTON_LEFT":
                 case "GLFW_MOUSE_BUTTON_RIGHT":
                 case "GLFW_MOUSE_BUTTON_MIDDLE":
                     oblSetValue("10010," + OverlayState.cursorX + "," + OverlayState.cursorY);
@@ -782,6 +792,18 @@ public class OBLNativeActivity extends NativeActivity
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
+        if (OverlayState.virtualCursorActive) {
+            int action = event.getActionMasked();
+            if (action == MotionEvent.ACTION_DOWN ||
+                action == MotionEvent.ACTION_POINTER_DOWN ||
+                action == MotionEvent.ACTION_MOVE) {
+                OverlayState.cursorX = (int)event.getX();
+                OverlayState.cursorY = (int)event.getY();
+                oblSetValue("10010," + OverlayState.cursorX + "," + OverlayState.cursorY);
+            }
+            return true;
+        }
+
         if (inputHandler != null && inputHandler.onTouchEvent(event)) {
             return true;
         }
