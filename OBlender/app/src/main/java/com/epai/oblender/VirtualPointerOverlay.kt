@@ -1,8 +1,9 @@
 package com.epai.oblender
 
+import android.view.ViewGroup
+import android.app.Activity
 import android.os.Handler
 import android.os.Looper
-import android.view.WindowManager
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -205,7 +206,7 @@ fun VirtualPointerContent(
 }
 
 fun createVirtualPointerOverlay(context: android.content.Context, lifecycleOwner: LifecycleOwner): ComposeView {
-    android.util.Log.d("OBL", "createVirtualPointerOverlay: start, lifecycleOwner=$lifecycleOwner")
+    android.util.Log.d("OBL", "createVirtualPointerOverlay: start")
     val composeView = ComposeView(context).apply {
         setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
         setContent {
@@ -230,20 +231,13 @@ fun createVirtualPointerOverlay(context: android.content.Context, lifecycleOwner
         setBackgroundColor(android.graphics.Color.TRANSPARENT)
     }
 
-    val wm = context.getSystemService(android.content.Context.WINDOW_SERVICE) as WindowManager
-    val lp = WindowManager.LayoutParams(
-        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-        WindowManager.LayoutParams.TYPE_APPLICATION_PANEL,
-        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-        android.graphics.PixelFormat.TRANSPARENT
-    )
+    val activity = context as Activity
+    val rootView = activity.findViewById<ViewGroup>(android.R.id.content)
 
     Handler(Looper.getMainLooper()).post {
         try {
-            android.util.Log.d("OBL", "createVirtualPointerOverlay: adding to WindowManager on UI thread")
-            wm.addView(composeView, lp)
+            android.util.Log.d("OBL", "createVirtualPointerOverlay: adding to RootView on UI thread")
+            rootView.addView(composeView)
             android.util.Log.d("OBL", "createVirtualPointerOverlay: added successfully")
         } catch (e: Exception) {
             android.util.Log.e("OBL", "createVirtualPointerOverlay: ADD FAILED", e)

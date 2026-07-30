@@ -11,7 +11,8 @@ import android.graphics.RectF
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
-import android.view.WindowManager
+import android.view.ViewGroup
+import android.app.Activity
 import android.widget.ImageView
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -365,8 +366,9 @@ fun hideVirtualPointerOverlay() {
     
     Handler(Looper.getMainLooper()).post {
         try {
-            val wm = old.context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
-            wm.removeView(old)
+            val activity = old.context as Activity
+            val rootView = activity.findViewById<ViewGroup>(android.R.id.content)
+            rootView.removeView(old)
             android.util.Log.d("OBL", "hideVirtualPointerOverlay: removed successfully")
         } catch (e: Exception) {
             android.util.Log.e("OBL", "hideVirtualPointerOverlay: REMOVE FAILED", e)
