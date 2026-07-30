@@ -710,8 +710,8 @@ public class OBLNativeActivity extends NativeActivity
         if (OverlayState.virtualCursorActive && key.equals("GLFW_MOUSE_BUTTON_LEFT")) {
             // Toggle left mouse: 10004 = down, 10005 = up
             OverlayState.leftMouseHeld = !OverlayState.leftMouseHeld;
-            oblSetValue("10010," + OverlayState.cursorX + "," + OverlayState.cursorY);
             if (OverlayState.leftMouseHeld) {
+                oblSetValue("10010," + OverlayState.cursorX + "," + OverlayState.cursorY);
                 oblSetValue("10004,");
             } else {
                 oblSetValue("10005,");
