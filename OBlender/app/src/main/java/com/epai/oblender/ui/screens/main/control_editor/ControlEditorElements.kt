@@ -314,14 +314,9 @@ private fun ColumnScope.SettingSlider(
     onValueChange: (Float) -> Unit
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+        modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = valueDisplay,
-            style = MaterialTheme.typography.bodySmall,
-            modifier = Modifier.width(56.dp)
-        )
         Slider(
             value = value,
             onValueChange = onValueChange,
@@ -331,11 +326,16 @@ private fun ColumnScope.SettingSlider(
             modifier = Modifier.weight(1f)
         )
         Text(
-            text = label,
-            style = MaterialTheme.typography.bodySmall,
-            modifier = Modifier.width(80.dp)
+            text = valueDisplay,
+            style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.width(48.dp)
         )
     }
+    Text(
+        text = label,
+        style = MaterialTheme.typography.labelSmall,
+        modifier = Modifier.padding(start = 4.dp)
+    )
 }
 
 @Composable
