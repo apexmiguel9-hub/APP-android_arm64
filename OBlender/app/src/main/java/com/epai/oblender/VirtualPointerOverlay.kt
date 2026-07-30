@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.res.painterResource
@@ -55,7 +56,7 @@ fun VirtualPointerContent(
         OverlayState.cursorY = pointerPosition.y.toInt()
     }
 
-    val dp = androidx.compose.ui.platform.LocalDensity.current
+    val dp = LocalDensity.current
     val btnWPx = with(dp) { BTN_W_DP.toPx() }
     val btnHPx = with(dp) { BTN_H_DP.toPx() }
     val btnGapPx = with(dp) { BTN_GAP_DP.toPx() }
@@ -107,17 +108,18 @@ fun VirtualPointerContent(
                                             "10010,${pointerPosition.x.toInt()},${pointerPosition.y.toInt()}"
                                         )
                                         OBLNativeActivity.oblSetValueStatic("10004,")
-                                    } else if (idx in 0..2 && !leftDown) {
+                                    } else if (idx in 0..2 && pendingTapFinger < 0) {
                                         pendingTapIdx = idx
                                         pendingTapFinger = id
                                         pendingTapStart = System.currentTimeMillis()
                                         pendingTapPos = change.position
-                                    } else if (idx < 0 && !leftDown) {
+                                    } else if (idx < 0 && !tracking) {
                                         cursorPrevPos = change.position
                                         tracking = true
                                     }
                                 }
 
+                                // cursor movement: non-L finger
                                 if (change.pressed && tracking && id != leftFingerId) {
                                     val delta = change.position - cursorPrevPos
                                     cursorPrevPos = change.position
@@ -132,6 +134,7 @@ fun VirtualPointerContent(
                                     )
                                 }
 
+                                // cursor movement: L-finger drawing
                                 if (id == leftFingerId && leftDown && change.pressed) {
                                     val delta = change.position - leftPrevPos
                                     leftPrevPos = change.position
@@ -155,7 +158,7 @@ fun VirtualPointerContent(
                                     } else if (id == pendingTapFinger && pendingTapIdx >= 0) {
                                         val elapsed = System.currentTimeMillis() - pendingTapStart
                                         val dist = (change.position - pendingTapPos).getDistance()
-                                        if (elapsed < 300 && dist < 24f) {
+                                        if (elapsed < 400 && dist < 48f) {
                                             when (pendingTapIdx) {
                                                 0 -> onScroll(1f)
                                                 1 -> onScroll(-1f)
