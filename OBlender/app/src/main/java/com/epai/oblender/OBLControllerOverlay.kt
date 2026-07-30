@@ -11,8 +11,7 @@ import android.graphics.RectF
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
-import android.view.ViewGroup
-import android.app.Activity
+import android.view.WindowManager
 import android.widget.ImageView
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -28,11 +27,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.ProcessLifecycleOwner
-import androidx.lifecycle.setViewTreeLifecycleOwner
-import androidx.savedstate.SavedStateRegistry
-import androidx.savedstate.SavedStateRegistryController
-import androidx.savedstate.SavedStateRegistryOwner
-import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.movtery.layer_controller.EDITOR_VERSION
 import com.movtery.layer_controller.data.*
 import com.movtery.layer_controller.data.lang.createTranslatable
@@ -366,9 +360,8 @@ fun hideVirtualPointerOverlay() {
     
     Handler(Looper.getMainLooper()).post {
         try {
-            val activity = old.context as Activity
-            val rootView = activity.findViewById<ViewGroup>(android.R.id.content)
-            rootView.removeView(old)
+            val wm = old.context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+            wm.removeView(old)
             android.util.Log.d("OBL", "hideVirtualPointerOverlay: removed successfully")
         } catch (e: Exception) {
             android.util.Log.e("OBL", "hideVirtualPointerOverlay: REMOVE FAILED", e)

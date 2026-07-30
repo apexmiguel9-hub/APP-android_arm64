@@ -1,7 +1,6 @@
 package com.epai.oblender
 
-import android.view.ViewGroup
-import android.app.Activity
+import android.view.WindowManager
 import android.os.Handler
 import android.os.Looper
 import androidx.compose.foundation.Canvas
@@ -18,6 +17,8 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.lifecycle.ViewTreeLifecycleOwner
+import androidx.lifecycle.ViewTreeViewModelStoreOwner
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.LifecycleOwner
 import kotlinx.coroutines.coroutineScope
