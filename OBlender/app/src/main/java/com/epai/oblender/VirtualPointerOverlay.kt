@@ -57,6 +57,11 @@ fun VirtualPointerContent(
             .pointerInput(Unit) {
                 awaitPointerEventScope {
                     var prevPos = mutableMapOf<Long, Offset>()
+                    var touchDownTime = 0L
+                    var touchDownPos = Offset.Zero
+                    var leftDownSent = false
+                    var fingerId = 0L
+
                     while (true) {
                         val event = awaitPointerEvent()
                         val currentPointers = event.changes.filter { it.pressed }
@@ -68,24 +73,62 @@ fun VirtualPointerContent(
                         }
 
                         when (currentPointers.size) {
+                            0 -> {
+                                if (leftDownSent) {
+                                    OBLNativeActivity.oblSetValueStatic("10005,")
+                                    leftDownSent = false
+                                } else if (touchDownTime > 0 &&
+                                    System.currentTimeMillis() - touchDownTime < 300) {
+                                    val downPos = touchDownPos
+                                    val dist = (pointerMap.values.firstOrNull() ?: downPos) - downPos
+                                    if (dist.getDistance() < 16f) {
+                                        OBLNativeActivity.oblSetValueStatic(
+                                            "10010,${OverlayState.cursorX},${OverlayState.cursorY}")
+                                        OBLNativeActivity.oblSetValueStatic("10004,")
+                                        OBLNativeActivity.oblSetValueStatic("10005,")
+                                    }
+                                }
+                                lastTwoFingerDist = 0f
+                                prevPos.clear()
+                                touchDownTime = 0L
+                            }
                             1 -> {
                                 val entry = pointerMap.entries.first()
                                 val id = entry.key
                                 val pos = entry.value
-                                val prev = prevPos[id]
-                                if (prev != null) {
-                                    val delta = pos - prev
-                                    pointerPosition = Offset(
-                                        x = (pointerPosition.x + delta.x).coerceIn(0f, screenW),
-                                        y = (pointerPosition.y + delta.y).coerceIn(0f, screenH)
-                                    )
-                                    OverlayState.cursorX = pointerPosition.x.toInt()
-                                    OverlayState.cursorY = pointerPosition.y.toInt()
-                                    OBLNativeActivity.oblSetValueStatic(
-                                        "10010,${pointerPosition.x.toInt()},${pointerPosition.y.toInt()}"
-                                    )
+
+                                if (prevPos.isEmpty()) {
+                                    fingerId = id
+                                    touchDownTime = System.currentTimeMillis()
+                                    touchDownPos = pos
+                                    prevPos[id] = pos
                                 }
-                                prevPos[id] = pos
+
+                                if (id == fingerId) {
+                                    val prev = prevPos[id]
+                                    val elapsed = System.currentTimeMillis() - touchDownTime
+                                    val dist = (pos - touchDownPos).getDistance()
+
+                                    if (!leftDownSent &&
+                                        (elapsed > 300 || dist > 16f)) {
+                                        OBLNativeActivity.oblSetValueStatic("10004,")
+                                        leftDownSent = true
+                                    }
+
+                                    if (prev != null) {
+                                        val delta = pos - prev
+                                        pointerPosition = Offset(
+                                            x = (pointerPosition.x + delta.x).coerceIn(0f, screenW),
+                                            y = (pointerPosition.y + delta.y).coerceIn(0f, screenH)
+                                        )
+                                        OverlayState.cursorX = pointerPosition.x.toInt()
+                                        OverlayState.cursorY = pointerPosition.y.toInt()
+                                        OBLNativeActivity.oblSetValueStatic(
+                                            "10010,${pointerPosition.x.toInt()},${pointerPosition.y.toInt()}"
+                                        )
+                                    }
+                                    prevPos[id] = pos
+                                }
                             }
                             2 -> {
                                 val entries = pointerMap.entries.toList()

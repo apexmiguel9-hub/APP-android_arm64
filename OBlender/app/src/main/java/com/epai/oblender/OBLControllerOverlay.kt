@@ -67,6 +67,8 @@ object OverlayState {
     var cursorY = 0
     @JvmField
     var virtualPointerView: View? = null
+    @JvmField
+    var leftMouseHeld = false
 }
 
 fun setControlOverlayEditMode(editMode: Boolean) { OverlayState.isEditMode = editMode }
