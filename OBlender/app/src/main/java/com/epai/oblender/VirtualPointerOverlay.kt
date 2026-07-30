@@ -18,12 +18,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.LifecycleOwner
@@ -31,12 +29,13 @@ import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import kotlin.math.roundToInt
 
-private val BTN_W_PX = 48f
-private val BTN_H_PX = 36f
-private val BTN_GAP = 4f
+private val BTN_W_DP = 56.dp
+private val BTN_H_DP = 40.dp
+private val BTN_GAP_DP = 4.dp
 private val BTN_COLOR = Color(0x88000000)
 private val BTN_BORDER = Color(0x44FFFFFF)
 private val BTN_TEXT = Color(0xCCFFFFFF)
+private val BTN_BAR_PAD = 12.dp
 
 @Composable
 fun VirtualPointerContent(
@@ -44,11 +43,6 @@ fun VirtualPointerContent(
     onRightClick: (x: Int, y: Int) -> Unit,
     onScroll: (Float) -> Unit
 ) {
-    val density = LocalDensity.current
-    val btnWDp = with(density) { BTN_W_PX.toDp() }
-    val btnHDp = with(density) { BTN_H_PX.toDp() }
-    val barPad = 8.dp
-
     val windowSize = LocalWindowInfo.current.containerSize
     val screenW = windowSize.width.toFloat().coerceAtLeast(1f)
     val screenH = windowSize.height.toFloat().coerceAtLeast(1f)
@@ -61,24 +55,36 @@ fun VirtualPointerContent(
         OverlayState.cursorY = pointerPosition.y.toInt()
     }
 
+    val dp = androidx.compose.ui.platform.LocalDensity.current
+    val btnWPx = with(dp) { BTN_W_DP.toPx() }
+    val btnHPx = with(dp) { BTN_H_DP.toPx() }
+    val btnGapPx = with(dp) { BTN_GAP_DP.toPx() }
+    val barPadPx = with(dp) { BTN_BAR_PAD.toPx() }
+
     Box(modifier = Modifier.fillMaxSize()) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(screenW, screenH, BTN_W_PX, BTN_H_PX, BTN_GAP) {
+                .pointerInput(
+                    screenW, screenH, btnWPx, btnHPx, btnGapPx, barPadPx
+                ) {
                     val numBtns = 4
-                    val barWidth = numBtns * BTN_W_PX + (numBtns - 1) * BTN_GAP
-                    val barLeft = screenW - barWidth - 16f
-                    val barTop = screenH - BTN_H_PX - 16f
+                    val barWidth = numBtns * btnWPx + (numBtns - 1) * btnGapPx
+                    val barLeft = screenW - barWidth - barPadPx
+                    val barTop = screenH - btnHPx - barPadPx
 
                     fun btnIndex(x: Float, y: Float): Int {
-                        if (x < barLeft || x > barLeft + barWidth || y < barTop || y > barTop + BTN_H_PX) return -1
-                        return ((x - barLeft) / (BTN_W_PX + BTN_GAP)).toInt().coerceIn(0, numBtns - 1)
+                        if (x < barLeft || y < barTop || x > barLeft + barWidth || y > barTop + btnHPx) return -1
+                        return ((x - barLeft) / (btnWPx + btnGapPx)).toInt().coerceIn(0, numBtns - 1)
                     }
 
                     awaitPointerEventScope {
                         var leftFingerId = -1L
                         var leftDown = false
+                        var cursorPrevPos = Offset.Zero
+                        var leftPrevPos = Offset.Zero
+                        var tracking = false
+
                         var pendingTapIdx = -1
                         var pendingTapFinger = -1L
                         var pendingTapStart = 0L
@@ -96,6 +102,7 @@ fun VirtualPointerContent(
                                     if (idx == 3 && !leftDown) {
                                         leftFingerId = id
                                         leftDown = true
+                                        leftPrevPos = change.position
                                         OBLNativeActivity.oblSetValueStatic(
                                             "10010,${pointerPosition.x.toInt()},${pointerPosition.y.toInt()}"
                                         )
@@ -106,16 +113,37 @@ fun VirtualPointerContent(
                                         pendingTapStart = System.currentTimeMillis()
                                         pendingTapPos = change.position
                                     } else if (idx < 0 && !leftDown) {
-                                        pointerPosition = Offset(
-                                            x = change.position.x.coerceIn(0f, screenW),
-                                            y = change.position.y.coerceIn(0f, screenH)
-                                        )
-                                        OverlayState.cursorX = pointerPosition.x.toInt()
-                                        OverlayState.cursorY = pointerPosition.y.toInt()
-                                        OBLNativeActivity.oblSetValueStatic(
-                                            "10010,${pointerPosition.x.toInt()},${pointerPosition.y.toInt()}"
-                                        )
+                                        cursorPrevPos = change.position
+                                        tracking = true
                                     }
+                                }
+
+                                if (change.pressed && tracking && id != leftFingerId) {
+                                    val delta = change.position - cursorPrevPos
+                                    cursorPrevPos = change.position
+                                    pointerPosition = Offset(
+                                        x = (pointerPosition.x + delta.x).coerceIn(0f, screenW),
+                                        y = (pointerPosition.y + delta.y).coerceIn(0f, screenH)
+                                    )
+                                    OverlayState.cursorX = pointerPosition.x.toInt()
+                                    OverlayState.cursorY = pointerPosition.y.toInt()
+                                    OBLNativeActivity.oblSetValueStatic(
+                                        "10010,${pointerPosition.x.toInt()},${pointerPosition.y.toInt()}"
+                                    )
+                                }
+
+                                if (id == leftFingerId && leftDown && change.pressed) {
+                                    val delta = change.position - leftPrevPos
+                                    leftPrevPos = change.position
+                                    pointerPosition = Offset(
+                                        x = (pointerPosition.x + delta.x).coerceIn(0f, screenW),
+                                        y = (pointerPosition.y + delta.y).coerceIn(0f, screenH)
+                                    )
+                                    OverlayState.cursorX = pointerPosition.x.toInt()
+                                    OverlayState.cursorY = pointerPosition.y.toInt()
+                                    OBLNativeActivity.oblSetValueStatic(
+                                        "10010,${pointerPosition.x.toInt()},${pointerPosition.y.toInt()}"
+                                    )
                                 }
 
                                 if (!change.pressed) {
@@ -123,6 +151,7 @@ fun VirtualPointerContent(
                                         OBLNativeActivity.oblSetValueStatic("10005,")
                                         leftDown = false
                                         leftFingerId = -1
+                                        tracking = false
                                     } else if (id == pendingTapFinger && pendingTapIdx >= 0) {
                                         val elapsed = System.currentTimeMillis() - pendingTapStart
                                         val dist = (change.position - pendingTapPos).getDistance()
@@ -135,19 +164,9 @@ fun VirtualPointerContent(
                                         }
                                         pendingTapIdx = -1
                                         pendingTapFinger = -1
+                                    } else if (id != leftFingerId && tracking) {
+                                        tracking = false
                                     }
-                                }
-
-                                // Track L-finger movement for drawing
-                                if (id == leftFingerId && leftDown && change.pressed) {
-                                    val clampedX = change.position.x.coerceIn(0f, screenW)
-                                    val clampedY = change.position.y.coerceIn(0f, screenH)
-                                    pointerPosition = Offset(clampedX, clampedY)
-                                    OverlayState.cursorX = clampedX.toInt()
-                                    OverlayState.cursorY = clampedY.toInt()
-                                    OBLNativeActivity.oblSetValueStatic(
-                                        "10010,${clampedX.toInt()},${clampedY.toInt()}"
-                                    )
                                 }
 
                                 change.consume()
@@ -160,13 +179,13 @@ fun VirtualPointerContent(
         Row(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(barPad),
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                .padding(BTN_BAR_PAD),
+            horizontalArrangement = Arrangement.spacedBy(BTN_GAP_DP)
         ) {
-            BtnView("\u2191", btnWDp, btnHDp)
-            BtnView("\u2193", btnWDp, btnHDp)
-            BtnView("R", btnWDp, btnHDp)
-            BtnView("L", btnWDp, btnHDp, bluish = true)
+            BtnView("\u2191", BTN_W_DP, BTN_H_DP)
+            BtnView("\u2193", BTN_W_DP, BTN_H_DP)
+            BtnView("R", BTN_W_DP, BTN_H_DP)
+            BtnView("L", BTN_W_DP, BTN_H_DP, bluish = true)
         }
 
         Image(
@@ -195,17 +214,17 @@ private fun RowScope.BtnView(
     Box(
         modifier = Modifier
             .size(width = w, height = h)
-            .clip(RoundedCornerShape(4.dp))
+            .clip(RoundedCornerShape(6.dp))
             .background(bg)
-            .border(1.dp, BTN_BORDER, RoundedCornerShape(4.dp)),
+            .border(1.dp, BTN_BORDER, RoundedCornerShape(6.dp)),
         contentAlignment = Alignment.Center
     ) {
         androidx.compose.material3.Text(
             text = text,
             color = BTN_TEXT,
-            fontSize = 12.sp,
+            fontSize = 16.sp,
             fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
         )
     }
 }
