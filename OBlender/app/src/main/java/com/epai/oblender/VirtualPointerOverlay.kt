@@ -4,7 +4,11 @@ import android.view.ViewGroup
 import android.app.Activity
 import android.os.Handler
 import android.os.Looper
-import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
@@ -40,9 +44,6 @@ fun VirtualPointerContent(
     val screenW = windowSize.width.toFloat().coerceAtLeast(1f)
     val screenH = windowSize.height.toFloat().coerceAtLeast(1f)
 
-    val density = LocalDensity.current
-    val crosshairSize = with(density) { 32.dp.toPx() }
-
     var pointerPosition by remember {
         mutableStateOf(Offset(screenW / 2f, screenH / 2f))
     }
@@ -52,7 +53,6 @@ fun VirtualPointerContent(
         OverlayState.cursorY = pointerPosition.y.toInt()
     }
 
-    var lastPointerDown by remember { mutableStateOf<Offset?>(null) }
     var pointerDownTime by remember { mutableStateOf(0L) }
     var isDragging by remember { mutableStateOf(false) }
     var lastTwoFingerDist by remember { mutableStateOf(0f) }
@@ -67,8 +67,6 @@ fun VirtualPointerContent(
                     awaitPointerEventScope {
                         while (true) {
                             val event = awaitPointerEvent()
-
-                            // Track pointer count
                             val currentPointers = event.changes.filter { it.pressed }
                             val pointerMap = mutableMapOf<Long, Offset>()
                             for (change in currentPointers) {
@@ -79,17 +77,9 @@ fun VirtualPointerContent(
 
                             when (currentPointers.size) {
                                 0 -> {
-                                    // All pointers released
                                     if (activePointers.size == 1 && !isDragging) {
-                                        val pos = activePointers.values.first()
-                                        val topArea = 0f
-                                        if (pos.y > topArea) {
-                                            if (System.currentTimeMillis() - pointerDownTime < 300) {
-                                                onLeftClick(
-                                                    pointerPosition.x.toInt(),
-                                                    pointerPosition.y.toInt()
-                                                )
-                                            }
+                                        if (System.currentTimeMillis() - pointerDownTime < 300) {
+                                            onLeftClick(pointerPosition.x.toInt(), pointerPosition.y.toInt())
                                         }
                                     }
                                     activePointers.clear()
@@ -102,18 +92,12 @@ fun VirtualPointerContent(
                                     val pos = entry.value
 
                                     if (activePointers.isEmpty()) {
-                                        // First touch down
-                                        lastPointerDown = pos
                                         pointerDownTime = System.currentTimeMillis()
                                         activePointers[id] = pos
                                     } else if (activePointers.size == 1 && activePointers.containsKey(id)) {
                                         val prev = activePointers[id]!!
                                         val delta = pos - prev
-
-                                        // Check if dragging beyond touch slop
-                                        if (!isDragging && delta.getDistance() > 16f) {
-                                            isDragging = true
-                                        }
+                                        if (!isDragging && delta.getDistance() > 16f) isDragging = true
 
                                         if (isDragging) {
                                             pointerPosition = Offset(
@@ -124,13 +108,6 @@ fun VirtualPointerContent(
                                             OverlayState.cursorY = pointerPosition.y.toInt()
                                         }
                                         activePointers[id] = pos
-                                    } else if (activePointers.size == 2) {
-                                        // Transitioned from 2 to 1 finger — reset
-                                        activePointers.clear()
-                                        activePointers[id] = pos
-                                        lastPointerDown = pos
-                                        pointerDownTime = System.currentTimeMillis()
-                                        isDragging = false
                                     }
                                 }
                                 2 -> {
@@ -138,70 +115,30 @@ fun VirtualPointerContent(
                                     val p1 = entries[0].value
                                     val p2 = entries[1].value
                                     val dist = (p1 - p2).getDistance()
-
-                                    if (lastTwoFingerDist > 0f) {
-                                        val delta = dist - lastTwoFingerDist
-                                        // Scale factor: 1px pinch ≈ 0.05 scroll units
-                                        onScroll(delta * 0.05f)
-                                    }
+                                    if (lastTwoFingerDist > 0f) onScroll((dist - lastTwoFingerDist) * 0.05f)
                                     lastTwoFingerDist = dist
-
-                                    // Update activePointers with new positions
-                                    for (entry in pointerMap.entries) {
-                                        activePointers[entry.key] = entry.value
-                                    }
-
-                                    // Check for two-finger tap (quick touch and release)
-                                    if (activePointers.size >= 2 && !isDragging) {
-                                        val now = System.currentTimeMillis()
-                                        if (now - pointerDownTime < 300) {
-                                            // This will be handled on release
-                                        }
-                                    }
+                                    for (entry in pointerMap.entries) activePointers[entry.key] = entry.value
                                 }
-                                else -> { /* 3+ fingers — ignore */ }
                             }
-
-                            // Consume all touch changes
-                            for (change in event.changes) {
-                                change.consume()
-                            }
+                            for (change in event.changes) change.consume()
                         }
                     }
                 }
             }
     ) {
-        // Render crosshair
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val cx = pointerPosition.x
-            val cy = pointerPosition.y
-            val halfSize = crosshairSize / 2f
-            val gap = 4f
-
-            drawCircle(
-                color = Color.White.copy(alpha = 0.5f),
-                radius = halfSize + 2f,
-                center = Offset(cx, cy),
-                style = Stroke(width = 1.5f)
-            )
-            drawLine(
-                color = Color.White,
-                start = Offset(cx, cy - halfSize + gap),
-                end = Offset(cx, cy + halfSize - gap),
-                strokeWidth = 1.5f
-            )
-            drawLine(
-                color = Color.White,
-                start = Offset(cx - halfSize + gap, cy),
-                end = Offset(cx + halfSize - gap, cy),
-                strokeWidth = 1.5f
-            )
-            drawCircle(
-                color = Color.White,
-                radius = 2.5f,
-                center = Offset(cx, cy)
-            )
-        }
+        // Render Cursor Image - HOTSPOT APROXIMADO (ajusta según imagen)
+        Image(
+            painter = painterResource(id = R.drawable.img_cursor),
+            contentDescription = "Virtual Cursor",
+            modifier = Modifier.offset {
+                // Ajuste de hotspot: si la punta está arriba a la izquierda, 
+                // esto centra el clic en esa punta.
+                IntOffset(
+                    (pointerPosition.x).roundToInt(), 
+                    (pointerPosition.y).roundToInt()
+                )
+            }
+        )
     }
 }
 
