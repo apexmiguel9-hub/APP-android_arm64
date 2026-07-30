@@ -27,6 +27,11 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.ProcessLifecycleOwner
+import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.savedstate.SavedStateRegistry
+import androidx.savedstate.SavedStateRegistryController
+import androidx.savedstate.SavedStateRegistryOwner
+import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.movtery.layer_controller.EDITOR_VERSION
 import com.movtery.layer_controller.data.*
 import com.movtery.layer_controller.data.lang.createTranslatable
@@ -67,7 +72,7 @@ object OverlayState {
 fun setControlOverlayEditMode(editMode: Boolean) { OverlayState.isEditMode = editMode }
 fun getControlOverlayEditMode(): Boolean = OverlayState.isEditMode
 
-private class SimpleSavedStateRegistryOwner : SavedStateRegistryOwner {
+internal class SimpleSavedStateRegistryOwner : SavedStateRegistryOwner {
     override val lifecycle: Lifecycle = LifecycleRegistry(this)
     override val savedStateRegistry: SavedStateRegistry
     init {

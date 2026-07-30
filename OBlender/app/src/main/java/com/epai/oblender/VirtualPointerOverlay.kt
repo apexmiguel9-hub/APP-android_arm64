@@ -17,8 +17,8 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.ViewCompositionStrategy
-import androidx.lifecycle.ViewTreeLifecycleOwner
-import androidx.lifecycle.ViewTreeViewModelStoreOwner
+import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.LifecycleOwner
 import kotlinx.coroutines.coroutineScope
@@ -232,8 +232,8 @@ fun createVirtualPointerOverlay(context: android.content.Context, lifecycleOwner
         setBackgroundColor(android.graphics.Color.TRANSPARENT)
     }
 
-    androidx.lifecycle.ViewTreeLifecycleOwner.set(composeView, lifecycleOwner)
-    androidx.lifecycle.ViewTreeViewModelStoreOwner.set(composeView, lifecycleOwner as androidx.lifecycle.ViewModelStoreOwner)
+    composeView.setViewTreeLifecycleOwner(lifecycleOwner)
+    composeView.setViewTreeSavedStateRegistryOwner(SimpleSavedStateRegistryOwner())
 
     val wm = context.getSystemService(android.content.Context.WINDOW_SERVICE) as WindowManager
     val lp = WindowManager.LayoutParams(
