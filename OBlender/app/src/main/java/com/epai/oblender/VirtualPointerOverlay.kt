@@ -61,6 +61,7 @@ fun VirtualPointerContent(
                     var touchDownPos = Offset.Zero
                     var leftDownSent = false
                     var fingerId = 0L
+                    var stillStart = -1L
 
                     while (true) {
                         val event = awaitPointerEvent()
@@ -91,6 +92,7 @@ fun VirtualPointerContent(
                                 lastTwoFingerDist = 0f
                                 prevPos.clear()
                                 touchDownTime = 0L
+                                stillStart = -1L
                             }
                             1 -> {
                                 val entry = pointerMap.entries.first()
@@ -102,19 +104,29 @@ fun VirtualPointerContent(
                                     touchDownTime = System.currentTimeMillis()
                                     touchDownPos = pos
                                     prevPos[id] = pos
+                                    stillStart = -1L
                                 }
 
                                 if (id == fingerId) {
                                     val prev = prevPos[id]
-                                    val elapsed = System.currentTimeMillis() - touchDownTime
-
-                                    if (!leftDownSent && elapsed > 500) {
-                                        OBLNativeActivity.oblSetValueStatic("10004,")
-                                        leftDownSent = true
-                                    }
+                                    val now = System.currentTimeMillis()
+                                    val elapsed = now - touchDownTime
 
                                     if (prev != null) {
                                         val delta = pos - prev
+                                        val moved = delta.getDistance()
+
+                                        if (moved > 4f) {
+                                            stillStart = -1L
+                                        } else if (stillStart < 0 && moved <= 4f && elapsed > 50) {
+                                            stillStart = now
+                                        }
+
+                                        if (!leftDownSent && stillStart > 0 && (now - stillStart) > 700) {
+                                            OBLNativeActivity.oblSetValueStatic("10004,")
+                                            leftDownSent = true
+                                        }
+
                                         pointerPosition = Offset(
                                             x = (pointerPosition.x + delta.x).coerceIn(0f, screenW),
                                             y = (pointerPosition.y + delta.y).coerceIn(0f, screenH)
