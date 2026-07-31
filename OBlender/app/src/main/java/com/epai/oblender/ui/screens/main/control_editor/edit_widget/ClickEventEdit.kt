@@ -134,6 +134,20 @@ private fun EditBasicEvent(
 
         InfoLayoutSwitchItem(
             modifier = Modifier.fillMaxWidth(),
+            title = stringResource(R.string.control_editor_edit_event_swipple),
+            value = data.isSwipple,
+            onValueChange = { value -> data.isSwipple = value }
+        )
+
+        InfoLayoutSwitchItem(
+            modifier = Modifier.fillMaxWidth(),
+            title = stringResource(R.string.control_editor_edit_event_penetrable),
+            value = data.isPenetrable,
+            onValueChange = { value -> data.isPenetrable = value }
+        )
+
+        InfoLayoutSwitchItem(
+            modifier = Modifier.fillMaxWidth(),
             title = stringResource(R.string.control_editor_edit_event_toggleable),
             value = data.isToggleable,
             onValueChange = { value -> data.isToggleable = value }

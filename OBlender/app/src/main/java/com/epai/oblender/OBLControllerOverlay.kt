@@ -9,6 +9,7 @@ import android.graphics.Paint
 import android.graphics.PixelFormat
 import android.graphics.RectF
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
@@ -60,13 +61,11 @@ object OverlayState {
     var isEditMode by mutableStateOf(false)
     val runtimeButtonViews = mutableListOf<View>()
     @JvmField
-    var virtualCursorActive = false
-    @JvmField
     var cursorX = 0
     @JvmField
     var cursorY = 0
     @JvmField
-    var leftMouseHeld = false
+    var cursorSensitivity = 1.0f
     @JvmField
     var cursorOverlayView: android.widget.ImageView? = null
 }
@@ -146,7 +145,8 @@ private fun getLayoutFile(context: Context): File {
 
 fun showRuntimeButtons(context: Context, lifecycleOwner: LifecycleOwner) {
     hideRuntimeButtons()
-    CursorModeManager.init(context)
+    VirtualPointerSettings.init(context)
+    OverlayState.cursorSensitivity = VirtualPointerSettings.getSensitivity()
     val file = getLayoutFile(context)
     if (!file.exists()) return
     val layout = try { loadLayoutFromFile(file) } catch (_: Exception) { return }
@@ -154,15 +154,6 @@ fun showRuntimeButtons(context: Context, lifecycleOwner: LifecycleOwner) {
     val density = context.resources.displayMetrics.density
     val screenW = context.resources.displayMetrics.widthPixels
     val screenH = context.resources.displayMetrics.heightPixels
-
-    // Show virtual pointer overlay FIRST (below buttons) if mode is Virtual
-    val mode = CursorModeManager.getMode()
-    android.util.Log.d("OBL", "showRuntimeButtons: cursorMode=$mode")
-    if (mode == CURSOR_MODE_VIRTUAL) {
-        OverlayState.virtualCursorActive = true
-        android.util.Log.d("OBL", "showRuntimeButtons: virtual cursor mode active")
-        OverlayState.cursorOverlayView = createCursorOverlay(context)
-    }
 
     // Per-button toggle state (UUID → pressed)
     val toggleStates = mutableMapOf<String, Boolean>()
@@ -260,18 +251,76 @@ fun showRuntimeButtons(context: Context, lifecycleOwner: LifecycleOwner) {
 
             val btnView = ImageView(context).apply {
                 setImageBitmap(bitmap)
-                setOnClickListener {
-                    val uuid = btn.uuid
-                    val pressed = if (btn.isToggleable) {
-                        val newState = !(toggleStates[uuid] ?: false)
-                        toggleStates[uuid] = newState
-                        // Visual feedback: dim/green overlay when pressed
-                        alpha = if (newState) 0.6f else 1.0f
-                        newState
-                    } else {
-                        true
+
+                // "Move with Mouse" (isPenetrable) + a mouse button event → press-hold-drag moves the cursor
+                val mouseBtn = btn.clickEvents.firstOrNull {
+                    it.type.name == "LauncherEvent" && it.key.startsWith("GLFW_MOUSE_BUTTON")
+                }?.key
+                val isMoveWithMouse = btn.isPenetrable && mouseBtn != null
+
+                if (isMoveWithMouse) {
+                    var lastX = 0f
+                    var lastY = 0f
+                    var leftDown = false
+                    setOnTouchListener { v, e ->
+                        when (e.actionMasked) {
+                            MotionEvent.ACTION_DOWN -> {
+                                lastX = e.x
+                                lastY = e.y
+                                if (OverlayState.cursorOverlayView == null) {
+                                    OverlayState.cursorOverlayView = createCursorOverlay(context)
+                                }
+                                OBLNativeActivity.oblSetValueStatic("10010," + OverlayState.cursorX + "," + OverlayState.cursorY)
+                                when (mouseBtn) {
+                                    "GLFW_MOUSE_BUTTON_LEFT" -> {
+                                        leftDown = true
+                                        OBLNativeActivity.oblSetValueStatic("10004,")
+                                    }
+                                    "GLFW_MOUSE_BUTTON_RIGHT" -> OBLNativeActivity.oblSetValueStatic("10001,")
+                                    "GLFW_MOUSE_BUTTON_MIDDLE" -> OBLNativeActivity.oblSetValueStatic("10006,")
+                                }
+                                v.alpha = 0.6f
+                                try { v.requestPointerCapture() } catch (_: Exception) {}
+                                true
+                            }
+                            MotionEvent.ACTION_MOVE -> {
+                                val dx = (e.x - lastX) * OverlayState.cursorSensitivity
+                                val dy = (e.y - lastY) * OverlayState.cursorSensitivity
+                                lastX = e.x
+                                lastY = e.y
+                                OverlayState.cursorX = (OverlayState.cursorX + dx).toInt().coerceIn(0, screenW)
+                                OverlayState.cursorY = (OverlayState.cursorY + dy).toInt().coerceIn(0, screenH)
+                                OBLNativeActivity.oblSetValueStatic("10010," + OverlayState.cursorX + "," + OverlayState.cursorY)
+                                true
+                            }
+                            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                                if (leftDown) {
+                                    leftDown = false
+                                    OBLNativeActivity.oblSetValueStatic("10005,")
+                                }
+                                v.alpha = 1.0f
+                                OverlayState.cursorOverlayView?.let { removeCursorOverlay(it) }
+                                OverlayState.cursorOverlayView = null
+                                try { v.releasePointerCapture() } catch (_: Exception) {}
+                                true
+                            }
+                            else -> false
+                        }
                     }
-                    OBLNativeActivity.routeClickEvents(btn.clickEvents, pressed)
+                } else {
+                    setOnClickListener {
+                        val uuid = btn.uuid
+                        val pressed = if (btn.isToggleable) {
+                            val newState = !(toggleStates[uuid] ?: false)
+                            toggleStates[uuid] = newState
+                            // Visual feedback: dim/green overlay when pressed
+                            alpha = if (newState) 0.6f else 1.0f
+                            newState
+                        } else {
+                            true
+                        }
+                        OBLNativeActivity.routeClickEvents(btn.clickEvents, pressed)
+                    }
                 }
             }
 
@@ -289,62 +338,6 @@ fun showRuntimeButtons(context: Context, lifecycleOwner: LifecycleOwner) {
             OverlayState.runtimeButtonViews.add(btnView)
         }
     }
-
-    // Virtual cursor toggle button
-    val cursorBtnSize = (44 * density).toInt()
-    val cursorBitmap = Bitmap.createBitmap(cursorBtnSize, cursorBtnSize, Bitmap.Config.ARGB_8888)
-    Canvas(cursorBitmap).apply {
-        val cx = cursorBtnSize / 2f
-        val cy = cursorBtnSize / 2f
-        Paint(Paint.ANTI_ALIAS_FLAG).let { p ->
-            p.color = android.graphics.Color.argb(100, 0, 0, 0)
-            p.style = Paint.Style.FILL
-            drawRoundRect(RectF(0f, 0f, cursorBtnSize.toFloat(), cursorBtnSize.toFloat()), 8f, 8f, p)
-        }
-        Paint(Paint.ANTI_ALIAS_FLAG).let { p ->
-            p.color = android.graphics.Color.WHITE
-            p.strokeWidth = 2.5f
-            // Crosshair icon
-            drawLine(cx, cy - 10f, cx, cy - 3f, p)
-            drawLine(cx, cy + 3f, cx, cy + 10f, p)
-            drawLine(cx - 10f, cy, cx - 3f, cy, p)
-            drawLine(cx + 3f, cy, cx + 10f, cy, p)
-            drawCircle(cx, cy, 3f, p.apply { style = Paint.Style.FILL })
-        }
-    }
-
-    val cursorBtnView = ImageView(context).apply {
-        setImageBitmap(cursorBitmap)
-        alpha = if (OverlayState.virtualCursorActive) 0.6f else 1.0f
-        setOnClickListener {
-            val newActive = !OverlayState.virtualCursorActive
-            OverlayState.virtualCursorActive = newActive
-            android.util.Log.d("OBL", "cursor toggle: newActive=$newActive")
-            if (!newActive) OverlayState.leftMouseHeld = false
-            CursorModeManager.setMode(if (newActive) CURSOR_MODE_VIRTUAL else CURSOR_MODE_TOUCH)
-            alpha = if (newActive) 0.6f else 1.0f
-            if (newActive) {
-                OverlayState.cursorOverlayView = createCursorOverlay(context)
-            } else {
-                OverlayState.cursorOverlayView?.let { removeCursorOverlay(it) }
-                OverlayState.cursorOverlayView = null
-            }
-        }
-    }
-
-    val cursorLp = WindowManager.LayoutParams().apply {
-        gravity = Gravity.TOP or Gravity.START
-        width = cursorBtnSize
-        height = cursorBtnSize
-        x = screenW - cursorBtnSize - 8
-        y = 8
-        flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
-        format = PixelFormat.TRANSLUCENT
-    }
-    wm.addView(cursorBtnView, cursorLp)
-    OverlayState.runtimeButtonViews.add(cursorBtnView)
-
 }
 
 fun hideRuntimeButtons() {

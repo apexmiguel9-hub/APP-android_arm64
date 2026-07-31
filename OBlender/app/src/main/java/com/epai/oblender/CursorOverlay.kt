@@ -6,6 +6,8 @@ import android.os.Looper
 import android.widget.ImageView
 import android.view.ViewGroup
 
+private val cursorUpdateHandler = Handler(Looper.getMainLooper())
+
 fun createCursorOverlay(context: android.content.Context): ImageView {
     val cursorSize = 32
     val density = context.resources.displayMetrics.density
@@ -32,23 +34,22 @@ fun createCursorOverlay(context: android.content.Context): ImageView {
     lp.x = OverlayState.cursorX - (sizePx / 2)
     lp.y = OverlayState.cursorY - (sizePx / 2)
 
+    try {
+        wm.addView(imageView, lp)
+    } catch (e: Exception) {
+        android.util.Log.e("OBL", "createCursorOverlay: ADD FAILED", e)
+    }
+
     val updateRunnable = object : Runnable {
         override fun run() {
+            if (!imageView.isAttachedToWindow) return
             lp.x = OverlayState.cursorX - (sizePx / 2)
             lp.y = OverlayState.cursorY - (sizePx / 2)
             try { wm.updateViewLayout(imageView, lp) } catch (_: Exception) {}
-            Handler(Looper.getMainLooper()).postDelayed(this, 16)
+            cursorUpdateHandler.postDelayed(this, 16)
         }
     }
-
-    Handler(Looper.getMainLooper()).post {
-        try {
-            wm.addView(imageView, lp)
-            Handler(Looper.getMainLooper()).postDelayed(updateRunnable, 16)
-        } catch (e: Exception) {
-            android.util.Log.e("OBL", "createCursorOverlay: ADD FAILED", e)
-        }
-    }
+    cursorUpdateHandler.postDelayed(updateRunnable, 16)
 
     return imageView
 }

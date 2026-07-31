@@ -105,8 +105,8 @@
     <string name="control_editor_edit_event_basic">Basic</string>
     <string name="control_editor_edit_event_launcher">Launcher</string>
     <string name="control_editor_edit_event_key">Keys</string>
-    <string name="control_editor_edit_event_swipple">Swipe to trigger</string>
-    <string name="control_editor_edit_event_penetrable">Penetrable</string>
+    <string name="control_editor_edit_event_swipple">Swipe trigger</string>
+    <string name="control_editor_edit_event_penetrable">Move with Mouse</string>
     <string name="control_editor_edit_event_toggleable">Toggleable</string>
     <string name="control_editor_edit_event_launcher_switch_menu">Toggle Menu</string>
     <string name="control_editor_edit_event_launcher_mouse_left">Mouse Left</string>

@@ -707,27 +707,6 @@ public class OBLNativeActivity extends NativeActivity
 
     /** Handle LauncherEvent type click events */
     private void handleLauncherEvent(String key) {
-        Log.d("OBL", "handleLauncherEvent: key=" + key + " vcActive=" + OverlayState.virtualCursorActive + " leftHeld=" + OverlayState.leftMouseHeld);
-        if (OverlayState.virtualCursorActive && key.equals("GLFW_MOUSE_BUTTON_LEFT")) {
-            // Toggle left mouse: 10004 = down, 10005 = up
-            OverlayState.leftMouseHeld = !OverlayState.leftMouseHeld;
-            if (OverlayState.leftMouseHeld) {
-                oblSetValue("10010," + OverlayState.cursorX + "," + OverlayState.cursorY);
-                oblSetValue("10004,");
-            } else {
-                oblSetValue("10005,");
-            }
-            Log.d("OBL", "launcher=" + key + " toggle=" + OverlayState.leftMouseHeld);
-            return;
-        }
-        if (OverlayState.virtualCursorActive) {
-            switch (key) {
-                case "GLFW_MOUSE_BUTTON_RIGHT":
-                case "GLFW_MOUSE_BUTTON_MIDDLE":
-                    oblSetValue("10010," + OverlayState.cursorX + "," + OverlayState.cursorY);
-                    break;
-            }
-        }
         switch (key) {
             case "GLFW_MOUSE_BUTTON_LEFT":   oblSetValue("10000,"); break;
             case "GLFW_MOUSE_BUTTON_RIGHT":  oblSetValue("10001,"); break;
@@ -789,23 +768,6 @@ public class OBLNativeActivity extends NativeActivity
     @Override
     public void onActivityStarted() {
 
-    }
-
-    @Override
-    public boolean dispatchTouchEvent(MotionEvent event) {
-        if (OverlayState.virtualCursorActive) {
-            int action = event.getActionMasked();
-            if (action == MotionEvent.ACTION_DOWN ||
-                action == MotionEvent.ACTION_POINTER_DOWN ||
-                action == MotionEvent.ACTION_MOVE) {
-                OverlayState.cursorX = (int)event.getX();
-                OverlayState.cursorY = (int)event.getY();
-                Log.d("OBL", "dispatchTouchEvent: sending 10010 " + OverlayState.cursorX + "," + OverlayState.cursorY);
-                oblSetValue("10010," + OverlayState.cursorX + "," + OverlayState.cursorY);
-            }
-            return true;
-        }
-        return super.dispatchTouchEvent(event);
     }
 
     @Override
