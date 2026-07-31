@@ -67,6 +67,8 @@ object OverlayState {
     var cursorY = 0
     @JvmField
     var leftMouseHeld = false
+    @JvmField
+    var cursorOverlayView: android.widget.ImageView? = null
 }
 
 fun setControlOverlayEditMode(editMode: Boolean) { OverlayState.isEditMode = editMode }
@@ -158,7 +160,8 @@ fun showRuntimeButtons(context: Context, lifecycleOwner: LifecycleOwner) {
     android.util.Log.d("OBL", "showRuntimeButtons: cursorMode=$mode")
     if (mode == CURSOR_MODE_VIRTUAL) {
         OverlayState.virtualCursorActive = true
-        android.util.Log.d("OBL", "showRuntimeButtons: virtual cursor mode active (no overlay)")
+        android.util.Log.d("OBL", "showRuntimeButtons: virtual cursor mode active")
+        OverlayState.cursorOverlayView = createCursorOverlay(context)
     }
 
     // Per-button toggle state (UUID → pressed)
@@ -320,8 +323,10 @@ fun showRuntimeButtons(context: Context, lifecycleOwner: LifecycleOwner) {
             CursorModeManager.setMode(if (newActive) CURSOR_MODE_VIRTUAL else CURSOR_MODE_TOUCH)
             alpha = if (newActive) 0.6f else 1.0f
             if (newActive) {
-                // virtual cursor mode — onTouchEvent handles cursor movement
+                OverlayState.cursorOverlayView = createCursorOverlay(context)
             } else {
+                OverlayState.cursorOverlayView?.let { removeCursorOverlay(it) }
+                OverlayState.cursorOverlayView = null
             }
         }
     }
@@ -342,6 +347,8 @@ fun showRuntimeButtons(context: Context, lifecycleOwner: LifecycleOwner) {
 }
 
 fun hideRuntimeButtons() {
+    OverlayState.cursorOverlayView?.let { removeCursorOverlay(it) }
+    OverlayState.cursorOverlayView = null
     val views = OverlayState.runtimeButtonViews.toList()
     OverlayState.runtimeButtonViews.clear()
     for (v in views) {
