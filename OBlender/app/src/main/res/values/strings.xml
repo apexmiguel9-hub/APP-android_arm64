@@ -162,4 +162,5 @@
     <string name="setting_tap_max_dist">Tap max dist</string>
     <string name="setting_tap_max_time">Tap max time</string>
     <string name="setting_cursor_sensitivity">Sensitivity</string>
+    <string name="setting_cursor_smoothing">Smoothness</string>
 </resources>

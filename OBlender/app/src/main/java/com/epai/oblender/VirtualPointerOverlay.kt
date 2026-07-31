@@ -69,6 +69,7 @@ fun VirtualPointerContent(
     val tapMaxDistPx = remember { VirtualPointerSettings.getTapMaxDistPx().toFloat() }
     val tapMaxTimeMs = remember { VirtualPointerSettings.getTapMaxTimeMs() }
     val sensitivity = remember { VirtualPointerSettings.getSensitivity() }
+    val smoothing = remember { VirtualPointerSettings.getSmoothing() }
 
     Box(
         modifier = Modifier
@@ -81,6 +82,8 @@ fun VirtualPointerContent(
                     var leftDownSent = false
                     var fingerId = 0L
                     var stillStart = -1L
+                    var rawX = pointerPosition.x
+                    var rawY = pointerPosition.y
 
                     while (true) {
                         val event = awaitPointerEvent()
@@ -124,6 +127,8 @@ fun VirtualPointerContent(
                                     touchDownPos = pos
                                     prevPos[id] = pos
                                     stillStart = -1L
+                                    rawX = pointerPosition.x
+                                    rawY = pointerPosition.y
                                 }
 
                                 if (id == fingerId) {
@@ -146,9 +151,16 @@ fun VirtualPointerContent(
                                             leftDownSent = true
                                         }
 
+                                        // raw = donde apunta el dedo (con sensibilidad aplicada)
+                                        rawX = (rawX + delta.x * sensitivity).coerceIn(0f, screenW)
+                                        rawY = (rawY + delta.y * sensitivity).coerceIn(0f, screenH)
+
+                                        // EMA low-pass: el cursor persigue a raw amortiguado.
+                                        // smoothing=0 → sin filtro (salta directo), smoothing alto → más lag/suavidad
+                                        val alpha = 1f - smoothing
                                         pointerPosition = Offset(
-                                            x = (pointerPosition.x + delta.x * sensitivity).coerceIn(0f, screenW),
-                                            y = (pointerPosition.y + delta.y * sensitivity).coerceIn(0f, screenH)
+                                            x = (pointerPosition.x + (rawX - pointerPosition.x) * alpha).coerceIn(0f, screenW),
+                                            y = (pointerPosition.y + (rawY - pointerPosition.y) * alpha).coerceIn(0f, screenH)
                                         )
                                         OverlayState.cursorX = pointerPosition.x.toInt()
                                         OverlayState.cursorY = pointerPosition.y.toInt()

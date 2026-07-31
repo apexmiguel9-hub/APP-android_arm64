@@ -263,6 +263,7 @@ private fun ColumnScope.VirtualPointerSettingsPanel() {
     var tapMaxDist by remember { mutableIntStateOf(VirtualPointerSettings.getTapMaxDistPx()) }
     var tapMaxTime by remember { mutableIntStateOf(VirtualPointerSettings.getTapMaxTimeMs()) }
     var sens by remember { mutableFloatStateOf(VirtualPointerSettings.getSensitivity()) }
+    var smoothing by remember { mutableFloatStateOf(VirtualPointerSettings.getSmoothing()) }
 
     SettingSlider(
         label = stringResource(R.string.setting_stillness_time),
@@ -303,6 +304,14 @@ private fun ColumnScope.VirtualPointerSettingsPanel() {
         step = 0.25f,
         valueDisplay = "%.2f".format(sens),
         onValueChange = { sens = it; VirtualPointerSettings.setSensitivity(it) }
+    )
+    SettingSlider(
+        label = stringResource(R.string.setting_cursor_smoothing),
+        value = smoothing,
+        valueRange = 0.0f..0.9f,
+        step = 0.05f,
+        valueDisplay = "%.2f".format(smoothing),
+        onValueChange = { smoothing = it; VirtualPointerSettings.setSmoothing(it) }
     )
 }
 

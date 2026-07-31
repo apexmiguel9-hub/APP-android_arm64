@@ -10,6 +10,7 @@ object VirtualPointerSettings {
     private const val KEY_TAP_MAX_DIST = "tap_max_dist_px"
     private const val KEY_TAP_MAX_TIME = "tap_max_time_ms"
     private const val KEY_SENSITIVITY = "cursor_sensitivity"
+    private const val KEY_SMOOTHING = "cursor_smoothing"
 
     private var prefs: SharedPreferences? = null
 
@@ -61,5 +62,15 @@ object VirtualPointerSettings {
     @JvmStatic
     fun setSensitivity(value: Float) {
         prefs?.edit()?.putFloat(KEY_SENSITIVITY, value.coerceIn(0.25f, 3.0f))?.apply()
+    }
+
+    /** Smoothing factor (0.0 = off, 1.0 = max lag). 0.35 default. */
+    @JvmStatic
+    fun getSmoothing(): Float = prefs?.getFloat(KEY_SMOOTHING, 0.35f)
+        ?.coerceIn(0.0f, 1.0f) ?: 0.35f
+
+    @JvmStatic
+    fun setSmoothing(value: Float) {
+        prefs?.edit()?.putFloat(KEY_SMOOTHING, value.coerceIn(0.0f, 1.0f))?.apply()
     }
 }
