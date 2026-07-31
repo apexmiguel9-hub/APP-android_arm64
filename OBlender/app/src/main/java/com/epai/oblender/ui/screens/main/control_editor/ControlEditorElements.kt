@@ -4,8 +4,6 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -145,50 +143,59 @@ fun EditorMenu(
         state = state, closeScreen = closeScreen,
         leftMenuTitle = { Text(modifier = Modifier.padding(all = 8.dp), text = stringResource(R.string.control_editor_menu_title), style = MaterialTheme.typography.titleMedium) },
         leftMenuContent = {
-            Column(modifier = Modifier.fillMaxSize()) {
-                SecondaryTabRow(selectedTabIndex = selectedTab, containerColor = MaterialTheme.colorScheme.surface) {
-                    Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text(stringResource(R.string.editor_tab_editor)) })
-                    Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text(stringResource(R.string.editor_tab_mouse)) })
+            LazyColumn(
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                contentPadding = PaddingValues(all = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                item(key = "tabs") {
+                    SecondaryTabRow(selectedTabIndex = selectedTab, containerColor = MaterialTheme.colorScheme.surface) {
+                        Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text(stringResource(R.string.editor_tab_editor)) })
+                        Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text(stringResource(R.string.editor_tab_mouse)) })
+                    }
                 }
-                Column(modifier = Modifier.weight(1f).fillMaxWidth().padding(8.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                item(key = "content") {
                     when (selectedTab) {
                         0 -> {
-                            MenuTextButton(
-                                modifier = Modifier.fillMaxWidth(),
-                                text = stringResource(R.string.control_editor_menu_new_widget_button),
-                                onClick = { addNewButton(); closeScreen() }
-                            )
-                            MenuTextButton(
-                                modifier = Modifier.fillMaxWidth(),
-                                text = stringResource(R.string.control_editor_menu_save_and_exit),
-                                onClick = { saveAndExit() }
-                            )
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                MenuTextButton(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    text = stringResource(R.string.control_editor_menu_new_widget_button),
+                                    onClick = { addNewButton(); closeScreen() }
+                                )
+                                MenuTextButton(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    text = stringResource(R.string.control_editor_menu_save_and_exit),
+                                    onClick = { saveAndExit() }
+                                )
+                            }
                         }
                         1 -> {
                             val currentMode = CursorModeManager.getMode()
                             val showVirtualSettings = currentMode == CURSOR_MODE_VIRTUAL || currentMode == CURSOR_MODE_PRECISION
 
-                            MenuListLayout(
-                                modifier = Modifier.fillMaxWidth(),
-                                title = stringResource(R.string.cursor_mode),
-                                items = listOf(CURSOR_MODE_TOUCH, CURSOR_MODE_VIRTUAL, CURSOR_MODE_PRECISION),
-                                currentItem = currentMode,
-                                onItemChange = { mode ->
-                                    android.util.Log.d("OBL", "EditorMenu: cursorMode changed to $mode")
-                                    CursorModeManager.setMode(mode)
-                                },
-                                getItemText = { mode ->
-                                    when (mode) {
-                                        CURSOR_MODE_TOUCH -> stringResource(R.string.cursor_mode_touch)
-                                        CURSOR_MODE_VIRTUAL -> stringResource(R.string.cursor_mode_virtual)
-                                        CURSOR_MODE_PRECISION -> stringResource(R.string.cursor_mode_precision)
-                                        else -> "?"
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                MenuListLayout(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    title = stringResource(R.string.cursor_mode),
+                                    items = listOf(CURSOR_MODE_TOUCH, CURSOR_MODE_VIRTUAL, CURSOR_MODE_PRECISION),
+                                    currentItem = currentMode,
+                                    onItemChange = { mode ->
+                                        android.util.Log.d("OBL", "EditorMenu: cursorMode changed to $mode")
+                                        CursorModeManager.setMode(mode)
+                                    },
+                                    getItemText = { mode ->
+                                        when (mode) {
+                                            CURSOR_MODE_TOUCH -> stringResource(R.string.cursor_mode_touch)
+                                            CURSOR_MODE_VIRTUAL -> stringResource(R.string.cursor_mode_virtual)
+                                            CURSOR_MODE_PRECISION -> stringResource(R.string.cursor_mode_precision)
+                                            else -> "?"
+                                        }
                                     }
+                                )
+                                if (showVirtualSettings) {
+                                    VirtualPointerSettingsPanel()
                                 }
-                            )
-                            if (showVirtualSettings) {
-                                Spacer(modifier = Modifier.height(8.dp))
-                                VirtualPointerSettingsPanel()
                             }
                         }
                     }
