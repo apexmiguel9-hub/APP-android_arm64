@@ -707,6 +707,7 @@ public class OBLNativeActivity extends NativeActivity
 
     /** Handle LauncherEvent type click events */
     private void handleLauncherEvent(String key) {
+        Log.d("OBL", "handleLauncherEvent: key=" + key + " vcActive=" + OverlayState.virtualCursorActive + " leftHeld=" + OverlayState.leftMouseHeld);
         if (OverlayState.virtualCursorActive && key.equals("GLFW_MOUSE_BUTTON_LEFT")) {
             // Toggle left mouse: 10004 = down, 10005 = up
             OverlayState.leftMouseHeld = !OverlayState.leftMouseHeld;
@@ -791,7 +792,7 @@ public class OBLNativeActivity extends NativeActivity
     }
 
     @Override
-    public boolean onTouchEvent(MotionEvent event) {
+    public boolean dispatchTouchEvent(MotionEvent event) {
         if (OverlayState.virtualCursorActive) {
             int action = event.getActionMasked();
             if (action == MotionEvent.ACTION_DOWN ||
@@ -799,11 +800,16 @@ public class OBLNativeActivity extends NativeActivity
                 action == MotionEvent.ACTION_MOVE) {
                 OverlayState.cursorX = (int)event.getX();
                 OverlayState.cursorY = (int)event.getY();
+                Log.d("OBL", "dispatchTouchEvent: sending 10010 " + OverlayState.cursorX + "," + OverlayState.cursorY);
                 oblSetValue("10010," + OverlayState.cursorX + "," + OverlayState.cursorY);
             }
             return true;
         }
+        return super.dispatchTouchEvent(event);
+    }
 
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
         if (inputHandler != null && inputHandler.onTouchEvent(event)) {
             return true;
         }

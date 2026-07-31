@@ -319,6 +319,7 @@ fun showRuntimeButtons(context: Context, lifecycleOwner: LifecycleOwner) {
         setOnClickListener {
             val newActive = !OverlayState.virtualCursorActive
             OverlayState.virtualCursorActive = newActive
+            android.util.Log.d("OBL", "cursor toggle: newActive=$newActive")
             if (!newActive) OverlayState.leftMouseHeld = false
             CursorModeManager.setMode(if (newActive) CURSOR_MODE_VIRTUAL else CURSOR_MODE_TOUCH)
             alpha = if (newActive) 0.6f else 1.0f
