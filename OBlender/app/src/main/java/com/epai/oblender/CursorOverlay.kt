@@ -36,7 +36,7 @@ fun createCursorOverlay(context: android.content.Context): ImageView {
         override fun run() {
             lp.x = OverlayState.cursorX - (sizePx / 2)
             lp.y = OverlayState.cursorY - (sizePx / 2)
-            try { wm.updateViewLayout(this@apply, lp) } catch (_: Exception) {}
+            try { wm.updateViewLayout(imageView, lp) } catch (_: Exception) {}
             Handler(Looper.getMainLooper()).postDelayed(this, 16)
         }
     }
