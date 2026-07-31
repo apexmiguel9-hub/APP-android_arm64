@@ -315,6 +315,14 @@ public class OBLNativeActivity extends NativeActivity
 
     public native void oblSetValueOff(String stringValue);
 
+    public native int[] getCursorPosition();
+
+    /** Static accessor for the overlay (Kotlin) to query the real GHOST cursor position. */
+    public static int[] getCursorPositionStatic() {
+        if (sActivity == null) return new int[] { -1, -1 };
+        return sActivity.getCursorPosition();
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         sActivity = this;

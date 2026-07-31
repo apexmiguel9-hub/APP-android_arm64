@@ -259,27 +259,50 @@ fun showRuntimeButtons(context: Context, lifecycleOwner: LifecycleOwner) {
                 val isMoveWithMouse = btn.isPenetrable && mouseBtn != null
 
                 if (isMoveWithMouse) {
+                    var downX = 0f
+                    var downY = 0f
                     var lastX = 0f
                     var lastY = 0f
+                    var inside = true
                     var leftDown = false
+                    var movedFar = false
+                    val dwell = Handler(Looper.getMainLooper())
+                    val dwellRunnable = object : Runnable {
+                        override fun run() {
+                            if (!inside || leftDown) return
+                            when (mouseBtn) {
+                                "GLFW_MOUSE_BUTTON_LEFT" -> {
+                                    leftDown = true
+                                    OBLNativeActivity.oblSetValueStatic("10004,")
+                                }
+                                "GLFW_MOUSE_BUTTON_RIGHT" -> OBLNativeActivity.oblSetValueStatic("10001,")
+                                "GLFW_MOUSE_BUTTON_MIDDLE" -> OBLNativeActivity.oblSetValueStatic("10006,")
+                            }
+                        }
+                    }
                     setOnTouchListener { v, e ->
                         when (e.actionMasked) {
                             MotionEvent.ACTION_DOWN -> {
+                                downX = e.x
+                                downY = e.y
                                 lastX = e.x
                                 lastY = e.y
+                                inside = true
+                                leftDown = false
+                                movedFar = false
+                                // Start the icon at the REAL GHOST cursor position (fixes desync)
+                                val real = OBLNativeActivity.getCursorPositionStatic()
+                                if (real != null && real.size == 2 && real[0] >= 0 && real[1] >= 0) {
+                                    OverlayState.cursorX = real[0]
+                                    OverlayState.cursorY = real[1]
+                                }
                                 if (OverlayState.cursorOverlayView == null) {
                                     OverlayState.cursorOverlayView = createCursorOverlay(context)
                                 }
                                 OBLNativeActivity.oblSetValueStatic("10010," + OverlayState.cursorX + "," + OverlayState.cursorY)
-                                when (mouseBtn) {
-                                    "GLFW_MOUSE_BUTTON_LEFT" -> {
-                                        leftDown = true
-                                        OBLNativeActivity.oblSetValueStatic("10004,")
-                                    }
-                                    "GLFW_MOUSE_BUTTON_RIGHT" -> OBLNativeActivity.oblSetValueStatic("10001,")
-                                    "GLFW_MOUSE_BUTTON_MIDDLE" -> OBLNativeActivity.oblSetValueStatic("10006,")
-                                }
                                 v.alpha = 0.6f
+                                dwell.removeCallbacks(dwellRunnable)
+                                dwell.postDelayed(dwellRunnable, 350)
                                 try { v.requestPointerCapture() } catch (_: Exception) {}
                                 true
                             }
@@ -291,12 +314,40 @@ fun showRuntimeButtons(context: Context, lifecycleOwner: LifecycleOwner) {
                                 OverlayState.cursorX = (OverlayState.cursorX + dx).toInt().coerceIn(0, screenW)
                                 OverlayState.cursorY = (OverlayState.cursorY + dy).toInt().coerceIn(0, screenH)
                                 OBLNativeActivity.oblSetValueStatic("10010," + OverlayState.cursorX + "," + OverlayState.cursorY)
+                                val dist = kotlin.math.hypot(e.x - downX, e.y - downY)
+                                inside = e.x in 0f..v.width.toFloat() && e.y in 0f..v.height.toFloat()
+                                if (dist > 24f) {
+                                    // Real movement → this is a move gesture, not a tap
+                                    movedFar = true
+                                }
+                                if (!inside) {
+                                    // Outside the button: only move the cursor, never draw
+                                    dwell.removeCallbacks(dwellRunnable)
+                                    if (leftDown) {
+                                        // Left the button mid-drag: release so we only move the cursor
+                                        leftDown = false
+                                        OBLNativeActivity.oblSetValueStatic("10005,")
+                                    }
+                                } else {
+                                    // Inside the button: re-arm the dwell timer. It only fires after
+                                    // 350ms with the finger still → that's when drawing starts.
+                                    dwell.removeCallbacks(dwellRunnable)
+                                    dwell.postDelayed(dwellRunnable, 350)
+                                }
                                 true
                             }
                             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                                dwell.removeCallbacks(dwellRunnable)
                                 if (leftDown) {
                                     leftDown = false
                                     OBLNativeActivity.oblSetValueStatic("10005,")
+                                } else if (!movedFar && inside) {
+                                    // Quick tap inside the button → click at the cursor position
+                                    when (mouseBtn) {
+                                        "GLFW_MOUSE_BUTTON_LEFT" -> OBLNativeActivity.oblSetValueStatic("10000,")
+                                        "GLFW_MOUSE_BUTTON_RIGHT" -> OBLNativeActivity.oblSetValueStatic("10001,")
+                                        "GLFW_MOUSE_BUTTON_MIDDLE" -> OBLNativeActivity.oblSetValueStatic("10006,")
+                                    }
                                 }
                                 v.alpha = 1.0f
                                 OverlayState.cursorOverlayView?.let { removeCursorOverlay(it) }

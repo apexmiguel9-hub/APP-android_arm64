@@ -694,6 +694,10 @@ void oblSetValueOff(int values[],int num){
   blenderSetValueOff(values,num);
 }
 
+void oblGetCursorPosition(int *x, int *y){
+  blenderGetCursorPosition(x, y);
+}
+
 void inputKey(int p_physical_keycode,
                      int p_unicode, int p_key_label, int p_pressed,
               int p_echo){

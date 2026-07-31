@@ -717,6 +717,19 @@ extern "C" JNIEXPORT jstring JNICALL Java_com_epai_oblender_OBLNativeActivity_st
     return env->NewStringUTF(hello.c_str());
 }
 
+extern "C" JNIEXPORT jintArray JNICALL Java_com_epai_oblender_OBLNativeActivity_getCursorPosition(
+        JNIEnv *env,
+        jobject /* this */) {
+    int x = -1, y = -1;
+    oblGetCursorPosition(&x, &y);
+    jintArray result = env->NewIntArray(2);
+    if (result != nullptr) {
+        jint values[2] = {x, y};
+        env->SetIntArrayRegion(result, 0, 2, values);
+    }
+    return result;
+}
+
 
 //  原生Activity入口函数
 JNIEXPORT
