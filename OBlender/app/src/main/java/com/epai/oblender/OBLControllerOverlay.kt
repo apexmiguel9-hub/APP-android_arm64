@@ -9,7 +9,6 @@ import android.graphics.Paint
 import android.graphics.PixelFormat
 import android.graphics.RectF
 import android.view.Gravity
-import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
@@ -61,13 +60,15 @@ object OverlayState {
     var isEditMode by mutableStateOf(false)
     val runtimeButtonViews = mutableListOf<View>()
     @JvmField
+    var virtualCursorActive = false
+    @JvmField
     var cursorX = 0
     @JvmField
     var cursorY = 0
     @JvmField
-    var cursorSensitivity = 1.0f
+    var virtualPointerView: View? = null
     @JvmField
-    var cursorOverlayView: android.widget.ImageView? = null
+    var leftMouseHeld = false
 }
 
 fun setControlOverlayEditMode(editMode: Boolean) { OverlayState.isEditMode = editMode }
@@ -145,8 +146,7 @@ private fun getLayoutFile(context: Context): File {
 
 fun showRuntimeButtons(context: Context, lifecycleOwner: LifecycleOwner) {
     hideRuntimeButtons()
-    VirtualPointerSettings.init(context)
-    OverlayState.cursorSensitivity = VirtualPointerSettings.getSensitivity()
+    CursorModeManager.init(context)
     val file = getLayoutFile(context)
     if (!file.exists()) return
     val layout = try { loadLayoutFromFile(file) } catch (_: Exception) { return }
@@ -154,6 +154,15 @@ fun showRuntimeButtons(context: Context, lifecycleOwner: LifecycleOwner) {
     val density = context.resources.displayMetrics.density
     val screenW = context.resources.displayMetrics.widthPixels
     val screenH = context.resources.displayMetrics.heightPixels
+
+    // Show virtual pointer overlay FIRST (below buttons) if mode is Virtual
+    val mode = CursorModeManager.getMode()
+    android.util.Log.d("OBL", "showRuntimeButtons: cursorMode=$mode")
+    if (mode == CURSOR_MODE_VIRTUAL) {
+        OverlayState.virtualCursorActive = true
+        android.util.Log.d("OBL", "showRuntimeButtons: showing virtual pointer overlay")
+        showVirtualPointerOverlay(context, lifecycleOwner)
+    }
 
     // Per-button toggle state (UUID → pressed)
     val toggleStates = mutableMapOf<String, Boolean>()
@@ -251,127 +260,18 @@ fun showRuntimeButtons(context: Context, lifecycleOwner: LifecycleOwner) {
 
             val btnView = ImageView(context).apply {
                 setImageBitmap(bitmap)
-
-                // "Move with Mouse" (isPenetrable) + a mouse button event → press-hold-drag moves the cursor
-                val mouseBtn = btn.clickEvents.firstOrNull {
-                    it.type.name == "LauncherEvent" && it.key.startsWith("GLFW_MOUSE_BUTTON")
-                }?.key
-                val isMoveWithMouse = btn.isPenetrable && mouseBtn != null
-
-                if (isMoveWithMouse) {
-                    var downX = 0f
-                    var downY = 0f
-                    var lastX = 0f
-                    var lastY = 0f
-                    var inside = true
-                    var leftDown = false
-                    var movedFar = false
-                    val dwell = Handler(Looper.getMainLooper())
-                    val dwellRunnable = object : Runnable {
-                        override fun run() {
-                            if (!inside || leftDown) return
-                            when (mouseBtn) {
-                                "GLFW_MOUSE_BUTTON_LEFT" -> {
-                                    leftDown = true
-                                    OBLNativeActivity.oblSetValueStatic("10004,")
-                                }
-                                "GLFW_MOUSE_BUTTON_RIGHT" -> OBLNativeActivity.oblSetValueStatic("10001,")
-                                "GLFW_MOUSE_BUTTON_MIDDLE" -> OBLNativeActivity.oblSetValueStatic("10006,")
-                            }
-                        }
+                setOnClickListener {
+                    val uuid = btn.uuid
+                    val pressed = if (btn.isToggleable) {
+                        val newState = !(toggleStates[uuid] ?: false)
+                        toggleStates[uuid] = newState
+                        // Visual feedback: dim/green overlay when pressed
+                        alpha = if (newState) 0.6f else 1.0f
+                        newState
+                    } else {
+                        true
                     }
-                    setOnTouchListener { v, e ->
-                        when (e.actionMasked) {
-                            MotionEvent.ACTION_DOWN -> {
-                                downX = e.x
-                                downY = e.y
-                                lastX = e.x
-                                lastY = e.y
-                                inside = true
-                                leftDown = false
-                                movedFar = false
-                                // Start the icon at the REAL GHOST cursor position (fixes desync)
-                                val real = OBLNativeActivity.getCursorPositionStatic()
-                                if (real != null && real.size == 2 && real[0] >= 0 && real[1] >= 0) {
-                                    OverlayState.cursorX = real[0]
-                                    OverlayState.cursorY = real[1]
-                                }
-                                if (OverlayState.cursorOverlayView == null) {
-                                    OverlayState.cursorOverlayView = createCursorOverlay(context)
-                                }
-                                OBLNativeActivity.oblSetValueStatic("10010," + OverlayState.cursorX + "," + OverlayState.cursorY)
-                                v.alpha = 0.6f
-                                dwell.removeCallbacks(dwellRunnable)
-                                dwell.postDelayed(dwellRunnable, 350)
-                                try { v.requestPointerCapture() } catch (_: Exception) {}
-                                true
-                            }
-                            MotionEvent.ACTION_MOVE -> {
-                                val dx = (e.x - lastX) * OverlayState.cursorSensitivity
-                                val dy = (e.y - lastY) * OverlayState.cursorSensitivity
-                                lastX = e.x
-                                lastY = e.y
-                                OverlayState.cursorX = (OverlayState.cursorX + dx).toInt().coerceIn(0, screenW)
-                                OverlayState.cursorY = (OverlayState.cursorY + dy).toInt().coerceIn(0, screenH)
-                                OBLNativeActivity.oblSetValueStatic("10010," + OverlayState.cursorX + "," + OverlayState.cursorY)
-                                val dist = kotlin.math.hypot(e.x - downX, e.y - downY)
-                                inside = e.x in 0f..v.width.toFloat() && e.y in 0f..v.height.toFloat()
-                                if (dist > 24f) {
-                                    // Real movement → this is a move gesture, not a tap
-                                    movedFar = true
-                                }
-                                if (!inside) {
-                                    // Outside the button: only move the cursor, never draw
-                                    dwell.removeCallbacks(dwellRunnable)
-                                    if (leftDown) {
-                                        // Left the button mid-drag: release so we only move the cursor
-                                        leftDown = false
-                                        OBLNativeActivity.oblSetValueStatic("10005,")
-                                    }
-                                } else {
-                                    // Inside the button: re-arm the dwell timer. It only fires after
-                                    // 350ms with the finger still → that's when drawing starts.
-                                    dwell.removeCallbacks(dwellRunnable)
-                                    dwell.postDelayed(dwellRunnable, 350)
-                                }
-                                true
-                            }
-                            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                                dwell.removeCallbacks(dwellRunnable)
-                                if (leftDown) {
-                                    leftDown = false
-                                    OBLNativeActivity.oblSetValueStatic("10005,")
-                                } else if (!movedFar && inside) {
-                                    // Quick tap inside the button → click at the cursor position
-                                    when (mouseBtn) {
-                                        "GLFW_MOUSE_BUTTON_LEFT" -> OBLNativeActivity.oblSetValueStatic("10000,")
-                                        "GLFW_MOUSE_BUTTON_RIGHT" -> OBLNativeActivity.oblSetValueStatic("10001,")
-                                        "GLFW_MOUSE_BUTTON_MIDDLE" -> OBLNativeActivity.oblSetValueStatic("10006,")
-                                    }
-                                }
-                                v.alpha = 1.0f
-                                OverlayState.cursorOverlayView?.let { removeCursorOverlay(it) }
-                                OverlayState.cursorOverlayView = null
-                                try { v.releasePointerCapture() } catch (_: Exception) {}
-                                true
-                            }
-                            else -> false
-                        }
-                    }
-                } else {
-                    setOnClickListener {
-                        val uuid = btn.uuid
-                        val pressed = if (btn.isToggleable) {
-                            val newState = !(toggleStates[uuid] ?: false)
-                            toggleStates[uuid] = newState
-                            // Visual feedback: dim/green overlay when pressed
-                            alpha = if (newState) 0.6f else 1.0f
-                            newState
-                        } else {
-                            true
-                        }
-                        OBLNativeActivity.routeClickEvents(btn.clickEvents, pressed)
-                    }
+                    OBLNativeActivity.routeClickEvents(btn.clickEvents, pressed)
                 }
             }
 
@@ -389,11 +289,63 @@ fun showRuntimeButtons(context: Context, lifecycleOwner: LifecycleOwner) {
             OverlayState.runtimeButtonViews.add(btnView)
         }
     }
+
+    // Virtual cursor toggle button
+    val cursorBtnSize = (44 * density).toInt()
+    val cursorBitmap = Bitmap.createBitmap(cursorBtnSize, cursorBtnSize, Bitmap.Config.ARGB_8888)
+    Canvas(cursorBitmap).apply {
+        val cx = cursorBtnSize / 2f
+        val cy = cursorBtnSize / 2f
+        Paint(Paint.ANTI_ALIAS_FLAG).let { p ->
+            p.color = android.graphics.Color.argb(100, 0, 0, 0)
+            p.style = Paint.Style.FILL
+            drawRoundRect(RectF(0f, 0f, cursorBtnSize.toFloat(), cursorBtnSize.toFloat()), 8f, 8f, p)
+        }
+        Paint(Paint.ANTI_ALIAS_FLAG).let { p ->
+            p.color = android.graphics.Color.WHITE
+            p.strokeWidth = 2.5f
+            // Crosshair icon
+            drawLine(cx, cy - 10f, cx, cy - 3f, p)
+            drawLine(cx, cy + 3f, cx, cy + 10f, p)
+            drawLine(cx - 10f, cy, cx - 3f, cy, p)
+            drawLine(cx + 3f, cy, cx + 10f, cy, p)
+            drawCircle(cx, cy, 3f, p.apply { style = Paint.Style.FILL })
+        }
+    }
+
+    val cursorBtnView = ImageView(context).apply {
+        setImageBitmap(cursorBitmap)
+        alpha = if (OverlayState.virtualCursorActive) 0.6f else 1.0f
+        setOnClickListener {
+            val newActive = !OverlayState.virtualCursorActive
+            OverlayState.virtualCursorActive = newActive
+            CursorModeManager.setMode(if (newActive) CURSOR_MODE_VIRTUAL else CURSOR_MODE_TOUCH)
+            alpha = if (newActive) 0.6f else 1.0f
+            if (newActive) {
+        showVirtualPointerOverlay(context, lifecycleOwner)
+            } else {
+                hideVirtualPointerOverlay()
+            }
+        }
+    }
+
+    val cursorLp = WindowManager.LayoutParams().apply {
+        gravity = Gravity.TOP or Gravity.START
+        width = cursorBtnSize
+        height = cursorBtnSize
+        x = screenW - cursorBtnSize - 8
+        y = 8
+        flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+        format = PixelFormat.TRANSLUCENT
+    }
+    wm.addView(cursorBtnView, cursorLp)
+    OverlayState.runtimeButtonViews.add(cursorBtnView)
+
 }
 
 fun hideRuntimeButtons() {
-    OverlayState.cursorOverlayView?.let { removeCursorOverlay(it) }
-    OverlayState.cursorOverlayView = null
+    hideVirtualPointerOverlay()
     val views = OverlayState.runtimeButtonViews.toList()
     OverlayState.runtimeButtonViews.clear()
     for (v in views) {
@@ -402,6 +354,27 @@ fun hideRuntimeButtons() {
             wm.removeView(v)
         } catch (_: Exception) {}
     }
+}
+
+fun showVirtualPointerOverlay(context: Context, lifecycleOwner: LifecycleOwner) {
+    hideVirtualPointerOverlay()
+    OverlayState.virtualPointerView = createVirtualPointerOverlay(context, lifecycleOwner)
+}
+
+fun hideVirtualPointerOverlay() {
+    val old = OverlayState.virtualPointerView ?: return
+    android.util.Log.d("OBL", "hideVirtualPointerOverlay: removing view, thread=${Thread.currentThread().name}")
+    
+    Handler(Looper.getMainLooper()).post {
+        try {
+            val wm = old.context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+            wm.removeView(old)
+            android.util.Log.d("OBL", "hideVirtualPointerOverlay: removed successfully")
+        } catch (e: Exception) {
+            android.util.Log.e("OBL", "hideVirtualPointerOverlay: REMOVE FAILED", e)
+        }
+    }
+    OverlayState.virtualPointerView = null
 }
 
 @Composable

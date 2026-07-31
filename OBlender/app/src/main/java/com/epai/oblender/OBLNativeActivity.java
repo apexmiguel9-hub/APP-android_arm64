@@ -715,6 +715,16 @@ public class OBLNativeActivity extends NativeActivity
 
     /** Handle LauncherEvent type click events */
     private void handleLauncherEvent(String key) {
+        // When virtual cursor is active, reposition cursor before mouse clicks
+        if (OverlayState.virtualCursorActive) {
+            switch (key) {
+                case "GLFW_MOUSE_BUTTON_LEFT":
+                case "GLFW_MOUSE_BUTTON_RIGHT":
+                case "GLFW_MOUSE_BUTTON_MIDDLE":
+                    oblSetValue("10010," + OverlayState.cursorX + "," + OverlayState.cursorY);
+                    break;
+            }
+        }
         switch (key) {
             case "GLFW_MOUSE_BUTTON_LEFT":   oblSetValue("10000,"); break;
             case "GLFW_MOUSE_BUTTON_RIGHT":  oblSetValue("10001,"); break;
