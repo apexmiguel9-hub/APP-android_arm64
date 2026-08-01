@@ -730,6 +730,12 @@ extern "C" JNIEXPORT jintArray JNICALL Java_com_epai_oblender_OBLNativeActivity_
     return result;
 }
 
+extern "C" JNIEXPORT jboolean JNICALL Java_com_epai_oblender_OBLNativeActivity_getTouchDown(
+        JNIEnv *env,
+        jobject /* this */) {
+    return oblIsTouchDown() ? JNI_TRUE : JNI_FALSE;
+}
+
 
 //  原生Activity入口函数
 JNIEXPORT

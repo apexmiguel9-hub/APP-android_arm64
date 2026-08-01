@@ -68,6 +68,10 @@ object OverlayState {
     @JvmField
     var virtualPointerView: View? = null
     @JvmField
+    var precisionLensView: View? = null
+    @JvmField
+    var renderSurface: android.view.Surface? = null
+    @JvmField
     var leftMouseHeld = false
 }
 
@@ -204,6 +208,10 @@ fun showRuntimeButtons(context: Context, lifecycleOwner: LifecycleOwner) {
         OverlayState.virtualCursorActive = true
         android.util.Log.d("OBL", "showRuntimeButtons: showing virtual pointer overlay")
         showVirtualPointerOverlay(context, lifecycleOwner)
+    } else if (mode == CURSOR_MODE_PRECISION) {
+        OverlayState.virtualCursorActive = false
+        android.util.Log.d("OBL", "showRuntimeButtons: showing precision lens overlay")
+        showPrecisionLensOverlay(context, lifecycleOwner)
     }
 
     // Per-button toggle state (UUID → pressed)
@@ -370,6 +378,7 @@ fun showRuntimeButtons(context: Context, lifecycleOwner: LifecycleOwner) {
 
 fun hideRuntimeButtons() {
     hideVirtualPointerOverlay()
+    hidePrecisionLensOverlay()
     val views = OverlayState.runtimeButtonViews.toList()
     OverlayState.runtimeButtonViews.clear()
     for (v in views) {
@@ -399,6 +408,26 @@ fun hideVirtualPointerOverlay() {
         }
     }
     OverlayState.virtualPointerView = null
+}
+
+fun showPrecisionLensOverlay(context: Context, lifecycleOwner: LifecycleOwner) {
+    hidePrecisionLensOverlay()
+    OverlayState.precisionLensView = createPrecisionLensOverlay(context, lifecycleOwner)
+}
+
+fun hidePrecisionLensOverlay() {
+    val old = OverlayState.precisionLensView ?: return
+    android.util.Log.d("OBL", "hidePrecisionLensOverlay: removing view")
+    Handler(Looper.getMainLooper()).post {
+        try {
+            val wm = old.context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+            wm.removeView(old)
+            android.util.Log.d("OBL", "hidePrecisionLensOverlay: removed successfully")
+        } catch (e: Exception) {
+            android.util.Log.e("OBL", "hidePrecisionLensOverlay: REMOVE FAILED", e)
+        }
+    }
+    OverlayState.precisionLensView = null
 }
 
 @Composable

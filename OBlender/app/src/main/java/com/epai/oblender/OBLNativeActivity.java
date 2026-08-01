@@ -285,6 +285,7 @@ public class OBLNativeActivity extends NativeActivity
 
     @Override
     public void updateSurface(SurfaceHolder holder) {
+        OverlayState.renderSurface = holder.getSurface();
         updateSurface(holder.getSurface());
     }
 
@@ -317,10 +318,18 @@ public class OBLNativeActivity extends NativeActivity
 
     public native int[] getCursorPosition();
 
+    public native boolean getTouchDown();
+
     /** Static accessor for the overlay (Kotlin) to query the real GHOST cursor position. */
     public static int[] getCursorPositionStatic() {
         if (sActivity == null) return new int[] { -1, -1 };
         return sActivity.getCursorPosition();
+    }
+
+    /** Static accessor: true while a finger/stylus is pressed on the screen (precision lens). */
+    public static boolean getTouchDownStatic() {
+        if (sActivity == null) return false;
+        return sActivity.getTouchDown();
     }
 
     @Override
