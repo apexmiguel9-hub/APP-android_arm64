@@ -285,13 +285,36 @@ public class OBLNativeActivity extends NativeActivity
 
     @Override
     public void updateSurface(SurfaceHolder holder) {
-        OverlayState.renderSurface = holder.getSurface();
         updateSurface(holder.getSurface());
     }
 
     @Override
     public void updateSurfaceDestroyed(SurfaceHolder holder) {
         updateSurfaceDestroyed(holder.getSurface());
+    }
+
+    // NativeActivity delivers the MAIN render surface (app->window, where Blender draws
+    // the viewport) through SurfaceHolder.Callback. The precision lens PixelCopy needs
+    // THIS surface, not the auxiliary WindowGLSurfaceView ones used for popups.
+    @Override
+    public void surfaceCreated(SurfaceHolder holder) {
+        super.surfaceCreated(holder);
+        OverlayState.renderSurface = holder.getSurface();
+        Log.d("OBL", "surfaceCreated(main): renderSurface set " + holder.getSurface());
+    }
+
+    @Override
+    public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
+        super.surfaceChanged(holder, format, width, height);
+        OverlayState.renderSurface = holder.getSurface();
+        Log.d("OBL", "surfaceChanged(main): renderSurface set " + holder.getSurface());
+    }
+
+    @Override
+    public void surfaceDestroyed(SurfaceHolder holder) {
+        super.surfaceDestroyed(holder);
+        OverlayState.renderSurface = null;
+        Log.d("OBL", "surfaceDestroyed(main): renderSurface cleared");
     }
 
     @Override

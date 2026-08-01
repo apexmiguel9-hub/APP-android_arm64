@@ -60,12 +60,21 @@ fun PrecisionLensContent() {
         var lastX = -1
         var lastY = -1
         var lastDown = false
+        var logCount = 0
         while (isActive) {
             val real = OBLNativeActivity.getCursorPositionStatic()
             val down = OBLNativeActivity.getTouchDownStatic()
             val x = if (real != null && real.size == 2) real[0] else -1
             val y = if (real != null && real.size == 2) real[1] else -1
             val surface = OverlayState.renderSurface
+
+            if (logCount++ % 100 == 0) {
+                android.util.Log.d(
+                    "OBL.LENS",
+                    "poll down=$down x=$x y=$y surface=${surface != null} valid=${surface?.isValid ?: false} " +
+                        "fingerDown=$fingerDown lensBitmap=${lensBitmap != null}"
+                )
+            }
 
             if (down && x >= 0 && y >= 0 && surface != null && surface.isValid) {
                 fingerDown = true
@@ -86,15 +95,18 @@ fun PrecisionLensContent() {
                     val srcRect = Rect(srcLeft, srcTop, srcRight, srcBottom)
                     try {
                         requestPixelCopy(surface, srcRect, dst) { result ->
+                            android.util.Log.d("OBL.LENS", "PixelCopy result=$result w=${dst.width} h=${dst.height}")
                             if (result == PixelCopySuccess) {
                                 lensBitmap = dst
                             }
                         }
-                    } catch (_: Exception) {
+                    } catch (e: Exception) {
+                        android.util.Log.e("OBL.LENS", "PixelCopy threw", e)
                         lensBitmap = null
                     }
                 }
             } else {
+                if (fingerDown) android.util.Log.d("OBL.LENS", "finger released/not captured")
                 fingerDown = false
                 lensBitmap = null
             }
@@ -106,8 +118,8 @@ fun PrecisionLensContent() {
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        if (fingerDown && lensBitmap != null) {
-            val bmp = lensBitmap ?: return@Box
+        if (fingerDown) {
+            val bmp = lensBitmap
             val pos = fingerPos
             val radiusPx = lensRadiusDp.value * density
             val diameterPx = radiusPx * 2f
@@ -125,17 +137,19 @@ fun PrecisionLensContent() {
                     }
             ) {
                 drawCircle(color = androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.55f))
-                val image = bmp.asImageBitmap()
-                val side = size.width
-                val circlePath = Path().apply {
-                    addOval(androidx.compose.ui.geometry.Rect(0f, 0f, side, side))
-                }
-                clipPath(circlePath) {
-                    drawImage(
-                        image = image,
-                        dstSize = androidx.compose.ui.unit.IntSize(side.roundToInt(), side.roundToInt()),
-                        alpha = 1f
-                    )
+                if (bmp != null) {
+                    val image = bmp.asImageBitmap()
+                    val side = size.width
+                    val circlePath = Path().apply {
+                        addOval(androidx.compose.ui.geometry.Rect(0f, 0f, side, side))
+                    }
+                    clipPath(circlePath) {
+                        drawImage(
+                            image = image,
+                            dstSize = androidx.compose.ui.unit.IntSize(side.roundToInt(), side.roundToInt()),
+                            alpha = 1f
+                        )
+                    }
                 }
                 drawCircle(
                     color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.9f),
