@@ -75,7 +75,7 @@ fun PrecisionLensContent() {
                 // Re-capture only when the finger moved or just went down.
                 if (!lastDown || x != lastX || y != lastY) {
                     val lensPx = (lensRadiusDp.value * 2f * density).roundToInt()
-                    val srcSide = (lensPx / zoom).coerceAtLeast(8)
+                    val srcSide = (lensPx / zoom).roundToInt().coerceAtLeast(8)
                     val half = srcSide / 2
 
                     val srcLeft = (x - half).coerceIn(0, screenW - 1)
@@ -134,7 +134,7 @@ fun PrecisionLensContent() {
                 clipPath(circlePath) {
                     drawImage(
                         image = image,
-                        dstSize = androidx.compose.ui.geometry.Size(side, side),
+                        dstSize = androidx.compose.ui.unit.IntSize(side.roundToInt(), side.roundToInt()),
                         alpha = 1f
                     )
                 }
