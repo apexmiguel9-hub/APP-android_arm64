@@ -157,6 +157,7 @@
 
     <!-- Virtual Pointer Settings -->
     <string name="virtual_pointer_settings">Virtual Cursor</string>
+    <string name="setting_dwell_draw">Auto draw (hold still)</string>
     <string name="setting_stillness_time">Hold to draw</string>
     <string name="setting_stillness_threshold">Stillness threshold</string>
     <string name="setting_tap_max_dist">Tap max dist</string>

@@ -82,6 +82,7 @@ fun VirtualPointerContent(
                     var leftDownSent = false
                     var fingerId = 0L
                     var stillStart = -1L
+                    var stillPos = Offset.Zero
                     var rawX = pointerPosition.x
                     var rawY = pointerPosition.y
 
@@ -141,12 +142,23 @@ fun VirtualPointerContent(
                                         val moved = delta.getDistance()
 
                                         if (moved > stillnessThresholdPx) {
+                                            // Finger moved too far in one step: definitely moving.
                                             stillStart = -1L
-                                        } else if (stillStart < 0 && moved <= stillnessThresholdPx && elapsed > 50) {
+                                        } else if (stillStart < 0 && elapsed > 50) {
+                                            // Begin stillness window anchored at the current position.
                                             stillStart = now
+                                            stillPos = pos
+                                        } else if (stillStart > 0) {
+                                            // Net displacement from the stillness anchor decides:
+                                            // slow drift accumulates and cancels stillness, while
+                                            // sensor jitter around the same spot does not.
+                                            if ((pos - stillPos).getDistance() > stillnessThresholdPx) {
+                                                stillStart = -1L
+                                            }
                                         }
 
-                                        if (!leftDownSent && stillStart > 0 && (now - stillStart) > stillnessTimeMs) {
+                                        val dwellEnabled = VirtualPointerSettings.isDwellEnabled()
+                                        if (!leftDownSent && dwellEnabled && stillStart > 0 && (now - stillStart) > stillnessTimeMs) {
                                             OBLNativeActivity.oblSetValueStatic("10004,")
                                             leftDownSent = true
                                         }

@@ -39,6 +39,7 @@ import com.epai.oblender.ui.components.FloatingBall
 import com.epai.oblender.ui.components.MarqueeText
 import com.epai.oblender.ui.components.MenuListLayout
 import com.epai.oblender.ui.components.MenuState
+import com.epai.oblender.ui.components.MenuSwitchButton
 import kotlin.math.roundToInt
 import com.epai.oblender.ui.components.MenuTextButton
 import com.epai.oblender.ui.components.ScalingActionButton
@@ -172,7 +173,7 @@ fun EditorMenu(
                         }
                         1 -> {
                             val currentMode = CursorModeManager.getMode()
-                            val showVirtualSettings = currentMode == CURSOR_MODE_VIRTUAL || currentMode == CURSOR_MODE_PRECISION
+                            val showVirtualSettings = currentMode == CURSOR_MODE_VIRTUAL
 
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 MenuListLayout(
@@ -265,6 +266,15 @@ private fun ColumnScope.VirtualPointerSettingsPanel() {
         text = stringResource(R.string.virtual_pointer_settings),
         style = MaterialTheme.typography.titleSmall,
         modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+    )
+
+    var dwellEnabled by remember { mutableStateOf(VirtualPointerSettings.isDwellEnabled()) }
+
+    MenuSwitchButton(
+        modifier = Modifier.fillMaxWidth(),
+        text = stringResource(R.string.setting_dwell_draw),
+        switch = dwellEnabled,
+        onSwitch = { dwellEnabled = it; VirtualPointerSettings.setDwellEnabled(it) }
     )
 
     var stillnessTime by remember { mutableIntStateOf(VirtualPointerSettings.getStillnessTimeMs()) }

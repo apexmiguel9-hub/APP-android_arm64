@@ -11,6 +11,7 @@ object VirtualPointerSettings {
     private const val KEY_TAP_MAX_TIME = "tap_max_time_ms"
     private const val KEY_SENSITIVITY = "cursor_sensitivity"
     private const val KEY_SMOOTHING = "cursor_smoothing"
+    private const val KEY_DWELL_ENABLED = "dwell_draw_enabled"
 
     private var prefs: SharedPreferences? = null
 
@@ -72,5 +73,14 @@ object VirtualPointerSettings {
     @JvmStatic
     fun setSmoothing(value: Float) {
         prefs?.edit()?.putFloat(KEY_SMOOTHING, value.coerceIn(0.0f, 1.0f))?.apply()
+    }
+
+    /** Dwell-to-draw: hold still to press the left button (for freehand drawing). */
+    @JvmStatic
+    fun isDwellEnabled(): Boolean = prefs?.getBoolean(KEY_DWELL_ENABLED, true) ?: true
+
+    @JvmStatic
+    fun setDwellEnabled(value: Boolean) {
+        prefs?.edit()?.putBoolean(KEY_DWELL_ENABLED, value)?.apply()
     }
 }
