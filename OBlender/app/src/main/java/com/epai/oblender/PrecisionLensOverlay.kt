@@ -1,7 +1,6 @@
 package com.epai.oblender
 
 import android.graphics.Bitmap
-import android.graphics.PixelCopy
 import android.graphics.Rect
 import android.os.Handler
 import android.os.Looper
@@ -86,8 +85,8 @@ fun PrecisionLensContent() {
                     val dst = Bitmap.createBitmap(srcRight - srcLeft, srcBottom - srcTop, Bitmap.Config.ARGB_8888)
                     val srcRect = Rect(srcLeft, srcTop, srcRight, srcBottom)
                     try {
-                        PixelCopy.request(surface, srcRect, dst) { result ->
-                            if (result == PixelCopy.SUCCESS) {
+                        requestPixelCopy(surface, srcRect, dst) { result ->
+                            if (result == PixelCopySuccess) {
                                 lensBitmap = dst
                             }
                         }
@@ -182,4 +181,39 @@ fun createPrecisionLensOverlay(context: android.content.Context, lifecycleOwner:
     }
 
     return composeView
+}
+
+// android.graphics.PixelCopy exists at runtime (API 26+, device is API 28+) but the
+// android.jar resolved by this AGP in CI does not expose it; call it via reflection.
+private const val PixelCopySuccess = 0
+
+@Suppress("UNCHECKED_CAST")
+private fun requestPixelCopy(
+    surface: android.view.Surface,
+    srcRect: Rect,
+    dst: Bitmap,
+    callback: (Int) -> Unit
+) {
+    try {
+        val pixelCopyClass = Class.forName("android.graphics.PixelCopy")
+        val listenerIface = Class.forName("android.graphics.PixelCopy\$OnPixelCopyFinishedListener")
+        val listener = java.lang.reflect.Proxy.newProxyInstance(
+            listenerIface.classLoader,
+            arrayOf(listenerIface)
+        ) { _, method, args ->
+            if (method.name == "onPixelCopyFinished") {
+                callback((args?.getOrNull(0) as? Int) ?: -1)
+            }
+            null
+        }
+        pixelCopyClass.getMethod(
+            "request",
+            android.view.Surface::class.java,
+            Rect::class.java,
+            Bitmap::class.java,
+            listenerIface
+        ).invoke(null, surface, srcRect, dst, listener)
+    } catch (e: Throwable) {
+        callback(-1)
+    }
 }
