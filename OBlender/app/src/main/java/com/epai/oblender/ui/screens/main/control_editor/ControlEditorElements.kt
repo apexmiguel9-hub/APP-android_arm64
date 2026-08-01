@@ -333,29 +333,34 @@ private fun ColumnScope.SettingSlider(
     valueDisplay: String,
     onValueChange: (Float) -> Unit
 ) {
-    Row(
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
+        verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
-        Slider(
-            value = value,
-            onValueChange = onValueChange,
-            valueRange = valueRange,
-            steps = if (step > 0f && valueRange.endInclusive - valueRange.start > step * 2)
-                ((valueRange.endInclusive - valueRange.start) / step).toInt() - 1 else 0,
-            modifier = Modifier.weight(1f)
-        )
         Text(
-            text = valueDisplay,
+            text = label,
             style = MaterialTheme.typography.labelSmall,
-            modifier = Modifier.width(48.dp)
+            modifier = Modifier.padding(start = 4.dp)
         )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Slider(
+                value = value,
+                onValueChange = onValueChange,
+                valueRange = valueRange,
+                steps = if (step > 0f && valueRange.endInclusive - valueRange.start > step * 2)
+                    ((valueRange.endInclusive - valueRange.start) / step).toInt() - 1 else 0,
+                modifier = Modifier.weight(1f)
+            )
+            Text(
+                text = valueDisplay,
+                style = MaterialTheme.typography.labelSmall,
+                modifier = Modifier.width(40.dp)
+            )
+        }
     }
-    Text(
-        text = label,
-        style = MaterialTheme.typography.labelSmall,
-        modifier = Modifier.padding(start = 4.dp)
-    )
 }
 
 @Composable
