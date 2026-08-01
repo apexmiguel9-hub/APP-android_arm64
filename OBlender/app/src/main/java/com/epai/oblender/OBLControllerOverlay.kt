@@ -144,6 +144,48 @@ private fun getLayoutFile(context: Context): File {
     return File(context.filesDir, "control_layout.json")
 }
 
+// Icon for the virtual-cursor toggle button: open eye when virtual pointer is
+// active, closed eye when in touch mode. Draws onto a wide, short "slab" bitmap.
+private fun drawCursorToggleBitmap(width: Int, height: Int, open: Boolean): Bitmap {
+    val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+    Canvas(bmp).apply {
+        val cx = width / 2f
+        val cy = height / 2f
+        val r = height / 2f - 3f
+        Paint(Paint.ANTI_ALIAS_FLAG).let { p ->
+            p.color = android.graphics.Color.argb(100, 0, 0, 0)
+            p.style = Paint.Style.FILL
+            drawRoundRect(RectF(0f, 0f, width.toFloat(), height.toFloat()), r, r, p)
+        }
+        if (open) {
+            // Open eye: almond outline + pupil
+            Paint(Paint.ANTI_ALIAS_FLAG).let { p ->
+                p.color = android.graphics.Color.WHITE
+                p.style = Paint.Style.STROKE
+                p.strokeWidth = 2.5f
+                drawOval(RectF(cx - r - 3f, cy - r, cx + r + 3f, cy + r), p)
+            }
+            Paint(Paint.ANTI_ALIAS_FLAG).let { p ->
+                p.color = android.graphics.Color.WHITE
+                p.style = Paint.Style.FILL
+                drawCircle(cx, cy, r * 0.35f, p)
+            }
+        } else {
+            // Closed eye: single downward-curved line
+            Paint(Paint.ANTI_ALIAS_FLAG).let { p ->
+                p.color = android.graphics.Color.WHITE
+                p.style = Paint.Style.STROKE
+                p.strokeWidth = 2.5f
+                val path = android.graphics.Path()
+                path.moveTo(cx - r - 2f, cy)
+                path.quadTo(cx, cy + 4f, cx + r + 2f, cy)
+                drawPath(path, p)
+            }
+        }
+    }
+    return bmp
+}
+
 fun showRuntimeButtons(context: Context, lifecycleOwner: LifecycleOwner) {
     hideRuntimeButtons()
     CursorModeManager.init(context)
@@ -290,36 +332,18 @@ fun showRuntimeButtons(context: Context, lifecycleOwner: LifecycleOwner) {
         }
     }
 
-    // Virtual cursor toggle button
-    val cursorBtnSize = (44 * density).toInt()
-    val cursorBitmap = Bitmap.createBitmap(cursorBtnSize, cursorBtnSize, Bitmap.Config.ARGB_8888)
-    Canvas(cursorBitmap).apply {
-        val cx = cursorBtnSize / 2f
-        val cy = cursorBtnSize / 2f
-        Paint(Paint.ANTI_ALIAS_FLAG).let { p ->
-            p.color = android.graphics.Color.argb(100, 0, 0, 0)
-            p.style = Paint.Style.FILL
-            drawRoundRect(RectF(0f, 0f, cursorBtnSize.toFloat(), cursorBtnSize.toFloat()), 8f, 8f, p)
-        }
-        Paint(Paint.ANTI_ALIAS_FLAG).let { p ->
-            p.color = android.graphics.Color.WHITE
-            p.strokeWidth = 2.5f
-            // Crosshair icon
-            drawLine(cx, cy - 10f, cx, cy - 3f, p)
-            drawLine(cx, cy + 3f, cx, cy + 10f, p)
-            drawLine(cx - 10f, cy, cx - 3f, cy, p)
-            drawLine(cx + 3f, cy, cx + 10f, cy, p)
-            drawCircle(cx, cy, 3f, p.apply { style = Paint.Style.FILL })
-        }
-    }
+    // Virtual cursor toggle button (wide, short slab so it stays out of the way)
+    val cursorBtnW = (44 * density).toInt()
+    val cursorBtnH = (26 * density).toInt()
 
     val cursorBtnView = ImageView(context).apply {
-        setImageBitmap(cursorBitmap)
+        setImageBitmap(drawCursorToggleBitmap(cursorBtnW, cursorBtnH, OverlayState.virtualCursorActive))
         alpha = if (OverlayState.virtualCursorActive) 0.6f else 1.0f
         setOnClickListener {
             val newActive = !OverlayState.virtualCursorActive
             OverlayState.virtualCursorActive = newActive
             CursorModeManager.setMode(if (newActive) CURSOR_MODE_VIRTUAL else CURSOR_MODE_TOUCH)
+            setImageBitmap(drawCursorToggleBitmap(cursorBtnW, cursorBtnH, newActive))
             alpha = if (newActive) 0.6f else 1.0f
             if (newActive) {
         showVirtualPointerOverlay(context, lifecycleOwner)
@@ -331,9 +355,9 @@ fun showRuntimeButtons(context: Context, lifecycleOwner: LifecycleOwner) {
 
     val cursorLp = WindowManager.LayoutParams().apply {
         gravity = Gravity.TOP or Gravity.START
-        width = cursorBtnSize
-        height = cursorBtnSize
-        x = screenW - cursorBtnSize - 8
+        width = cursorBtnW
+        height = cursorBtnH
+        x = screenW - cursorBtnW - 8
         y = 8
         flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
