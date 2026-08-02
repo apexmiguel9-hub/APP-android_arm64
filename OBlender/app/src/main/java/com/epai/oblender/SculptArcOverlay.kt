@@ -157,23 +157,34 @@ fun SculptArcContent() {
                 highlightIndex = -1
             }
 
-            if (down && gestureArmed) {
-                if (onHandle) {
-                    gestureLastY = y.toFloat()
-                } else if (!collapsed && x >= 0 && y >= 0) {
-                    // Finger angle around the ellipse.
-                    val dx = x - cx
-                    val dy = cy - y
-                    val angDeg = Math.toDegrees(Math.atan2(dx.toDouble(), dy.toDouble())).toFloat()
-                    
-                    if (lastDown) {
-                        // Update scroll offset based on drag delta
-                        val delta = angDeg - Math.toDegrees(Math.atan2((lastX - cx).toDouble(), (cy - lastY).toDouble())).toFloat()
-                        OverlayState.scrollOffset += delta
-                    }
+            // Iniciar gesto solo si el toque comienza dentro de la banda o handle
+            if (down && !lastDown) {
+                gestureArmed = false
+                val dx = x - cx
+                val dy = cy - y
+                val nx = dx / Rx
+                val ny = dy / Ry
+                val distN = hypot(nx, ny)
+                val bandN = bandHalf / Ry
+                
+                // Hit test: ¿está dentro de la banda?
+                val inBand = (distN >= (1f - bandN) && distN <= (1f + bandN))
+                // Hit test: ¿está en el handle?
+                val inHandle = (abs(x - apexX) < arrowHole && abs(y - handleY) < arrowHole)
+
+                if (inBand || inHandle) {
+                    gestureArmed = true
+                    onHandle = inHandle
                     lastX = x.toFloat()
                     lastY = y.toFloat()
                 }
+            }
+            
+            // Si no está armado, pasamos el toque a Blender (no rotar)
+            if (!gestureArmed) {
+                lastDown = down
+                delay(16)
+                continue
             }
 
             if (logCount++ % 100 == 0) {
