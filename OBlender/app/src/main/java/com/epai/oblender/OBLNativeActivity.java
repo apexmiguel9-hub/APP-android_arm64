@@ -346,6 +346,8 @@ public class OBLNativeActivity extends NativeActivity
 
     public native String getActiveToolId();
 
+    public native String getActiveWorkspace();
+
     public native int getActiveMode();
 
     /** Static accessor for the overlay (Kotlin) to query the real GHOST cursor position. */
@@ -364,6 +366,12 @@ public class OBLNativeActivity extends NativeActivity
     public static String getActiveToolIdStatic() {
         if (sActivity == null) return "";
         return sActivity.getActiveToolId();
+    }
+
+    /** Static accessor: name of the active workspace (e.g. "Sculpting", "2D Animation"). */
+    public static String getActiveWorkspaceStatic() {
+        if (sActivity == null) return "";
+        return sActivity.getActiveWorkspace();
     }
 
     /** Static accessor: active object mode (eContextObjectMode, e.g. CTX_MODE_SCULPT = 9). */

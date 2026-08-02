@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -69,7 +70,14 @@ fun SculptArcContent() {
         while (isActive) {
             val toolId = OBLNativeActivity.getActiveToolIdStatic()
             val mode = OBLNativeActivity.getActiveModeStatic()
-            val idx = if (mode == CTX_MODE_SCULPT) SculptTools.indexOfFirst { it.id == toolId } else -1
+            val workspace = OBLNativeActivity.getActiveWorkspaceStatic()
+            // The sculpt arc is assigned to the "Sculpting" workspace: it must
+            // disappear when switching to "General", "2D Animation", etc. (the
+            // object mode alone is NOT enough — switching workspaces does not
+            // change the active object's mode).
+            val inSculptWorkspace = workspace.startsWith("Sculpting")
+            val idx = if (mode == CTX_MODE_SCULPT && inSculptWorkspace)
+                SculptTools.indexOfFirst { it.id == toolId } else -1
             val real = OBLNativeActivity.getCursorPositionStatic()
             val x = if (real != null && real.size == 2) real[0] else -1
             val y = if (real != null && real.size == 2) real[1] else -1
@@ -86,7 +94,7 @@ fun SculptArcContent() {
             val cy = screenH.toFloat()
             val apexX = cx
             val apexY = cy - Ry
-            val handleY = apexY + arrowHole * 0.8f
+            val handleY = apexY + 80f
 
             val inSculpt = idx >= 0
             OverlayState.sculptArcActive = inSculpt
@@ -97,7 +105,7 @@ fun SculptArcContent() {
                 gestureArmed = false
                 lastDown = down
                 if (logCount++ % 200 == 0) {
-                    android.util.Log.d("OBL.ARC", "poll: not in sculpt (tool=$toolId)")
+                    android.util.Log.d("OBL.ARC", "poll: not in sculpt (tool=$toolId mode=$mode ws=$workspace)")
                 }
                 delay(16)
                 continue
@@ -174,7 +182,7 @@ fun SculptArcContent() {
             if (logCount++ % 200 == 0) {
                 android.util.Log.d(
                     "OBL.ARC",
-                    "poll idx=$idx tool=$toolId down=$down x=$x y=$y " +
+                    "poll idx=$idx tool=$toolId ws=$workspace down=$down x=$x y=$y " +
                         "highlight=$highlightIndex collapsed=$collapsed active=$inSculpt"
                 )
             }
@@ -195,7 +203,7 @@ fun SculptArcContent() {
                 val cy = size.height
                 val apexX = cx
                 val apexY = cy - Ry
-                val handleY = apexY + max(30f, size.width * 0.04f) * 0.8f
+                val handleY = apexY + 80f
                 val step = 180f / (SculptTools.size - 1)
 
                 // Arc band hint.
@@ -220,7 +228,7 @@ fun SculptArcContent() {
                     bandPath.close()
                     drawPath(
                         path = bandPath,
-                        color = Color(0xFF3E4B61).copy(alpha = 0.30f)
+                        color = Color(0xFF1B1B1B).copy(alpha = 0.60f)
                     )
                 }
 
@@ -230,7 +238,7 @@ fun SculptArcContent() {
                         val t = Math.floorMod(activeIndex + off, SculptTools.size)
                         val angRad = Math.toRadians((off * step).toDouble()).toFloat()
                         val tx = cx + Rx * sin(angRad)
-                        val ty = (cy - Ry * cos(angRad)).coerceAtMost(cy - 24f)
+                        val ty = (cy - Ry * cos(angRad)).coerceAtMost(cy - 80f)
                         val isActive = off == 0
                         val isHighlight = t == highlightIndex
                         drawToolSlot(tx, ty, SculptTools[t].label, isActive, isHighlight)
@@ -251,39 +259,47 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawToolSlot(
     isActive: Boolean,
     isHighlight: Boolean
 ) {
-    val w = if (isActive) 96f else 80f
-    val h = if (isActive) 44f else 38f
-    val bg = when {
-        isHighlight -> Color(0xFF4FC3F7)
-        isActive -> Color(0xFF3E8EF7)
-        else -> Color(0xE6202A36)
+    val r = if (isActive) 46f else 38f
+    val highlighted = isActive || isHighlight
+
+    // Amber/orange glow behind the active (or being-selected) tool.
+    if (highlighted) {
+        drawCircle(color = Color(0x33FFC107), radius = r + 14f, center = Offset(cx, cy))
+        drawCircle(
+            color = Color(0xFFFFC107),
+            radius = r + 6f,
+            center = Offset(cx, cy),
+            style = Stroke(width = if (isActive) 3f else 2f)
+        )
+        if (isActive) {
+            drawCircle(
+                color = Color(0xFFCC6F03),
+                radius = r + 1f,
+                center = Offset(cx, cy),
+                style = Stroke(width = 3f)
+            )
+        }
     }
-    val border = when {
-        isHighlight -> Color(0xFFFFFFFF)
-        isActive -> Color(0xFF9CC9FF)
-        else -> Color(0x55AEBFD4)
-    }
-    val left = cx - w / 2f
-    val top = cy - h / 2f
-    drawRoundRect(
-        color = bg,
-        topLeft = Offset(left, top),
-        size = androidx.compose.ui.geometry.Size(w, h),
-        cornerRadius = androidx.compose.ui.geometry.CornerRadius(h / 2f, h / 2f)
+
+    // Clay sphere: radial gradient, highlight top-left, shadow bottom-right.
+    val brush = Brush.radialGradient(
+        colors = listOf(Color(0xFFE0E0E0), Color(0xFF9E9E9E), Color(0xFF404040)),
+        center = Offset(cx - r * 0.35f, cy - r * 0.4f),
+        radius = r * 1.25f
     )
-    drawRoundRect(
-        color = border,
-        topLeft = Offset(left, top),
-        size = androidx.compose.ui.geometry.Size(w, h),
-        cornerRadius = androidx.compose.ui.geometry.CornerRadius(h / 2f, h / 2f),
-        style = Stroke(width = 2f)
-    )
+    drawCircle(brush, r, Offset(cx, cy))
+
+    // Label below the sphere.
     drawContext.canvas.nativeCanvas.drawText(
         label,
         cx,
-        cy + 4f,
+        cy + r + 18f,
         android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-            color = android.graphics.Color.WHITE
+            color = if (highlighted) {
+                android.graphics.Color.rgb(0xFF, 0xC1, 0x07)
+            } else {
+                android.graphics.Color.rgb(0xD0, 0xD0, 0xD0)
+            }
             textSize = if (isActive) 15f else 13f
             textAlign = android.graphics.Paint.Align.CENTER
             isFakeBoldText = isActive || isHighlight
@@ -292,12 +308,12 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawToolSlot(
 }
 
 private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawChevron(cx: Float, cy: Float, collapsed: Boolean) {
-    val w = 44f
-    val h = 22f
+    val w = 48f
+    val h = 24f
     val left = cx - w / 2f
     val top = cy - h / 2f
     drawRoundRect(
-        color = Color(0xE6202A36),
+        color = Color(0xCC1B1B1B),
         topLeft = Offset(left, top),
         size = androidx.compose.ui.geometry.Size(w, h),
         cornerRadius = androidx.compose.ui.geometry.CornerRadius(h / 2f, h / 2f)
@@ -315,7 +331,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawChevron(cx: Flo
         }
         close()
     }
-    drawPath(path, Color(0xFFAEBFD4))
+    drawPath(path, Color(0xFFFFC107))
 }
 
 private fun emitToolKey(tool: SculptTool) {

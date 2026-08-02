@@ -13,6 +13,7 @@ extern void oblSetValueOff(int values[],int num);
 extern void oblGetCursorPosition(int *x, int *y);
 extern bool oblIsTouchDown(void);
 extern const char *oblGetActiveToolId(void);
+extern const char *oblGetActiveWorkspace(void);
 extern int oblGetActiveMode(void);
 extern void inputKey(int p_physical_keycode,
                      int p_unicode, int p_key_label, int p_pressed,

@@ -706,6 +706,10 @@ const char *oblGetActiveToolId(void){
   return blenderGetActiveToolId();
 }
 
+const char *oblGetActiveWorkspace(void){
+  return blenderGetActiveWorkspace();
+}
+
 int oblGetActiveMode(void){
   return blenderGetActiveMode();
 }

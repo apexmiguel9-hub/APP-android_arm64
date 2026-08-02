@@ -743,6 +743,13 @@ extern "C" JNIEXPORT jstring JNICALL Java_com_epai_oblender_OBLNativeActivity_ge
     return (tool_id != nullptr) ? env->NewStringUTF(tool_id) : nullptr;
 }
 
+extern "C" JNIEXPORT jstring JNICALL Java_com_epai_oblender_OBLNativeActivity_getActiveWorkspace(
+        JNIEnv *env,
+        jobject /* this */) {
+    const char *workspace = oblGetActiveWorkspace();
+    return (workspace != nullptr) ? env->NewStringUTF(workspace) : nullptr;
+}
+
 extern "C" JNIEXPORT jint JNICALL Java_com_epai_oblender_OBLNativeActivity_getActiveMode(
         JNIEnv *env,
         jobject /* this */) {
