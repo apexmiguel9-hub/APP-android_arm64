@@ -107,6 +107,7 @@ fun SculptArcContent() {
         val tool = SculptTools[sel]
         android.util.Log.d("OBL.ARC", "select ${tool.id} key=${tool.key} shift=${tool.shift}")
         if (sel != currentActive) emitToolKey(tool)
+        highlightIndex = sel
         scope.launch { scrollOffset.animateTo(-(sel * step).toFloat()) }
     }
 
@@ -180,7 +181,12 @@ fun SculptArcContent() {
                             return@detectTapGestures
                         }
                         val sel = nearestToolIndex(w, h, pos.x, pos.y)
-                        if (sel >= 0) selectTool(sel, activeIdx)
+                        if (sel >= 0) {
+                            // Show the selection glow immediately (the active-tool
+                            // poll takes ~200ms to confirm from Blender).
+                            highlightIndex = sel
+                            selectTool(sel, activeIdx)
+                        }
                     }
                 )
             }
