@@ -168,8 +168,13 @@ fun SculptArcContent() {
                             collapsed = false
                             return@detectTapGestures
                         }
-                        val distHandle = hypot(pos.x - cx, pos.y - handleY)
-                        if (distHandle <= arrowHole * 2f) {
+                        // Tight handle hit-test: the chevron pill is 48x24, so the
+                        // tap target must be small — otherwise the ACTIVE tool's
+                        // label (drawn just ~22px above the chevron) would fall
+                        // inside the handle zone and collapse the arc by accident.
+                        if (abs(pos.x - cx) <= arrowHole * 0.9f &&
+                            abs(pos.y - handleY) <= arrowHole * 0.4f
+                        ) {
                             OverlayState.sculptArcCollapsed = true
                             collapsed = true
                             return@detectTapGestures
@@ -193,7 +198,8 @@ fun SculptArcContent() {
                         val halfW = w / 2f - bandHalf
                         val handleY = if (collapsed) h / 2f else h - arcH + 90f
                         gestureArmed = false
-                        onHandle = hypot(start.x - cx, start.y - handleY) <= arrowHole * 2f
+                        onHandle = abs(start.x - cx) <= arrowHole * 0.9f &&
+                                abs(start.y - handleY) <= arrowHole * 0.4f
                         handleDelta = 0f
                         dragAccum = 0f
                         if (collapsed) {
