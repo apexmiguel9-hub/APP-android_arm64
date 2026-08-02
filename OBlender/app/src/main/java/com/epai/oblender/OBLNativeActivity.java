@@ -117,12 +117,13 @@ public class OBLNativeActivity extends NativeActivity
     }
 
     public int GetAsyncKeyState(int type) {
+        if (type == 102) {
+            return OverlayState.sculptArcActive ? 1 : 0;
+        }
+        if (type == 103) {
+            return OverlayState.sculptArcCollapsed ? 1 : 0;
+        }
         if (mOblSettingFragment == null) {
-            if (type==100){
-                return 0;
-            }else if (type==101){
-                return 0;
-            }
             return 0;
         }
         return mOblSettingFragment.GetAsyncKeyState(type);
@@ -343,6 +344,10 @@ public class OBLNativeActivity extends NativeActivity
 
     public native boolean getTouchDown();
 
+    public native String getActiveToolId();
+
+    public native int getActiveMode();
+
     /** Static accessor for the overlay (Kotlin) to query the real GHOST cursor position. */
     public static int[] getCursorPositionStatic() {
         if (sActivity == null) return new int[] { -1, -1 };
@@ -353,6 +358,18 @@ public class OBLNativeActivity extends NativeActivity
     public static boolean getTouchDownStatic() {
         if (sActivity == null) return false;
         return sActivity.getTouchDown();
+    }
+
+    /** Static accessor: idname of the active tool (e.g. "builtin_brush.Clay"), empty if none. */
+    public static String getActiveToolIdStatic() {
+        if (sActivity == null) return "";
+        return sActivity.getActiveToolId();
+    }
+
+    /** Static accessor: active object mode (eContextObjectMode, e.g. CTX_MODE_SCULPT = 9). */
+    public static int getActiveModeStatic() {
+        if (sActivity == null) return -1;
+        return sActivity.getActiveMode();
     }
 
     @Override
@@ -598,6 +615,14 @@ public class OBLNativeActivity extends NativeActivity
     /** Static helper for callbacks from Compose overlays (VirtualPointerOverlay). */
     public static void oblSetValueStatic(String value) {
         if (sActivity != null) sActivity.oblSetValue(value);
+    }
+
+    public static void oblSetValueOnStatic(String value) {
+        if (sActivity != null) sActivity.oblSetValueOn(value);
+    }
+
+    public static void oblSetValueOffStatic(String value) {
+        if (sActivity != null) sActivity.oblSetValueOff(value);
     }
 
     public static void routeClickEvents(List<?> clickEvents, boolean pressed) {

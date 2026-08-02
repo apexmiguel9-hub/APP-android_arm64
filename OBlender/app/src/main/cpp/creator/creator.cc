@@ -702,6 +702,14 @@ bool oblIsTouchDown(void){
   return blenderIsTouchDown();
 }
 
+const char *oblGetActiveToolId(void){
+  return blenderGetActiveToolId();
+}
+
+int oblGetActiveMode(void){
+  return blenderGetActiveMode();
+}
+
 void inputKey(int p_physical_keycode,
                      int p_unicode, int p_key_label, int p_pressed,
               int p_echo){

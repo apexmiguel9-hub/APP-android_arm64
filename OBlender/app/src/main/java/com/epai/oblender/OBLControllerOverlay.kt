@@ -73,6 +73,19 @@ object OverlayState {
     var renderSurface: android.view.Surface? = null
     @JvmField
     var leftMouseHeld = false
+    /** True while the sculpt tool arc overlay is active. GHOST reads this
+     *  (GetAsyncKeyState(102)) to suppress brush strokes over the arc band. */
+    @Volatile
+    @JvmField
+    var sculptArcActive = false
+    /** True when the arc is collapsed to just the arrow handle (GetAsyncKeyState(103)).
+     *  When collapsed, GHOST only intercepts touches on the handle region. */
+    @Volatile
+    @JvmField
+    var sculptArcCollapsed = false
+    /** ComposeView of the sculpt tool arc overlay (for show/hide). */
+    @JvmField
+    var sculptArcView: View? = null
 }
 
 fun setControlOverlayEditMode(editMode: Boolean) { OverlayState.isEditMode = editMode }
@@ -213,6 +226,9 @@ fun showRuntimeButtons(context: Context, lifecycleOwner: LifecycleOwner) {
         android.util.Log.d("OBL", "showRuntimeButtons: showing precision lens overlay")
         showPrecisionLensOverlay(context, lifecycleOwner)
     }
+
+    // Sculpt tool arc overlay (auto-hides when not in sculpt mode via JNI tool id).
+    showSculptArcOverlay(context, lifecycleOwner)
 
     // Per-button toggle state (UUID → pressed)
     val toggleStates = mutableMapOf<String, Boolean>()
@@ -379,6 +395,7 @@ fun showRuntimeButtons(context: Context, lifecycleOwner: LifecycleOwner) {
 fun hideRuntimeButtons() {
     hideVirtualPointerOverlay()
     hidePrecisionLensOverlay()
+    hideSculptArcOverlay()
     val views = OverlayState.runtimeButtonViews.toList()
     OverlayState.runtimeButtonViews.clear()
     for (v in views) {
@@ -428,6 +445,29 @@ fun hidePrecisionLensOverlay() {
         }
     }
     OverlayState.precisionLensView = null
+}
+
+fun showSculptArcOverlay(context: Context, lifecycleOwner: LifecycleOwner) {
+    hideSculptArcOverlay()
+    OverlayState.sculptArcView = createSculptArcOverlay(context, lifecycleOwner)
+}
+
+fun hideSculptArcOverlay() {
+    val old = OverlayState.sculptArcView ?: return
+    android.util.Log.d("OBL", "hideSculptArcOverlay: removing view")
+    // Reset flags so GHOST stops intercepting strokes over the (now gone) band.
+    OverlayState.sculptArcActive = false
+    OverlayState.sculptArcCollapsed = false
+    Handler(Looper.getMainLooper()).post {
+        try {
+            val wm = old.context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+            wm.removeView(old)
+            android.util.Log.d("OBL", "hideSculptArcOverlay: removed successfully")
+        } catch (e: Exception) {
+            android.util.Log.e("OBL", "hideSculptArcOverlay: REMOVE FAILED", e)
+        }
+    }
+    OverlayState.sculptArcView = null
 }
 
 @Composable

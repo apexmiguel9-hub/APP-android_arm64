@@ -736,6 +736,19 @@ extern "C" JNIEXPORT jboolean JNICALL Java_com_epai_oblender_OBLNativeActivity_g
     return oblIsTouchDown() ? JNI_TRUE : JNI_FALSE;
 }
 
+extern "C" JNIEXPORT jstring JNICALL Java_com_epai_oblender_OBLNativeActivity_getActiveToolId(
+        JNIEnv *env,
+        jobject /* this */) {
+    const char *tool_id = oblGetActiveToolId();
+    return (tool_id != nullptr) ? env->NewStringUTF(tool_id) : nullptr;
+}
+
+extern "C" JNIEXPORT jint JNICALL Java_com_epai_oblender_OBLNativeActivity_getActiveMode(
+        JNIEnv *env,
+        jobject /* this */) {
+    return (jint)oblGetActiveMode();
+}
+
 
 //  原生Activity入口函数
 JNIEXPORT
