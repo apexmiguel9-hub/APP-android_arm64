@@ -65,6 +65,8 @@ fun SculptArcContent() {
         var gestureArmed = false
         var gestureStartY = 0f
         var gestureLastY = 0f
+        var lastX = 0f
+        var lastY = 0f
         var onHandle = false
 
         while (isActive) {
@@ -159,23 +161,18 @@ fun SculptArcContent() {
                 if (onHandle) {
                     gestureLastY = y.toFloat()
                 } else if (!collapsed && x >= 0 && y >= 0) {
-                    // Finger angle around the ellipse → nearest tool slot.
+                    // Finger angle around the ellipse.
                     val dx = x - cx
                     val dy = cy - y
-                    val nx = dx / Rx
-                    val ny = dy / Ry
-                    val distN = hypot(nx, ny)
-                    val bandN = bandHalf / Ry
-                    if (y <= cy && distN >= (1f - bandN) && distN <= (1f + bandN)) {
-                        val angDeg = Math.toDegrees(Math.atan2(nx.toDouble(), ny.toDouble())).toFloat()
-                        val step = 180f / (SculptTools.size - 1)
-                        var off = (angDeg / step).roundToInt().coerceIn(-5, 5)
-                        var hi = Math.floorMod(idx + off, SculptTools.size)
-                        if (hi < 0) hi += SculptTools.size
-                        highlightIndex = hi
-                    } else {
-                        highlightIndex = -1
+                    val angDeg = Math.toDegrees(Math.atan2(dx.toDouble(), dy.toDouble())).toFloat()
+                    
+                    if (lastDown) {
+                        // Update scroll offset based on drag delta
+                        val delta = angDeg - Math.toDegrees(Math.atan2((lastX - cx).toDouble(), (cy - lastY).toDouble())).toFloat()
+                        OverlayState.setScrollOffset(OverlayState.getScrollOffset() + delta)
                     }
+                    lastX = x.toFloat()
+                    lastY = y.toFloat()
                 }
             }
 
@@ -232,16 +229,20 @@ fun SculptArcContent() {
                     )
                 }
 
-                // Tool slots in carousel order centered on the active tool.
+                // Tool slots in carousel order.
                 if (!collapsed) {
-                    for (off in -5..5) {
-                        val t = Math.floorMod(activeIndex + off, SculptTools.size)
-                        val angRad = Math.toRadians((off * step).toDouble()).toFloat()
-                        val tx = cx + Rx * sin(angRad)
-                        val ty = (cy - Ry * cos(angRad)).coerceAtMost(cy - 80f)
-                        val isActive = off == 0
-                        val isHighlight = t == highlightIndex
-                        drawToolSlot(tx, ty, SculptTools[t].label, isActive, isHighlight)
+                    val step = 20f // Fixed angular step for better spacing
+                    for (i in SculptTools.indices) {
+                        val angleDeg = (i * step) + OverlayState.scrollOffset
+                        // Only draw tools within the visible arc range (-90 to 90 degrees)
+                        if (angleDeg > -95f && angleDeg < 95f) {
+                            val angRad = Math.toRadians(angleDeg.toDouble()).toFloat()
+                            val tx = cx + Rx * sin(angRad)
+                            val ty = (cy - Ry * cos(angRad)).coerceAtMost(cy - 80f)
+                            val isActive = SculptTools[i].id == OBLNativeActivity.getActiveToolIdStatic()
+                            val isHighlight = i == highlightIndex
+                            drawToolSlot(tx, ty, SculptTools[i].label, isActive, isHighlight)
+                        }
                     }
                 }
 
