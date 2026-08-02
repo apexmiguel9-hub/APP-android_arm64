@@ -206,6 +206,12 @@ private fun drawCursorToggleBitmap(width: Int, height: Int, open: Boolean): Bitm
 fun showRuntimeButtons(context: Context, lifecycleOwner: LifecycleOwner) {
     hideRuntimeButtons()
     CursorModeManager.init(context)
+
+    // Sculpt tool arc overlay is INDEPENDENT of the control-editor layout: it
+    // must appear even when no control_layout.json exists yet (auto-hides when
+    // not in sculpt mode via JNI tool id). Shown before the layout check below.
+    showSculptArcOverlay(context, lifecycleOwner)
+
     val file = getLayoutFile(context)
     if (!file.exists()) return
     val layout = try { loadLayoutFromFile(file) } catch (_: Exception) { return }
@@ -226,9 +232,6 @@ fun showRuntimeButtons(context: Context, lifecycleOwner: LifecycleOwner) {
         android.util.Log.d("OBL", "showRuntimeButtons: showing precision lens overlay")
         showPrecisionLensOverlay(context, lifecycleOwner)
     }
-
-    // Sculpt tool arc overlay (auto-hides when not in sculpt mode via JNI tool id).
-    showSculptArcOverlay(context, lifecycleOwner)
 
     // Per-button toggle state (UUID → pressed)
     val toggleStates = mutableMapOf<String, Boolean>()

@@ -75,14 +75,18 @@ fun SculptArcContent() {
             val y = if (real != null && real.size == 2) real[1] else -1
             val down = OBLNativeActivity.getTouchDownStatic()
 
-            // Arc geometry — MUST match sculpt_arc_hit_test() in GHOST_SystemAndroid.cc
-            val R = min(screenW, screenH) * 0.24f
+            // Arc geometry — MUST match sculpt_arc_hit_test() in GHOST_SystemAndroid.cc.
+            // Flattened half-ellipse ("parenthesis"), wider than tall.
+            val minWh = min(screenW, screenH).toFloat()
+            val Rx = minWh * 0.40f
+            val Ry = minWh * 0.18f
             val bandHalf = max(28f, screenW * 0.03f)
             val arrowHole = max(30f, screenW * 0.04f)
             val cx = screenW * 0.5f
             val cy = screenH.toFloat()
             val apexX = cx
-            val apexY = cy - R
+            val apexY = cy - Ry
+            val handleY = apexY + arrowHole * 0.8f
 
             val inSculpt = idx >= 0
             OverlayState.sculptArcActive = inSculpt
@@ -101,12 +105,12 @@ fun SculptArcContent() {
             collapsed = OverlayState.sculptArcCollapsed
             activeIndex = idx
 
-            val distToApex = if (x >= 0 && y >= 0) hypot(x - apexX, y - apexY) else 1e9f
+            val distToHandle = if (x >= 0 && y >= 0) hypot(x - apexX, y - handleY) else 1e9f
 
             if (down && !lastDown) {
                 // DOWN: arm the gesture. Handle gesture if the finger lands on the chevron.
                 gestureArmed = true
-                onHandle = distToApex <= arrowHole
+                onHandle = distToHandle <= arrowHole
                 gestureStartY = y.toFloat()
                 gestureLastY = y.toFloat()
             } else if (!down && lastDown && gestureArmed) {
@@ -147,12 +151,15 @@ fun SculptArcContent() {
                 if (onHandle) {
                     gestureLastY = y.toFloat()
                 } else if (!collapsed && x >= 0 && y >= 0) {
-                    // Finger angle around the circle → nearest tool slot.
+                    // Finger angle around the ellipse → nearest tool slot.
                     val dx = x - cx
                     val dy = cy - y
-                    val dist = hypot(dx, dy)
-                    if (y <= cy && dist >= (R - bandHalf) && dist <= (R + bandHalf)) {
-                        val angDeg = Math.toDegrees(Math.atan2(dx.toDouble(), dy.toDouble())).toFloat()
+                    val nx = dx / Rx
+                    val ny = dy / Ry
+                    val distN = hypot(nx, ny)
+                    val bandN = bandHalf / Ry
+                    if (y <= cy && distN >= (1f - bandN) && distN <= (1f + bandN)) {
+                        val angDeg = Math.toDegrees(Math.atan2(nx.toDouble(), ny.toDouble())).toFloat()
                         val step = 180f / (SculptTools.size - 1)
                         var off = (angDeg / step).roundToInt().coerceIn(-5, 5)
                         var hi = Math.floorMod(idx + off, SculptTools.size)
@@ -180,51 +187,58 @@ fun SculptArcContent() {
     Box(modifier = Modifier.fillMaxSize()) {
         if (activeIndex >= 0) {
             Canvas(modifier = Modifier.fillMaxSize()) {
-                val R = min(size.width, size.height) * 0.24f
+                val minWh = min(size.width, size.height).toFloat()
+                val Rx = minWh * 0.40f
+                val Ry = minWh * 0.18f
                 val bandHalf = max(28f, size.width * 0.03f)
                 val cx = size.width / 2f
                 val cy = size.height
                 val apexX = cx
-                val apexY = cy - R
+                val apexY = cy - Ry
+                val handleY = apexY + max(30f, size.width * 0.04f) * 0.8f
                 val step = 180f / (SculptTools.size - 1)
 
                 // Arc band hint.
                 if (!collapsed) {
                     val bandPath = Path()
-                    val outer = R + bandHalf
-                    val inner = R - bandHalf
+                    val outerX = Rx + bandHalf
+                    val outerY = Ry + bandHalf
+                    val innerX = Rx - bandHalf
+                    val innerY = Ry - bandHalf
                     for (i in 0..180) {
                         val a = Math.toRadians((i - 90).toDouble()).toFloat()
-                        val px = cx + outer * sin(a)
-                        val py = cy - outer * cos(a)
+                        val px = cx + outerX * sin(a)
+                        val py = cy - outerY * cos(a)
                         if (i == 0) bandPath.moveTo(px, py) else bandPath.lineTo(px, py)
                     }
                     for (i in 180 downTo 0) {
                         val a = Math.toRadians((i - 90).toDouble()).toFloat()
-                        val px = cx + inner * sin(a)
-                        val py = cy - inner * cos(a)
+                        val px = cx + innerX * sin(a)
+                        val py = cy - innerY * cos(a)
                         bandPath.lineTo(px, py)
                     }
                     bandPath.close()
                     drawPath(
                         path = bandPath,
-                        color = Color.Black.copy(alpha = 0.25f)
+                        color = Color(0xFF3E4B61).copy(alpha = 0.30f)
                     )
                 }
 
                 // Tool slots in carousel order centered on the active tool.
-                for (off in -5..5) {
-                    val t = Math.floorMod(activeIndex + off, SculptTools.size)
-                    val angRad = Math.toRadians((off * step).toDouble()).toFloat()
-                    val tx = cx + R * sin(angRad)
-                    val ty = cy - R * cos(angRad)
-                    val isActive = off == 0
-                    val isHighlight = t == highlightIndex
-                    drawToolSlot(tx, ty, SculptTools[t].label, isActive, isHighlight)
+                if (!collapsed) {
+                    for (off in -5..5) {
+                        val t = Math.floorMod(activeIndex + off, SculptTools.size)
+                        val angRad = Math.toRadians((off * step).toDouble()).toFloat()
+                        val tx = cx + Rx * sin(angRad)
+                        val ty = (cy - Ry * cos(angRad)).coerceAtMost(cy - 24f)
+                        val isActive = off == 0
+                        val isHighlight = t == highlightIndex
+                        drawToolSlot(tx, ty, SculptTools[t].label, isActive, isHighlight)
+                    }
                 }
 
-                // Hide/show chevron at the apex.
-                drawChevron(apexX, apexY, collapsed)
+                // Hide/show chevron at the handle position.
+                drawChevron(apexX, handleY, collapsed)
             }
         }
     }
@@ -237,17 +251,31 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawToolSlot(
     isActive: Boolean,
     isHighlight: Boolean
 ) {
-    val radius = if (isActive) 26f else 20f
+    val w = if (isActive) 96f else 80f
+    val h = if (isActive) 44f else 38f
     val bg = when {
         isHighlight -> Color(0xFF4FC3F7)
-        isActive -> Color(0xFF81C784)
-        else -> Color(0x99000000)
+        isActive -> Color(0xFF3E8EF7)
+        else -> Color(0xE6202A36)
     }
-    drawCircle(color = bg, radius = radius, center = Offset(cx, cy))
-    drawCircle(
-        color = if (isHighlight) Color.White else Color(0x55FFFFFF),
-        radius = radius,
-        center = Offset(cx, cy),
+    val border = when {
+        isHighlight -> Color(0xFFFFFFFF)
+        isActive -> Color(0xFF9CC9FF)
+        else -> Color(0x55AEBFD4)
+    }
+    val left = cx - w / 2f
+    val top = cy - h / 2f
+    drawRoundRect(
+        color = bg,
+        topLeft = Offset(left, top),
+        size = androidx.compose.ui.geometry.Size(w, h),
+        cornerRadius = androidx.compose.ui.geometry.CornerRadius(h / 2f, h / 2f)
+    )
+    drawRoundRect(
+        color = border,
+        topLeft = Offset(left, top),
+        size = androidx.compose.ui.geometry.Size(w, h),
+        cornerRadius = androidx.compose.ui.geometry.CornerRadius(h / 2f, h / 2f),
         style = Stroke(width = 2f)
     )
     drawContext.canvas.nativeCanvas.drawText(
@@ -256,7 +284,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawToolSlot(
         cy + 4f,
         android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
             color = android.graphics.Color.WHITE
-            textSize = if (isActive) 13f else 11f
+            textSize = if (isActive) 15f else 13f
             textAlign = android.graphics.Paint.Align.CENTER
             isFakeBoldText = isActive || isHighlight
         }
@@ -264,7 +292,17 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawToolSlot(
 }
 
 private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawChevron(cx: Float, cy: Float, collapsed: Boolean) {
-    val r = 12f
+    val w = 44f
+    val h = 22f
+    val left = cx - w / 2f
+    val top = cy - h / 2f
+    drawRoundRect(
+        color = Color(0xE6202A36),
+        topLeft = Offset(left, top),
+        size = androidx.compose.ui.geometry.Size(w, h),
+        cornerRadius = androidx.compose.ui.geometry.CornerRadius(h / 2f, h / 2f)
+    )
+    val r = 7f
     val path = Path().apply {
         if (collapsed) {
             moveTo(cx - r, cy + r * 0.5f)
@@ -277,7 +315,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawChevron(cx: Flo
         }
         close()
     }
-    drawPath(path, Color.White.copy(alpha = 0.55f))
+    drawPath(path, Color(0xFFAEBFD4))
 }
 
 private fun emitToolKey(tool: SculptTool) {

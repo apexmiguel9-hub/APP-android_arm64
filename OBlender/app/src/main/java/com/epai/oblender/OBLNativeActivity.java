@@ -432,6 +432,10 @@ public class OBLNativeActivity extends NativeActivity
         });
 
         super.onCreate(savedInstanceState);
+
+        // Sculpt arc overlay is independent of the control editor: show it on
+        // app start so it is available even without a control_layout.json.
+        OBLControllerOverlayKt.showSculptArcOverlay(OBLNativeActivity.this, ProcessLifecycleOwner.get());
     }
 
     private void hideToolbar() {
