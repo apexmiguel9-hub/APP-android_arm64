@@ -123,8 +123,11 @@ fun SculptArcContent() {
         }
 
         fun startSnap(target: Float) {
+            // Never snap outside the valid tool range: center index must be a
+            // real tool (Gemini: clamp to [0, items.size - 1]).
+            val clamped = target.coerceIn(-((SculptTools.size - 1) * step).toFloat(), 0f)
             snapFrom = OverlayState.scrollOffset
-            snapTarget = target
+            snapTarget = clamped
             snapT = 0f
             snapActive = true
         }
@@ -209,7 +212,13 @@ fun SculptArcContent() {
                     val degPerPx = 90f / halfW
                     val delta = (x - lastX) * degPerPx
                     if (abs(delta) < 60f) {
-                        OverlayState.scrollOffset += delta
+                        // Clamp so scrollOffset stays within [-(lastIndex*step), 0]:
+                        // the center index is always a valid tool. Without this the
+                        // drag past the last element collapses the animation state
+                        // (Gemini: Index Out Of Bounds / reset to 0).
+                        val maxOffset = -((SculptTools.size - 1) * step).toFloat()
+                        OverlayState.scrollOffset =
+                            (OverlayState.scrollOffset + delta).coerceIn(maxOffset, 0f)
                         dragAccum += abs(delta)
                     }
                     lastX = x.toFloat()
