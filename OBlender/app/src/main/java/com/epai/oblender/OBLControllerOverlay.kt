@@ -75,14 +75,10 @@ object OverlayState {
     var leftMouseHeld = false
     /** True while the sculpt tool arc overlay is active. GHOST reads this
      *  (GetAsyncKeyState(102)) to suppress brush strokes over the arc band. */
-    @Volatile
-    @JvmField
-    var sculptArcActive = false
-    /** True when the arc is collapsed to just the arrow handle (GetAsyncKeyState(103)).
-     *  When collapsed, GHOST only intercepts touches on the handle region. */
-    @Volatile
-    @JvmField
-    var sculptArcCollapsed = false
+    @JvmStatic
+    var sculptArcActive by mutableStateOf(false)
+    @JvmStatic
+    var sculptArcCollapsed by mutableStateOf(false)
     /** ComposeView of the sculpt tool arc overlay (for show/hide). */
     @JvmField
     var sculptArcView: View? = null

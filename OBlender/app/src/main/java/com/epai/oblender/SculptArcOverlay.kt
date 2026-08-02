@@ -179,11 +179,10 @@ fun SculptArcContent() {
                 }
             }
 
-            if (logCount++ % 200 == 0) {
+            if (logCount++ % 100 == 0) {
                 android.util.Log.d(
                     "OBL.ARC",
-                    "poll idx=$idx tool=$toolId ws=$workspace down=$down x=$x y=$y " +
-                        "highlight=$highlightIndex collapsed=$collapsed active=$inSculpt"
+                    "DEBUG: idx=$idx tool=$toolId mode=$mode ws=$workspace active=$inSculpt"
                 )
             }
 
@@ -196,8 +195,8 @@ fun SculptArcContent() {
         if (activeIndex >= 0) {
             Canvas(modifier = Modifier.fillMaxSize()) {
                 val minWh = min(size.width, size.height).toFloat()
-                val Rx = minWh * 0.40f
-                val Ry = minWh * 0.18f
+                val Rx = minWh * 0.75f
+                val Ry = minWh * 0.10f
                 val bandHalf = max(28f, size.width * 0.03f)
                 val cx = size.width / 2f
                 val cy = size.height
