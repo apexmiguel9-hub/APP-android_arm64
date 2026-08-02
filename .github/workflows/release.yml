@@ -76,30 +76,32 @@ jobs:
 
       - name: Extract and flatten .a files
         run: |
-          ZIP_FILE=$(find /tmp/blender-libs -name "*.zip" -type f | head -1)
-          if [ -z "$ZIP_FILE" ]; then
-            echo "ERROR: No .zip found in downloaded artifact"
-            find /tmp/blender-libs -type f | head -20
-            exit 1
-          fi
-          echo "Extracting $ZIP_FILE..."
-          unzip -q "$ZIP_FILE" -d /tmp/blender-libs/extracted
-
           GITROOT="${{ github.workspace }}"
           A_DIR="$GITROOT/OBlender/app/.cxx/blender-libs/release/arm64-v8a/lib"
+          # 1. Asegurar limpieza total del destino
+          rm -rf "$A_DIR"
           mkdir -p "$A_DIR"
+          
+          # 2. Buscar si hay un zip (por si acaso el comportamiento de la acción cambia)
+          ZIP_FILE=$(find /tmp/blender-libs -name "*.zip" -type f | head -1)
+          if [ -n "$ZIP_FILE" ]; then
+            echo "Zip encontrado, extrayendo..."
+            unzip -q "$ZIP_FILE" -d /tmp/blender-libs/extracted
+            SOURCE_DIR="/tmp/blender-libs/extracted"
+          else
+            echo "No zip, usando la carpeta de descarga directamente..."
+            SOURCE_DIR="/tmp/blender-libs"
+          fi
 
-          echo "=== .a files found ==="
-          find /tmp/blender-libs/extracted -name "*.a" -type f | head -5
-          find /tmp/blender-libs/extracted -name "*.a" -type f | wc -l
-
-          echo "=== Copiando a $A_DIR ==="
-          find /tmp/blender-libs/extracted -name "*.a" -type f -exec cp {} "$A_DIR/" \;
+          # 3. Copiar solo .a files encontrados en la descarga actual
+          echo "=== Copiando .a files recién descargados ==="
+          find "$SOURCE_DIR" -name "*.a" -type f -exec cp {} "$A_DIR/" \;
+          
+          # 4. Validar que se hayan desplegado archivos
           DEPLOYED=$(ls "$A_DIR/" | wc -l)
           echo "Deployed $DEPLOYED .a files"
-
           if [ "$DEPLOYED" -eq 0 ]; then
-            echo "ERROR: No .a files deployed!" >&2
+            echo "ERROR: No .a files deployed, algo salió mal en la descarga!" >&2
             exit 1
           fi
 
