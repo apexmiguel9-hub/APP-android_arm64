@@ -118,10 +118,10 @@ public class OBLNativeActivity extends NativeActivity
 
     public int GetAsyncKeyState(int type) {
         if (type == 102) {
-            return OverlayState.sculptArcActive ? 1 : 0;
+            return OverlayState.isSculptArcActive() ? 1 : 0;
         }
         if (type == 103) {
-            return OverlayState.sculptArcCollapsed ? 1 : 0;
+            return OverlayState.isSculptArcCollapsed() ? 1 : 0;
         }
         if (mOblSettingFragment == null) {
             return 0;

@@ -78,7 +78,11 @@ object OverlayState {
     @JvmStatic
     var sculptArcActive by mutableStateOf(false)
     @JvmStatic
+    fun isSculptArcActive(): Boolean = sculptArcActive
+    @JvmStatic
     var sculptArcCollapsed by mutableStateOf(false)
+    @JvmStatic
+    fun isSculptArcCollapsed(): Boolean = sculptArcCollapsed
     /** ComposeView of the sculpt tool arc overlay (for show/hide). */
     @JvmField
     var sculptArcView: View? = null
