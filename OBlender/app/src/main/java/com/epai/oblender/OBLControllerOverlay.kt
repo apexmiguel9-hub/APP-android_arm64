@@ -85,10 +85,6 @@ object OverlayState {
     fun isSculptArcCollapsed(): Boolean = sculptArcCollapsed
     @JvmStatic
     var scrollOffset by mutableStateOf(0f)
-    @JvmStatic
-    fun getScrollOffset(): Float = scrollOffset
-    @JvmStatic
-    fun setScrollOffset(offset: Float) { scrollOffset = offset }
     /** ComposeView of the sculpt tool arc overlay (for show/hide). */
     @JvmField
     var sculptArcView: View? = null

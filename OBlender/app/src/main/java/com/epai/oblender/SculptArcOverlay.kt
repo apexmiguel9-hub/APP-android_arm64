@@ -169,7 +169,7 @@ fun SculptArcContent() {
                     if (lastDown) {
                         // Update scroll offset based on drag delta
                         val delta = angDeg - Math.toDegrees(Math.atan2((lastX - cx).toDouble(), (cy - lastY).toDouble())).toFloat()
-                        OverlayState.setScrollOffset(OverlayState.getScrollOffset() + delta)
+                        OverlayState.scrollOffset += delta
                     }
                     lastX = x.toFloat()
                     lastY = y.toFloat()
