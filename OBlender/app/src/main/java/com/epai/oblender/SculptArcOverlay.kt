@@ -36,20 +36,26 @@ import kotlin.math.sin
 const val CTX_MODE_SCULPT = 9
 
 /**
- * Sculpt tool arc overlay.
+ * Sculpt tool arc overlay (Curved Bottom Carousel, per Gemini spec).
  *
- * A 180° semicircle anchored at the bottom of the screen, opened upward. The
- * ACTIVE sculpt tool sits at the apex (top center). The 11 sculpt tools are
- * arranged around the arc in a carousel centered on the active tool; the user
- * presses and drags toward a tool and releases to switch to it.
+ * A wide, shallow "bridge" parabola anchored at the bottom-center of the screen
+ * (60% of the screen width, apex at cy - arcH). The ACTIVE sculpt tool sits at
+ * the apex and is highlighted (scale 1.1); the neighboring tools fan out along
+ * the curve (scale down to 0.8). Only the 7 tools around the current center are
+ * rendered (culling), and only the centered tool is "selected".
+ *
+ * Interaction model:
+ *  - Horizontal drag rotates the carousel; on release it snaps (animated) so
+ *    the nearest tool ends up exactly at the apex.
+ *  - Tap on a tool selects it: the key is emitted and the carousel animates to
+ *    center that tool at the apex.
+ *  - Swiping the chevron handle DOWN collapses the arc to just the handle;
+ *    swiping UP expands it.
  *
  * The overlay is FLAG_NOT_TOUCHABLE: touches pass through to the GL surface and
  * GHOST receives them. GHOST suppresses strokes that start inside the arc band
  * (GetAsyncKeyState(102)) so holding on the arc never draws. The finger position
  * comes from the GHOST cursor position (== finger position in touch mode).
- *
- * A small chevron at the apex is the hide/show handle: swipe it DOWN to collapse
- * the arc to just the handle, swipe UP to expand again.
  */
 @Composable
 fun SculptArcContent() {
@@ -71,6 +77,56 @@ fun SculptArcContent() {
         var lastY = 0f
         var dragAccum = 0f
         var onHandle = false
+        var snapActive = false
+        var snapFrom = 0f
+        var snapTarget = 0f
+        var snapT = 0f
+
+        // Arc geometry — MUST match sculpt_arc_hit_test() in GHOST_SystemAndroid.cc.
+        // "Bridge" parabola (quadratic bezier, per Gemini spec): apex at cy-arcH,
+        // base at cy, total width = 60% of screen, contained at bottom-center.
+        val step = 20f
+        val halfW = screenW * 0.30f
+        val arcH = screenW * 0.16f
+        val bandHalf = max(28f, screenW * 0.03f)
+        val arrowHole = max(30f, screenW * 0.04f)
+        val cx = screenW * 0.5f
+        val cy = screenH.toFloat()
+        val apexX = cx
+        val apexY = cy - arcH
+        val handleY = apexY + 90f
+
+        fun nearestToolIndex(px: Float, py: Float): Int {
+            var best = -1
+            var bestD = 1e9f
+            for (i in SculptTools.indices) {
+                val a = (i * step) + OverlayState.scrollOffset
+                val angRad = Math.toRadians(a.toDouble()).toFloat()
+                val tx = cx + halfW * sin(angRad)
+                val ty = cy - arcH * cos(angRad) * cos(angRad)
+                val d = hypot(px - tx, py - ty)
+                if (d < bestD) { bestD = d; best = i }
+            }
+            return best
+        }
+
+        fun nearestToApexIndex(): Int {
+            var best = -1
+            var bestD = 1e9f
+            for (i in SculptTools.indices) {
+                val a = (i * step) + OverlayState.scrollOffset
+                val d = abs(((a % 180f) + 180f) % 180f)
+                if (d < bestD) { bestD = d; best = i }
+            }
+            return best
+        }
+
+        fun startSnap(target: Float) {
+            snapFrom = OverlayState.scrollOffset
+            snapTarget = target
+            snapT = 0f
+            snapActive = true
+        }
 
         while (isActive) {
             val toolId = OBLNativeActivity.getActiveToolIdStatic()
@@ -87,19 +143,6 @@ fun SculptArcContent() {
             val x = if (real != null && real.size == 2) real[0] else -1
             val y = if (real != null && real.size == 2) real[1] else -1
             val down = OBLNativeActivity.getTouchDownStatic()
-
-            // Arc geometry — MUST match sculpt_arc_hit_test() in GHOST_SystemAndroid.cc.
-            // Flattened half-ellipse ("parenthesis"), wider and flatter.
-            val minWh = min(screenW, screenH).toFloat()
-            val Rx = minWh * 0.72f
-            val Ry = minWh * 0.20f
-            val bandHalf = max(28f, screenW * 0.03f)
-            val arrowHole = max(30f, screenW * 0.04f)
-            val cx = screenW * 0.5f
-            val cy = screenH.toFloat()
-            val apexX = cx
-            val apexY = cy - Ry
-            val handleY = apexY + 80f
 
             val inSculpt = idx >= 0
             OverlayState.sculptArcActive = inSculpt
@@ -126,16 +169,17 @@ fun SculptArcContent() {
                 // (brush stroke / sculpting keeps working).
                 gestureArmed = false
                 onHandle = distToHandle <= arrowHole * 2f
-                val dx = x - cx
-                val dy = cy - y
-                val nx = dx / Rx
-                val ny = dy / Ry
-                val distN = hypot(nx, ny)
-                val bandN = bandHalf / Ry
-                val inBand = (distN >= (1f - bandN * 2f) && distN <= (1f + bandN * 2f))
+                // Parabola band test (same as sculpt_arc_hit_test in C++): solve
+                // theta from x, compare y distance to the curve.
+                val sx = if (x >= 0) (x - cx) / halfW else 2f
+                val inBand = if (x >= 0 && y >= 0 && sx >= -1f && sx <= 1f) {
+                    val theta = Math.asin(sx.coerceIn(-1f, 1f).toDouble()).toFloat()
+                    val curveY = cy - arcH * cos(theta) * cos(theta)
+                    abs(y - curveY) <= bandHalf * 2f
+                } else false
                 android.util.Log.d(
                     "OBL.ARC",
-                    "down x=$x y=$y distN=$distN inBand=$inBand onHandle=$onHandle"
+                    "down x=$x y=$y inBand=$inBand onHandle=$onHandle"
                 )
                 if (inBand || onHandle) {
                     gestureArmed = true
@@ -145,49 +189,25 @@ fun SculptArcContent() {
                     lastY = y.toFloat()
                     dragAccum = 0f
                     if (!onHandle) {
-                        // Nearest tool to the finger's angular position → tap selects it.
-                        val fingerAng = Math.toDegrees(Math.atan2(dx.toDouble(), dy.toDouble())).toFloat()
-                        val step = 20f
-                        var best = -1
-                        var bestD = 1e9f
-                        for (i in SculptTools.indices) {
-                            val a = (i * step) + OverlayState.scrollOffset
-                            val diff = abs((((a - fingerAng + 180f) % 360f) + 360f) % 360f - 180f)
-                            if (diff < bestD) {
-                                bestD = diff
-                                best = i
-                            }
-                        }
+                        // Nearest tool by screen position (tap selects it).
+                        val best = nearestToolIndex(x, y)
                         highlightIndex = best
                     }
                 }
             } else if (down && gestureArmed) {
-                // MOVE: rotate the carousel by the angular delta of the finger.
+                // MOVE: rotate the carousel by horizontal finger delta (degrees per px).
                 if (!onHandle && !collapsed && x >= 0 && y >= 0) {
-                    val dx = x - cx
-                    val dy = cy - y
-                    val ang = Math.toDegrees(Math.atan2(dx.toDouble(), dy.toDouble())).toFloat()
-                    val ldx = lastX - cx
-                    val ldy = cy - lastY
-                    val lastAng = Math.toDegrees(Math.atan2(ldx.toDouble(), ldy.toDouble())).toFloat()
-                    val delta = ang - lastAng
-                    if (abs(delta) < 45f) {
+                    val degPerPx = 90f / halfW
+                    val delta = (x - lastX) * degPerPx
+                    if (abs(delta) < 60f) {
                         OverlayState.scrollOffset += delta
                         dragAccum += abs(delta)
                     }
                     lastX = x.toFloat()
                     lastY = y.toFloat()
 
-                    // Nearest tool to the apex (angle 0) → highlight.
-                    val step = 20f
-                    var best = -1
-                    var bestD = 1e9f
-                    for (i in SculptTools.indices) {
-                        val a = (i * step) + OverlayState.scrollOffset
-                        val d = abs(((a % 180f) + 180f) % 180f - 0f)
-                        if (d < bestD) { bestD = d; best = i }
-                    }
-                    highlightIndex = best
+                    // Nearest tool to the apex (offset 0) → highlight.
+                    highlightIndex = nearestToApexIndex()
                 }
                 if (onHandle) {
                     gestureLastY = y.toFloat()
@@ -209,35 +229,43 @@ fun SculptArcContent() {
                         }
                     }
                 } else if (!collapsed) {
-                    // If it was essentially a tap (little angular movement), select.
-                    if (dragAccum < 8f) {
+                    // If it was essentially a tap (little horizontal movement), select.
+                    if (dragAccum < 12f) {
                         val sel = highlightIndex
-                        if (sel >= 0 && sel != idx) {
+                        if (sel >= 0) {
                             val tool = SculptTools[sel]
                             android.util.Log.d(
                                 "OBL.ARC",
                                 "select ${tool.id} key=${tool.key} shift=${tool.shift}"
                             )
-                            emitToolKey(tool)
+                            // Select the tool AND center it at the apex (animated snap).
+                            if (sel != idx) emitToolKey(tool)
+                            startSnap(-(sel * step).toFloat())
                         }
                     } else {
                         // It was a drag: snap so the nearest tool sits at the apex.
-                        val step = 20f
-                        var best = -1
-                        var bestD = 1e9f
-                        for (i in SculptTools.indices) {
-                            val a = (i * step) + OverlayState.scrollOffset
-                            val d = abs(((a % 180f) + 180f) % 180f)
-                            if (d < bestD) { bestD = d; best = i }
-                        }
+                        val best = nearestToApexIndex()
                         if (best >= 0) {
-                            OverlayState.scrollOffset = -(best * step).toFloat()
+                            startSnap(-(best * step).toFloat())
                         }
                     }
                 }
                 gestureArmed = false
                 onHandle = false
                 highlightIndex = -1
+            }
+
+            // Animated snap: ease scrollOffset toward the target so the centered
+            // tool ends up exactly at the apex.
+            if (snapActive) {
+                snapT += 0.12f
+                if (snapT >= 1f) {
+                    OverlayState.scrollOffset = snapTarget
+                    snapActive = false
+                } else {
+                    val eased = 1f - (1f - snapT) * (1f - snapT) * (1f - snapT)
+                    OverlayState.scrollOffset = snapFrom + (snapTarget - snapFrom) * eased
+                }
             }
 
             // If the gesture isn't armed, we don't touch the scroll at all:
@@ -258,33 +286,33 @@ fun SculptArcContent() {
     Box(modifier = Modifier.fillMaxSize()) {
         if (OverlayState.sculptArcActive) {
             Canvas(modifier = Modifier.fillMaxSize()) {
-                val minWh = min(size.width, size.height).toFloat()
-                val Rx = minWh * 0.72f
-                val Ry = minWh * 0.20f
+                // Geometry — MUST match sculpt_arc_hit_test() in GHOST_SystemAndroid.cc.
+                val halfW = size.width * 0.30f
+                val arcH = size.width * 0.16f
                 val cx = size.width / 2f
-                val cy = size.height
+                val cy = size.height.toFloat()
                 val apexX = cx
-                val apexY = cy - Ry
-                val handleY = apexY + 80f
+                val apexY = cy - arcH
+                val handleY = apexY + 90f
 
-                // Arc band hint.
+                // Background "bridge" band (parabola) anchored at bottom-center.
                 if (!collapsed) {
                     val bandPath = Path()
                     val bandHalf = max(28f, size.width * 0.03f)
-                    val outerX = Rx + bandHalf
-                    val outerY = Ry + bandHalf
-                    val innerX = Rx - bandHalf
-                    val innerY = Ry - bandHalf
-                    for (i in 0..180) {
-                        val a = Math.toRadians((i - 90).toDouble()).toFloat()
-                        val px = cx + outerX * sin(a)
-                        val py = cy - outerY * cos(a)
+                    // Parabola y(x) = cy - arcH * cos^2(theta), theta in [-90,90].
+                    val n = 120
+                    for (i in 0..n) {
+                        val theta = -90f + 180f * i / n
+                        val a = Math.toRadians(theta.toDouble()).toFloat()
+                        val px = cx + (halfW + bandHalf) * sin(a)
+                        val py = cy - (arcH + bandHalf) * cos(a) * cos(a)
                         if (i == 0) bandPath.moveTo(px, py) else bandPath.lineTo(px, py)
                     }
-                    for (i in 180 downTo 0) {
-                        val a = Math.toRadians((i - 90).toDouble()).toFloat()
-                        val px = cx + innerX * sin(a)
-                        val py = cy - innerY * cos(a)
+                    for (i in n downTo 0) {
+                        val theta = -90f + 180f * i / n
+                        val a = Math.toRadians(theta.toDouble()).toFloat()
+                        val px = cx + (halfW - bandHalf) * sin(a)
+                        val py = cy - (arcH - bandHalf) * cos(a) * cos(a)
                         bandPath.lineTo(px, py)
                     }
                     bandPath.close()
@@ -295,21 +323,25 @@ fun SculptArcContent() {
                 }
 
                 // Tool slots in carousel order. Each tool sits at
-                // angleDeg = (i * step) + scrollOffset (step = 20°).
+                // angleDeg = (i * step) + scrollOffset (step = 20°). Only the 7
+                // tools around the current center are drawn (culling per spec).
                 if (!collapsed) {
                     val step = 20f
                     val activeId = OBLNativeActivity.getActiveToolIdStatic()
-                    for (i in SculptTools.indices) {
+                    val centerIdx = Math.round(-OverlayState.scrollOffset / step).toInt()
+                    val lo = (centerIdx - 3).coerceAtLeast(0)
+                    val hi = (centerIdx + 3).coerceAtMost(SculptTools.size - 1)
+                    for (i in lo..hi) {
                         val angleDeg = (i * step) + OverlayState.scrollOffset
-                        // Only draw tools within the visible arc range.
-                        if (angleDeg > -95f && angleDeg < 95f) {
-                            val angRad = Math.toRadians(angleDeg.toDouble()).toFloat()
-                            val tx = cx + Rx * sin(angRad)
-                            val ty = (cy - Ry * cos(angRad)).coerceAtMost(cy - 8f)
-                            val isActive = SculptTools[i].id == activeId
-                            val isHighlight = i == highlightIndex
-                            drawToolSlot(tx, ty, SculptTools[i].label, isActive, isHighlight)
-                        }
+                        // Clamp near the edges so tools don't run off the parabola.
+                        val a = Math.toRadians(angleDeg.toDouble()).toFloat()
+                        val tx = cx + halfW * sin(a)
+                        val ty = (cy - arcH * cos(a) * cos(a)).coerceAtMost(cy - 10f)
+                        val isActive = SculptTools[i].id == activeId
+                        val isHighlight = i == highlightIndex
+                        // Dynamic scale: center = 1.1, edges = 0.8.
+                        val scale = (1.1f - 0.3f * abs(sin(a))).coerceAtLeast(0.8f)
+                        drawToolSlot(tx, ty, SculptTools[i].label, scale, isActive, isHighlight)
                     }
                 }
 
@@ -324,10 +356,11 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawToolSlot(
     cx: Float,
     cy: Float,
     label: String,
+    scale: Float,
     isActive: Boolean,
     isHighlight: Boolean
 ) {
-    val r = if (isActive) 46f else 38f
+    val r = (if (isActive) 46f else 38f) * scale
     val highlighted = isActive || isHighlight
 
     // Amber/orange glow behind the active (or being-selected) tool.
