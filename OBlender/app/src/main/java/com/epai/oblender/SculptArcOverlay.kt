@@ -91,8 +91,8 @@ fun SculptArcContent() {
             // Arc geometry — MUST match sculpt_arc_hit_test() in GHOST_SystemAndroid.cc.
             // Flattened half-ellipse ("parenthesis"), wider and flatter.
             val minWh = min(screenW, screenH).toFloat()
-            val Rx = minWh * 0.75f
-            val Ry = minWh * 0.10f
+            val Rx = minWh * 0.72f
+            val Ry = minWh * 0.20f
             val bandHalf = max(28f, screenW * 0.03f)
             val arrowHole = max(30f, screenW * 0.04f)
             val cx = screenW * 0.5f
@@ -144,6 +144,22 @@ fun SculptArcContent() {
                     lastX = x.toFloat()
                     lastY = y.toFloat()
                     dragAccum = 0f
+                    if (!onHandle) {
+                        // Nearest tool to the finger's angular position → tap selects it.
+                        val fingerAng = Math.toDegrees(Math.atan2(dx.toDouble(), dy.toDouble())).toFloat()
+                        val step = 20f
+                        var best = -1
+                        var bestD = 1e9f
+                        for (i in SculptTools.indices) {
+                            val a = (i * step) + OverlayState.scrollOffset
+                            val diff = abs((((a - fingerAng + 180f) % 360f) + 360f) % 360f - 180f)
+                            if (diff < bestD) {
+                                bestD = diff
+                                best = i
+                            }
+                        }
+                        highlightIndex = best
+                    }
                 }
             } else if (down && gestureArmed) {
                 // MOVE: rotate the carousel by the angular delta of the finger.
@@ -243,8 +259,8 @@ fun SculptArcContent() {
         if (OverlayState.sculptArcActive) {
             Canvas(modifier = Modifier.fillMaxSize()) {
                 val minWh = min(size.width, size.height).toFloat()
-                val Rx = minWh * 0.75f
-                val Ry = minWh * 0.10f
+                val Rx = minWh * 0.72f
+                val Ry = minWh * 0.20f
                 val cx = size.width / 2f
                 val cy = size.height
                 val apexX = cx
@@ -289,7 +305,7 @@ fun SculptArcContent() {
                         if (angleDeg > -95f && angleDeg < 95f) {
                             val angRad = Math.toRadians(angleDeg.toDouble()).toFloat()
                             val tx = cx + Rx * sin(angRad)
-                            val ty = (cy - Ry * cos(angRad)).coerceAtMost(cy - 80f)
+                            val ty = (cy - Ry * cos(angRad)).coerceAtMost(cy - 8f)
                             val isActive = SculptTools[i].id == activeId
                             val isHighlight = i == highlightIndex
                             drawToolSlot(tx, ty, SculptTools[i].label, isActive, isHighlight)
