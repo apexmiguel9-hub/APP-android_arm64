@@ -190,7 +190,7 @@ fun SculptArcContent() {
                     dragAccum = 0f
                     if (!onHandle) {
                         // Nearest tool by screen position (tap selects it).
-                        val best = nearestToolIndex(x, y)
+                        val best = nearestToolIndex(x.toFloat(), y.toFloat())
                         highlightIndex = best
                     }
                 }
