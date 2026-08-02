@@ -81,13 +81,14 @@ fun SculptArcContent() {
         var snapFrom = 0f
         var snapTarget = 0f
         var snapT = 0f
+        var lastIdx = -2
 
         // Arc geometry — MUST match sculpt_arc_hit_test() in GHOST_SystemAndroid.cc.
         // "Bridge" parabola (quadratic bezier, per Gemini spec): apex at cy-arcH,
-        // base at cy, total width = 60% of screen, contained at bottom-center.
+        // base at cy, total width = 60% of screen, very gentle curve (arcH small).
         val step = 20f
         val halfW = screenW * 0.30f
-        val arcH = screenW * 0.16f
+        val arcH = screenW * 0.11f
         val bandHalf = max(28f, screenW * 0.03f)
         val arrowHole = max(30f, screenW * 0.04f)
         val cx = screenW * 0.5f
@@ -160,6 +161,14 @@ fun SculptArcContent() {
             }
             collapsed = OverlayState.sculptArcCollapsed
             activeIndex = idx
+
+            // Auto-center: keep the ACTIVE tool exactly at the apex so the
+            // carousel is symmetric (tools on BOTH sides of center, per Gemini).
+            // Re-centers on entry and whenever the active tool changes.
+            if (idx != lastIdx && !gestureArmed) {
+                lastIdx = idx
+                startSnap(-(idx * step).toFloat())
+            }
 
             val distToHandle = if (x >= 0 && y >= 0) hypot(x - apexX, y - handleY) else 1e9f
 
@@ -243,9 +252,16 @@ fun SculptArcContent() {
                             startSnap(-(sel * step).toFloat())
                         }
                     } else {
-                        // It was a drag: snap so the nearest tool sits at the apex.
+                        // It was a drag: snap so the nearest tool sits at the apex,
+                        // and select it (the centered tool IS the selected one).
                         val best = nearestToApexIndex()
                         if (best >= 0) {
+                            val tool = SculptTools[best]
+                            android.util.Log.d(
+                                "OBL.ARC",
+                                "drag-select ${tool.id} key=${tool.key} shift=${tool.shift}"
+                            )
+                            if (best != idx) emitToolKey(tool)
                             startSnap(-(best * step).toFloat())
                         }
                     }
@@ -288,7 +304,7 @@ fun SculptArcContent() {
             Canvas(modifier = Modifier.fillMaxSize()) {
                 // Geometry — MUST match sculpt_arc_hit_test() in GHOST_SystemAndroid.cc.
                 val halfW = size.width * 0.30f
-                val arcH = size.width * 0.16f
+                val arcH = size.width * 0.11f
                 val cx = size.width / 2f
                 val cy = size.height.toFloat()
                 val apexX = cx
