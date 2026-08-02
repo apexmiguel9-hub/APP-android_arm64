@@ -4,22 +4,27 @@ import android.os.Handler
 import android.os.Looper
 import android.view.ViewGroup
 import android.view.WindowManager
-import androidx.compose.foundation.*
-import androidx.compose.foundation.gestures.*
-import androidx.compose.foundation.layout.*
-import androidx.compose.input.pointer.*
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.*
-import androidx.compose.ui.graphics.*
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.platform.*
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.max
@@ -64,6 +69,7 @@ fun SculptArcContent() {
         var gestureLastY = 0f
         var lastX = 0f
         var lastY = 0f
+        var dragAccum = 0f
         var onHandle = false
 
         while (isActive) {
@@ -115,38 +121,102 @@ fun SculptArcContent() {
             val distToHandle = if (x >= 0 && y >= 0) hypot(x - apexX, y - handleY) else 1e9f
 
             if (down && !lastDown) {
-                // DOWN: arm the gesture. Handle gesture if the finger lands on the chevron.
-                gestureArmed = true
-                onHandle = distToHandle <= arrowHole
-                gestureStartY = y.toFloat()
-                gestureLastY = y.toFloat()
+                // DOWN: arm the gesture only if the finger lands on the band or the chevron.
+                // If it lands elsewhere, we don't arm and the touch passes to Blender
+                // (brush stroke / sculpting keeps working).
+                gestureArmed = false
+                onHandle = distToHandle <= arrowHole * 2f
+                val dx = x - cx
+                val dy = cy - y
+                val nx = dx / Rx
+                val ny = dy / Ry
+                val distN = hypot(nx, ny)
+                val bandN = bandHalf / Ry
+                val inBand = (distN >= (1f - bandN * 2f) && distN <= (1f + bandN * 2f))
+                android.util.Log.d(
+                    "OBL.ARC",
+                    "down x=$x y=$y distN=$distN inBand=$inBand onHandle=$onHandle"
+                )
+                if (inBand || onHandle) {
+                    gestureArmed = true
+                    gestureStartY = y.toFloat()
+                    gestureLastY = y.toFloat()
+                    lastX = x.toFloat()
+                    lastY = y.toFloat()
+                    dragAccum = 0f
+                }
+            } else if (down && gestureArmed) {
+                // MOVE: rotate the carousel by the angular delta of the finger.
+                if (!onHandle && !collapsed && x >= 0 && y >= 0) {
+                    val dx = x - cx
+                    val dy = cy - y
+                    val ang = Math.toDegrees(Math.atan2(dx.toDouble(), dy.toDouble())).toFloat()
+                    val ldx = lastX - cx
+                    val ldy = cy - lastY
+                    val lastAng = Math.toDegrees(Math.atan2(ldx.toDouble(), ldy.toDouble())).toFloat()
+                    val delta = ang - lastAng
+                    if (abs(delta) < 45f) {
+                        OverlayState.scrollOffset += delta
+                        dragAccum += abs(delta)
+                    }
+                    lastX = x.toFloat()
+                    lastY = y.toFloat()
+
+                    // Nearest tool to the apex (angle 0) → highlight.
+                    val step = 20f
+                    var best = -1
+                    var bestD = 1e9f
+                    for (i in SculptTools.indices) {
+                        val a = (i * step) + OverlayState.scrollOffset
+                        val d = abs(((a % 180f) + 180f) % 180f - 0f)
+                        if (d < bestD) { bestD = d; best = i }
+                    }
+                    highlightIndex = best
+                }
+                if (onHandle) {
+                    gestureLastY = y.toFloat()
+                }
             } else if (!down && lastDown && gestureArmed) {
                 // UP: commit the gesture.
                 if (onHandle) {
                     val swipe = gestureLastY - gestureStartY
                     val threshold = max(24f, arrowHole * 0.6f)
                     if (collapsed) {
-                        // Swipe UP (negative y delta) expands.
                         if (gestureLastY < gestureStartY - threshold) {
                             OverlayState.sculptArcCollapsed = false
                             android.util.Log.d("OBL.ARC", "handle: expand")
                         }
                     } else {
-                        // Swipe DOWN (positive y delta) collapses.
                         if (gestureLastY > gestureStartY + threshold) {
                             OverlayState.sculptArcCollapsed = true
                             android.util.Log.d("OBL.ARC", "handle: collapse")
                         }
                     }
                 } else if (!collapsed) {
-                    val sel = highlightIndex
-                    if (sel >= 0 && sel != idx) {
-                        val tool = SculptTools[sel]
-                        android.util.Log.d(
-                            "OBL.ARC",
-                            "select ${tool.id} key=${tool.key} shift=${tool.shift}"
-                        )
-                        emitToolKey(tool)
+                    // If it was essentially a tap (little angular movement), select.
+                    if (dragAccum < 8f) {
+                        val sel = highlightIndex
+                        if (sel >= 0 && sel != idx) {
+                            val tool = SculptTools[sel]
+                            android.util.Log.d(
+                                "OBL.ARC",
+                                "select ${tool.id} key=${tool.key} shift=${tool.shift}"
+                            )
+                            emitToolKey(tool)
+                        }
+                    } else {
+                        // It was a drag: snap so the nearest tool sits at the apex.
+                        val step = 20f
+                        var best = -1
+                        var bestD = 1e9f
+                        for (i in SculptTools.indices) {
+                            val a = (i * step) + OverlayState.scrollOffset
+                            val d = abs(((a % 180f) + 180f) % 180f)
+                            if (d < bestD) { bestD = d; best = i }
+                        }
+                        if (best >= 0) {
+                            OverlayState.scrollOffset = -(best * step).toFloat()
+                        }
                     }
                 }
                 gestureArmed = false
@@ -154,38 +224,9 @@ fun SculptArcContent() {
                 highlightIndex = -1
             }
 
-            // Iniciar gesto solo si el toque comienza dentro de la banda o handle
-            if (down && !lastDown) {
-                gestureArmed = false
-                val dx = x - cx
-                val dy = cy - y
-                val nx = dx / Rx
-                val ny = dy / Ry
-                val distN = hypot(nx, ny)
-                val bandN = bandHalf / Ry
-                
-                // Hit test: ¿está cerca de la banda? (Ampliamos la zona de detección)
-                val inBand = (distN >= (1f - bandN * 2f) && distN <= (1f + bandN * 2f))
-                // Hit test: ¿está en el handle? (Ampliamos el área del handle)
-                val inHandle = (abs(x - apexX) < arrowHole * 2f && abs(y - handleY) < arrowHole * 2f)
-                
-                android.util.Log.d("OBL.ARC", "Gesture hit-test: inBand=$inBand inHandle=$inHandle distN=$distN")
-
-                if (inBand || inHandle) {
-                    gestureArmed = true
-                    onHandle = inHandle
-                    lastX = x.toFloat()
-                    lastY = y.toFloat()
-                }
-            }
-            
-            // Si no está armado, pasamos el toque a Blender (no rotar)
-            if (!gestureArmed) {
-                lastDown = down
-                delay(16)
-                continue
-            }
-
+            // If the gesture isn't armed, we don't touch the scroll at all:
+            // the touch belongs to Blender (sculpting). No early-continue here
+            // so the state flags below still update every frame.
             if (logCount++ % 100 == 0) {
                 android.util.Log.d(
                     "OBL.ARC",
@@ -198,28 +239,7 @@ fun SculptArcContent() {
         }
     }
 
-    // Carousel container with rotation logic
-    Box(modifier = Modifier
-        .fillMaxSize()
-        .pointerInput(Unit) {
-            detectDragGestures(
-                onDrag = { change, dragAmount ->
-                    change.consume()
-                    // 1. Rotación del carrusel
-                    val delta = dragAmount.x * 0.2f
-                    OverlayState.scrollOffset += delta
-                }
-            )
-        }
-        .pointerInput(Unit) {
-            detectTapGestures(
-                onTap = { offset ->
-                    // 2. Selección de herramienta
-                    // (Lógica de Hit-test basada en la posición actual de las esferas)
-                }
-            )
-        }
-    ) {
+    Box(modifier = Modifier.fillMaxSize()) {
         if (OverlayState.sculptArcActive) {
             Canvas(modifier = Modifier.fillMaxSize()) {
                 val minWh = min(size.width, size.height).toFloat()
@@ -227,22 +247,58 @@ fun SculptArcContent() {
                 val Ry = minWh * 0.10f
                 val cx = size.width / 2f
                 val cy = size.height
-                
-                // Tool slots in carousel order.
+                val apexX = cx
+                val apexY = cy - Ry
+                val handleY = apexY + 80f
+
+                // Arc band hint.
                 if (!collapsed) {
-                    val step = 20f // Fixed angular step
+                    val bandPath = Path()
+                    val bandHalf = max(28f, size.width * 0.03f)
+                    val outerX = Rx + bandHalf
+                    val outerY = Ry + bandHalf
+                    val innerX = Rx - bandHalf
+                    val innerY = Ry - bandHalf
+                    for (i in 0..180) {
+                        val a = Math.toRadians((i - 90).toDouble()).toFloat()
+                        val px = cx + outerX * sin(a)
+                        val py = cy - outerY * cos(a)
+                        if (i == 0) bandPath.moveTo(px, py) else bandPath.lineTo(px, py)
+                    }
+                    for (i in 180 downTo 0) {
+                        val a = Math.toRadians((i - 90).toDouble()).toFloat()
+                        val px = cx + innerX * sin(a)
+                        val py = cy - innerY * cos(a)
+                        bandPath.lineTo(px, py)
+                    }
+                    bandPath.close()
+                    drawPath(
+                        path = bandPath,
+                        color = Color(0xFF1B1B1B).copy(alpha = 0.60f)
+                    )
+                }
+
+                // Tool slots in carousel order. Each tool sits at
+                // angleDeg = (i * step) + scrollOffset (step = 20°).
+                if (!collapsed) {
+                    val step = 20f
+                    val activeId = OBLNativeActivity.getActiveToolIdStatic()
                     for (i in SculptTools.indices) {
                         val angleDeg = (i * step) + OverlayState.scrollOffset
+                        // Only draw tools within the visible arc range.
                         if (angleDeg > -95f && angleDeg < 95f) {
                             val angRad = Math.toRadians(angleDeg.toDouble()).toFloat()
                             val tx = cx + Rx * sin(angRad)
                             val ty = (cy - Ry * cos(angRad)).coerceAtMost(cy - 80f)
-                            val isActive = SculptTools[i].id == OBLNativeActivity.getActiveToolIdStatic()
+                            val isActive = SculptTools[i].id == activeId
                             val isHighlight = i == highlightIndex
                             drawToolSlot(tx, ty, SculptTools[i].label, isActive, isHighlight)
                         }
                     }
                 }
+
+                // Hide/show chevron at the handle position.
+                drawChevron(apexX, handleY, collapsed)
             }
         }
     }
