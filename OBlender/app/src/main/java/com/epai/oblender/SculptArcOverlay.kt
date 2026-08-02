@@ -84,10 +84,10 @@ fun SculptArcContent() {
             val down = OBLNativeActivity.getTouchDownStatic()
 
             // Arc geometry — MUST match sculpt_arc_hit_test() in GHOST_SystemAndroid.cc.
-            // Flattened half-ellipse ("parenthesis"), wider than tall.
+            // Flattened half-ellipse ("parenthesis"), wider and flatter.
             val minWh = min(screenW, screenH).toFloat()
-            val Rx = minWh * 0.40f
-            val Ry = minWh * 0.18f
+            val Rx = minWh * 0.75f
+            val Ry = minWh * 0.10f
             val bandHalf = max(28f, screenW * 0.03f)
             val arrowHole = max(30f, screenW * 0.04f)
             val cx = screenW * 0.5f
