@@ -88,6 +88,9 @@ object OverlayState {
     /** ComposeView of the sculpt tool arc overlay (for show/hide). */
     @JvmField
     var sculptArcView: View? = null
+    /** WindowManager.LayoutParams of the sculpt arc overlay (for resize/touchable). */
+    @JvmField
+    var sculptArcLp: WindowManager.LayoutParams? = null
 }
 
 fun setControlOverlayEditMode(editMode: Boolean) { OverlayState.isEditMode = editMode }
