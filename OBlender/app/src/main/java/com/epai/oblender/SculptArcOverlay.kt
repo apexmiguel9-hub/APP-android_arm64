@@ -5,8 +5,11 @@ import android.os.Looper
 import android.view.ViewGroup
 import android.view.WindowManager
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.input.pointer.pointerInput
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -168,10 +171,12 @@ fun SculptArcContent() {
                 val distN = hypot(nx, ny)
                 val bandN = bandHalf / Ry
                 
-                // Hit test: ¿está dentro de la banda?
-                val inBand = (distN >= (1f - bandN) && distN <= (1f + bandN))
-                // Hit test: ¿está en el handle?
-                val inHandle = (abs(x - apexX) < arrowHole && abs(y - handleY) < arrowHole)
+                // Hit test: ¿está cerca de la banda? (Ampliamos la zona de detección)
+                val inBand = (distN >= (1f - bandN * 2f) && distN <= (1f + bandN * 2f))
+                // Hit test: ¿está en el handle? (Ampliamos el área del handle)
+                val inHandle = (abs(x - apexX) < arrowHole * 2f && abs(y - handleY) < arrowHole * 2f)
+                
+                android.util.Log.d("OBL.ARC", "Gesture hit-test: inBand=$inBand inHandle=$inHandle distN=$distN")
 
                 if (inBand || inHandle) {
                     gestureArmed = true
@@ -200,53 +205,41 @@ fun SculptArcContent() {
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    // Carousel container with rotation logic
+    Box(modifier = Modifier
+        .fillMaxSize()
+        .pointerInput(Unit) {
+            detectDragGestures(
+                onDrag = { change, dragAmount ->
+                    change.consume()
+                    // 1. Rotación del carrusel
+                    val delta = dragAmount.x * 0.2f
+                    OverlayState.scrollOffset += delta
+                }
+            )
+        }
+        .pointerInput(Unit) {
+            detectTapGestures(
+                onTap = { offset ->
+                    // 2. Selección de herramienta
+                    // (Lógica de Hit-test basada en la posición actual de las esferas)
+                }
+            )
+        }
+    ) {
         if (OverlayState.sculptArcActive) {
             Canvas(modifier = Modifier.fillMaxSize()) {
                 val minWh = min(size.width, size.height).toFloat()
                 val Rx = minWh * 0.75f
                 val Ry = minWh * 0.10f
-                val bandHalf = max(28f, size.width * 0.03f)
                 val cx = size.width / 2f
                 val cy = size.height
-                val apexX = cx
-                val apexY = cy - Ry
-                val handleY = apexY + 80f
-                // Distribute tools across 160 degrees instead of 180 for better spacing in flatter arc
-                val step = 160f / (SculptTools.size - 1)
-
-                // Arc band hint.
-                if (!collapsed) {
-                    val bandPath = Path()
-                    val outerX = Rx + bandHalf
-                    val outerY = Ry + bandHalf
-                    val innerX = Rx - bandHalf
-                    val innerY = Ry - bandHalf
-                    for (i in 0..180) {
-                        val a = Math.toRadians((i - 90).toDouble()).toFloat()
-                        val px = cx + outerX * sin(a)
-                        val py = cy - outerY * cos(a)
-                        if (i == 0) bandPath.moveTo(px, py) else bandPath.lineTo(px, py)
-                    }
-                    for (i in 180 downTo 0) {
-                        val a = Math.toRadians((i - 90).toDouble()).toFloat()
-                        val px = cx + innerX * sin(a)
-                        val py = cy - innerY * cos(a)
-                        bandPath.lineTo(px, py)
-                    }
-                    bandPath.close()
-                    drawPath(
-                        path = bandPath,
-                        color = Color(0xFF1B1B1B).copy(alpha = 0.60f)
-                    )
-                }
-
+                
                 // Tool slots in carousel order.
                 if (!collapsed) {
-                    val step = 20f // Fixed angular step for better spacing
+                    val step = 20f // Fixed angular step
                     for (i in SculptTools.indices) {
                         val angleDeg = (i * step) + OverlayState.scrollOffset
-                        // Only draw tools within the visible arc range (-90 to 90 degrees)
                         if (angleDeg > -95f && angleDeg < 95f) {
                             val angRad = Math.toRadians(angleDeg.toDouble()).toFloat()
                             val tx = cx + Rx * sin(angRad)
@@ -257,9 +250,6 @@ fun SculptArcContent() {
                         }
                     }
                 }
-
-                // Hide/show chevron at the handle position.
-                drawChevron(apexX, handleY, collapsed)
             }
         }
     }
