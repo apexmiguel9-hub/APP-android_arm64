@@ -192,7 +192,7 @@ fun SculptArcContent() {
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        if (activeIndex >= 0) {
+        if (OverlayState.sculptArcActive) {
             Canvas(modifier = Modifier.fillMaxSize()) {
                 val minWh = min(size.width, size.height).toFloat()
                 val Rx = minWh * 0.75f
@@ -203,7 +203,8 @@ fun SculptArcContent() {
                 val apexX = cx
                 val apexY = cy - Ry
                 val handleY = apexY + 80f
-                val step = 180f / (SculptTools.size - 1)
+                // Distribute tools across 160 degrees instead of 180 for better spacing in flatter arc
+                val step = 160f / (SculptTools.size - 1)
 
                 // Arc band hint.
                 if (!collapsed) {
