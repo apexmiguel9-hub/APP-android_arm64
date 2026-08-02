@@ -112,14 +112,13 @@ fun SculptArcContent() {
         }
 
         fun nearestToApexIndex(): Int {
-            var best = -1
-            var bestD = 1e9f
-            for (i in SculptTools.indices) {
-                val a = (i * step) + OverlayState.scrollOffset
-                val d = abs(((a % 180f) + 180f) % 180f)
-                if (d < bestD) { bestD = d; best = i }
-            }
-            return best
+            // Center index = the tool closest to the apex. Using round(-offset/step)
+            // directly avoids the mod-180 wrap aliasing bug: with 11 tools at 20° the
+            // last tool (Mask, 200°) would wrap to the same "distance" as Clay (20°)
+            // and the release would snap back toward Draw. round() + clamp guarantees
+            // a valid, correct index for the whole list.
+            return Math.round(-OverlayState.scrollOffset / step).toInt()
+                .coerceIn(0, SculptTools.size - 1)
         }
 
         fun startSnap(target: Float) {
@@ -209,9 +208,11 @@ fun SculptArcContent() {
             } else if (down && gestureArmed) {
                 // MOVE: rotate the carousel by horizontal finger delta (degrees per px).
                 if (!onHandle && !collapsed && x >= 0 && y >= 0) {
-                    val degPerPx = 90f / halfW
+                    // 90° per halfW feels too slow to reach Mask (idx 10 = 200°).
+                    // Use 180° per halfW so a full sweep crosses the whole carousel.
+                    val degPerPx = 180f / halfW
                     val delta = (x - lastX) * degPerPx
-                    if (abs(delta) < 60f) {
+                    if (abs(delta) < 120f) {
                         // Clamp so scrollOffset stays within [-(lastIndex*step), 0]:
                         // the center index is always a valid tool. Without this the
                         // drag past the last element collapses the animation state
