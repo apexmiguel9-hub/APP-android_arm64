@@ -657,12 +657,14 @@ void mainBlenderInitial_reinit(void*pContext){
 
 /* Activa un tool de sculpt por idname (p.ej. "builtin_brush.Clay" o "builtin.box_mask").
  *
- * El hilo de render NO tiene área activa (CTX_wm_area(C) == NULL), y
- * WM_toolsystem_key_from_context() necesita un área para calcular el mode del
- * toolref (space_type/mode). Sin área, WM_toolsystem_ref_set_by_id() devuelve
- * NULL ANTES de llamar al operador Python wm.tool_set_by_id -> el overlay quedaba
- * "siempre Draw". Fix: localizar el área VIEW_3D en sculpt mode y setearla como
- * área activa del contexto mientras se activa el tool (se restaura al salir). */
+ * El hilo de render NO tiene contexto de ventana (CTX_wm_window(C) == NULL entre
+ * eventos) -> CTX_wm_workspace(C) es NULL. WM_toolsystem_ref_set_by_id() necesita
+ * el workspace para WM_toolsystem_ref_find() (NULL deref si es NULL) y el área
+ * para WM_toolsystem_key_from_context() (calcula el mode del toolref). Además el
+ * operador Python wm.tool_set_by_id usa context.workspace.tools. Fix: localizar
+ * la ventana + área VIEW_3D (preferible en sculpt mode) y setear UN CONTEXTO
+ * COMPLETO (window -> scene/workspace/screen + area + region WINDOW) mientras se
+ * activa el tool. Se restaura todo al salir. */
 static bToolRef *obl_activate_tool_by_id(bContext *C, const char *name)
 {
   const Scene *scene = CTX_data_scene(C);
@@ -676,10 +678,13 @@ static bToolRef *obl_activate_tool_by_id(bContext *C, const char *name)
     return NULL;
   }
 
+  wmWindow *prev_win = CTX_wm_window(C);
   ScrArea *prev_area = CTX_wm_area(C);
   ARegion *prev_region = CTX_wm_region(C);
 
-  /* Preferir el primer área VIEW_3D cuyo mode sea SCULPT; si no hay, el primer VIEW_3D. */
+  /* Localizar el área VIEW_3D (preferible en sculpt mode) Y la ventana que la
+   * contiene, para poder setear un contexto completo. */
+  wmWindow *win_best = NULL;
   ScrArea *best = NULL;
   bool found_sculpt = false;
   LISTBASE_FOREACH (wmWindowManager *, wm, &bmain->wm) {
@@ -694,10 +699,12 @@ static bToolRef *obl_activate_tool_by_id(bContext *C, const char *name)
         }
         if (best == NULL) {
           best = area;
+          win_best = win;
         }
         if (WM_toolsystem_mode_from_spacetype(scene, view_layer, area, SPACE_VIEW3D) ==
             CTX_MODE_SCULPT) {
           best = area;
+          win_best = win;
           found_sculpt = true;
           break;
         }
@@ -712,13 +719,24 @@ static bToolRef *obl_activate_tool_by_id(bContext *C, const char *name)
   }
 
   bToolRef *tref = NULL;
-  if (best != NULL) {
+  if (best != NULL && win_best != NULL) {
+    /* CTX_wm_window_set() setea C->data.scene, C->wm.workspace y C->wm.screen
+     * (además de limpiar area/region), y borra los miembros del py_context para
+     * que bpy.context los re-derive. Setear area + region DESPUÉS de la ventana. */
+    CTX_wm_window_set(C, win_best);
     CTX_wm_area_set(C, best);
-    if (best->regionbase.first) {
-      CTX_wm_region_set(C, (ARegion *)best->regionbase.first);
+    if (CTX_wm_workspace(C) != NULL) {
+      LISTBASE_FOREACH (ARegion *, region, &best->regionbase) {
+        if (region->regiontype == RGN_TYPE_WINDOW) {
+          CTX_wm_region_set(C, region);
+          break;
+        }
+      }
+      tref = WM_toolsystem_ref_set_by_id(C, name);
     }
-    tref = WM_toolsystem_ref_set_by_id(C, name);
-    /* Restaurar el contexto para no alterar el main loop. */
+    /* Restaurar el contexto para no alterar el main loop (window primero porque
+     * setea/limpia area/region; luego area y region). */
+    CTX_wm_window_set(C, prev_win);
     CTX_wm_area_set(C, prev_area);
     CTX_wm_region_set(C, prev_region);
   }
