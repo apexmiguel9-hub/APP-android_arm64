@@ -37,6 +37,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
@@ -56,6 +57,24 @@ import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.roundToInt
 import kotlin.math.sin
+
+private data class WheelTool(val label: String, val id: String)
+
+private val WheelTools = listOf(
+    WheelTool("Draw", "builtin_brush.Draw"),
+    WheelTool("Clay", "builtin_brush.Clay"),
+    WheelTool("Smooth", "builtin_brush.Smooth"),
+    WheelTool("Flatten", "builtin_brush.Flatten"),
+    WheelTool("Pinch", "builtin_brush.Pinch"),
+    WheelTool("Grab", "builtin_brush.Grab"),
+    WheelTool("Snake Hook", "builtin_brush.Snake_Hook"),
+    WheelTool("Inflate", "builtin_brush.Inflate"),
+    WheelTool("Layer", "builtin_brush.Layer"),
+    WheelTool("Crease", "builtin_brush.Crease"),
+    WheelTool("Mask", "builtin_brush.Mask")
+)
+
+private const val STEP = 36f
 
 /** Single source of truth for wheel geometry (dp). Matches BOTH the Compose layout
  * (dp) and wheelWindowSize (px) so the overlay window and its content never disagree
