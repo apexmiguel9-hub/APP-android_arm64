@@ -46,6 +46,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -202,12 +205,17 @@ fun SculptWheelContent() {
                     val itemAlpha = (1f - (distanceFromCenter / 75f)).coerceIn(0f, 1f)
                     val itemScale = (1f - (distanceFromCenter / 130f)).coerceIn(0.5f, 1f)
                     val isSelected = distanceFromCenter < (angleSpacing / 2f)
-                    val radiusPx = radius.toPx().toDouble()
-                    val ox = (cx + cos(currentAngleRad) * radiusPx).roundToInt()
-                    val oy = (cy + sin(currentAngleRad) * radiusPx).roundToInt()
+                    val cosA = cos(currentAngleRad).toFloat()
+                    val sinA = sin(currentAngleRad).toFloat()
                     Box(
                         modifier = Modifier
-                            .offset { IntOffset(ox, oy) }
+                            .offset {
+                                val radiusPx = radius.toPx()
+                                IntOffset(
+                                    (cx + cosA * radiusPx).roundToInt(),
+                                    (cy + sinA * radiusPx).roundToInt()
+                                )
+                            }
                             .size(sphere)
                             .clickable(interactionSource = interactionSource, indication = null) {
                                 android.util.Log.d("OBL.WHEEL", "select label=${tool.label} id=${tool.id}")
@@ -285,7 +293,7 @@ fun wheelWindowSize(context: Context): Pair<Int, Int> {
     return w to h
 }
 
-fun createSculptWheelOverlay(context: Context, lifecycleOwner: androidx.lifecycle.LifecycleOwner): ComposeView {
+fun createSculptWheelOverlay(context: Context, lifecycleOwner: LifecycleOwner): ComposeView {
     android.util.Log.d("OBL", "createSculptWheelOverlay: start")
     val composeView = ComposeView(context).apply {
         setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
