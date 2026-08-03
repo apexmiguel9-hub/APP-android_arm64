@@ -35,6 +35,7 @@ static bool g_dpi_initialized = false;
 
 #include "BLI_string.h"
 #include "BLI_system.h"
+#include "BLI_listbase.h"
 #include "DNA_userdef_types.h"
 #include "BLI_task.h"
 #include "BLI_threads.h"
@@ -60,6 +61,10 @@ static bool g_dpi_initialized = false;
 #include "BKE_sound.h"
 #include "BKE_vfont.h"
 #include "BKE_volume.h"
+#include "DNA_scene_types.h"
+#include "DNA_screen_types.h"
+#include "DNA_space_types.h"
+#include "DNA_windowmanager_types.h"
 
 #ifndef WITH_PYTHON_MODULE
 #  include "BLI_args.h"
@@ -650,6 +655,76 @@ void mainBlenderInitial_reinit(void*pContext){
   WM_check((bContext*)pContext,true);
 }
 
+/* Activa un tool de sculpt por idname (p.ej. "builtin_brush.Clay" o "builtin.box_mask").
+ *
+ * El hilo de render NO tiene área activa (CTX_wm_area(C) == NULL), y
+ * WM_toolsystem_key_from_context() necesita un área para calcular el mode del
+ * toolref (space_type/mode). Sin área, WM_toolsystem_ref_set_by_id() devuelve
+ * NULL ANTES de llamar al operador Python wm.tool_set_by_id -> el overlay quedaba
+ * "siempre Draw". Fix: localizar el área VIEW_3D en sculpt mode y setearla como
+ * área activa del contexto mientras se activa el tool (se restaura al salir). */
+static bToolRef *obl_activate_tool_by_id(bContext *C, const char *name)
+{
+  const Scene *scene = CTX_data_scene(C);
+  ViewLayer *view_layer = CTX_data_view_layer(C);
+  if (scene == NULL || view_layer == NULL) {
+    return NULL;
+  }
+
+  Main *bmain = CTX_data_main(C);
+  if (bmain == NULL) {
+    return NULL;
+  }
+
+  ScrArea *prev_area = CTX_wm_area(C);
+  ARegion *prev_region = CTX_wm_region(C);
+
+  /* Preferir el primer área VIEW_3D cuyo mode sea SCULPT; si no hay, el primer VIEW_3D. */
+  ScrArea *best = NULL;
+  bool found_sculpt = false;
+  LISTBASE_FOREACH (wmWindowManager *, wm, &bmain->wm) {
+    LISTBASE_FOREACH (wmWindow *, win, &wm->windows) {
+      bScreen *screen = WM_window_get_active_screen(win);
+      if (screen == NULL) {
+        continue;
+      }
+      LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
+        if (area->spacetype != SPACE_VIEW3D) {
+          continue;
+        }
+        if (best == NULL) {
+          best = area;
+        }
+        if (WM_toolsystem_mode_from_spacetype(scene, view_layer, area, SPACE_VIEW3D) ==
+            CTX_MODE_SCULPT) {
+          best = area;
+          found_sculpt = true;
+          break;
+        }
+      }
+      if (found_sculpt) {
+        break;
+      }
+    }
+    if (found_sculpt) {
+      break;
+    }
+  }
+
+  bToolRef *tref = NULL;
+  if (best != NULL) {
+    CTX_wm_area_set(C, best);
+    if (best->regionbase.first) {
+      CTX_wm_region_set(C, (ARegion *)best->regionbase.first);
+    }
+    tref = WM_toolsystem_ref_set_by_id(C, name);
+    /* Restaurar el contexto para no alterar el main loop. */
+    CTX_wm_area_set(C, prev_area);
+    CTX_wm_region_set(C, prev_region);
+  }
+  return tref;
+}
+
 int mainBlenderLoop(void*pContext) {
   bContext *C = (bContext *)pContext;
   if (!g_dpi_initialized && g_dpi_scale > 1.01f) {
@@ -704,7 +779,10 @@ int mainBlenderLoop(void*pContext) {
       __android_log_print(ANDROID_LOG_INFO, "OBL.WHEEL",
           "drain tool_set_by_id: %s", pending.c_str());
       bool ctx_ok = false;
-      if (WM_toolsystem_ref_set_by_id(C, pending.c_str()) != NULL) {
+      /* Con el área VIEW_3D en el contexto (ver obl_activate_tool_by_id),
+       * el camino Python estándar funciona para TODOS los tools (brush y
+       * non-brush: builtin.box_mask, builtin.mesh_filter, etc.). */
+      if (obl_activate_tool_by_id(C, pending.c_str()) != NULL) {
         ctx_ok = true;
         __android_log_print(ANDROID_LOG_INFO, "OBL.WHEEL",
             "tool_set C-API OK: %s", pending.c_str());

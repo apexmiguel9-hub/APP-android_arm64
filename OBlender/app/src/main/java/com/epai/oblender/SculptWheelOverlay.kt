@@ -48,26 +48,54 @@ import kotlin.math.max
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
-/** Las 42 herramientas oficiales de Blender 3.6 Sculpt Mode, en orden desde Draw. */
+/** Tools REALES de sculpt en este fork (blender-clone blender-v3.6-release):
+ *  32 brushes (builtin_brush.<Name>, generados del enum Brush.sculpt_tool en
+ *  rna_brush.c) + 14 tools non-brush (builtin.<id>, en space_toolsystem_toolbar.py
+ *  _defs_sculpt). Verificadas contra el source; la lista anterior de "42 oficiales"
+ *  contenía tools que NO existen aquí (Clay Tubes, Box Trim/Slice, Expand, etc.). */
 val sculptTools = listOf(
-    "Draw", "Draw Sharp", "Clay", "Clay Strips", "Clay Tubes",
+    // ---- Brushes (builtin_brush.<Name>) ----
+    "Draw", "Draw Sharp", "Clay", "Clay Strips", "Clay Thumb",
     "Layer", "Inflate", "Blob", "Crease", "Smooth",
-    "Flatten", "Fill", "Scrape", "Pinch", "Grab",
-    "Snake Hook", "Thumb", "Pose", "Nudge", "Rotate",
-    "Slide Relax", "Boundary", "Cloth", "Simplify", "Mask",
-    "Face Set", "Mesh Filter", "Color Filter", "Box Mask", "Lasso Mask",
-    "Line Mask", "Poly Mask", "Box Trim", "Lasso Trim", "Slice",
-    "Box Hide", "Lasso Hide", "Line Project", "Expand", "Sample Detail",
-    "Multires Displacement", "Sculpt Curves"
+    "Flatten", "Fill", "Scrape", "Multi-plane Scrape", "Pinch",
+    "Grab", "Elastic Deform", "Snake Hook", "Thumb", "Pose",
+    "Nudge", "Rotate", "Slide Relax", "Boundary", "Cloth",
+    "Simplify", "Mask", "Draw Face Sets", "Multires Displacement Eraser",
+    "Multires Displacement Smear", "Paint", "Smear",
+    // ---- Non-brush tools (builtin.<id>) ----
+    "Box Mask", "Lasso Mask", "Line Mask", "Box Hide",
+    "Box Face Set", "Lasso Face Set", "Box Trim", "Lasso Trim",
+    "Line Project", "Mesh Filter", "Cloth Filter", "Color Filter",
+    "Edit Face Set", "Mask by Color"
 )
 
-/** idname real de Blender (builtin_brush.<Label> tal cual, p.ej. "builtin_brush.Snake Hook"
- *  con espacio) para el poll de sync y el puente JNI. */
-private fun toolId(label: String) = "builtin_brush." + label
+/** idname real de Blender. Brushes: "builtin_brush.<Label>" tal cual (display name
+ *  del enum, p.ej. "builtin_brush.Snake Hook" con espacio, "builtin_brush.Slide Relax").
+ *  Non-brush: idname propio "builtin.<id>". */
+private val nonBrushTools = mapOf(
+    "Box Mask" to "builtin.box_mask",
+    "Lasso Mask" to "builtin.lasso_mask",
+    "Line Mask" to "builtin.line_mask",
+    "Box Hide" to "builtin.box_hide",
+    "Box Face Set" to "builtin.box_face_set",
+    "Lasso Face Set" to "builtin.lasso_face_set",
+    "Box Trim" to "builtin.box_trim",
+    "Lasso Trim" to "builtin.lasso_trim",
+    "Line Project" to "builtin.line_project",
+    "Mesh Filter" to "builtin.mesh_filter",
+    "Cloth Filter" to "builtin.cloth_filter",
+    "Color Filter" to "builtin.color_filter",
+    "Edit Face Set" to "builtin.face_set_edit",
+    "Mask by Color" to "builtin.mask_by_color"
+)
 
-/** Teclas del keymap de sculpt (blender_default.py, operador C paint.brush_select que SÍ
- *  cambia el brush real; wm.tool_set_by_id es Python y puede no correr en este build).
- *  Ordinales = OBLButtonID.h. Camino PROBADO en device (lo usaba el arco anterior). */
+private fun toolId(label: String) = nonBrushTools[label] ?: "builtin_brush." + label
+
+/** Teclas del keymap de sculpt (blender_default.py, operador C paint.brush_select).
+ *  Ordinales = OBLButtonID.h. Camino PROBADO en device (lo usaba el arco anterior).
+ *  El resto de tools van por JNI (oblSetToolByIdStatic), que ahora funciona para
+ *  TODAS porque el drain setea el área VIEW_3D en el contexto (creator.cc
+ *  obl_activate_tool_by_id) y así el operador Python wm.tool_set_by_id sí corre. */
 private data class ToolKey(val key: Int, val shift: Boolean = false)
 
 private val toolKeys = mapOf(
