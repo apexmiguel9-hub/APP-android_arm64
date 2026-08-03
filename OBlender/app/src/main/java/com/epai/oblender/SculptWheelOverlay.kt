@@ -95,13 +95,14 @@ private fun emitToolKey(key: ToolKey) {
 }
 
 private const val ARC_STEP = 20f      // grados por tool a lo largo del arco
-private const val VISIBLE_DEG = 75f   // tools con |angulo| <= VISIBLE_DEG (7 visibles)
-private const val SPHERE_ACTIVE = 46f // radio base de la esfera activa (px)
-private const val SPHERE_IDLE = 38f   // radio base del resto (px)
+private const val VISIBLE_DEG = 60f   // tools con |angulo| <= VISIBLE_DEG (7 visibles)
+private const val SPHERE_ACTIVE = 30f // radio base de la esfera activa (px)
+private const val SPHERE_IDLE = 24f   // radio base del resto (px)
 
-/** Geometría del arco en dp (misma proporción que el arco que funcionaba: parábola
- *  "bridge" anclada al borde inferior). Única fuente de verdad, compartida con
- *  wheelWindowSize(px) para que la ventana del overlay recorte EXACTAMENTE el arco. */
+/** Geometría del arco en dp (misma parábola "bridge" del arco original, anclada al
+ *  borde inferior). Única fuente de verdad, compartida con wheelWindowSize(px) para
+ *  que la ventana del overlay recorte EXACTAMENTE el arco (sin área muerta que tapa
+ *  el sculpt). */
 private data class ArcGeometry(val halfW: Float, val arcH: Float, val bandHalf: Float)
 
 private fun arcGeometry(context: Context): ArcGeometry {
@@ -109,9 +110,9 @@ private fun arcGeometry(context: Context): ArcGeometry {
     val density = context.resources.displayMetrics.density
     val screenWd = sw / density
     return ArcGeometry(
-        halfW = screenWd * 0.21f,  // más compacto: no tapa el área de sculpt
-        arcH = screenWd * 0.08f,
-        bandHalf = max(22f, screenWd * 0.025f)
+        halfW = screenWd * 0.17f,  // compacto: no invade el área central del sculpt
+        arcH = screenWd * 0.055f,
+        bandHalf = max(8f, screenWd * 0.02f)
     )
 }
 
@@ -154,13 +155,24 @@ fun CarouselDock() {
     var lastUserSelMs by remember { mutableStateOf(0L) }
     var highlightIndex by remember { mutableStateOf(-1) }
 
+    // Mismo filtro que el dibujo: SOLO los tools realmente visibles (centerIdx±3 con
+    // |angulo| <= VISIBLE_DEG). Si se considerara el listado completo, un tap cerca de
+    // los extremos de la banda podía caer sobre un tool INVISIBLE y "teletransportarse".
+    fun visibleIndices(): List<Int> {
+        val centerIdx = Math.round(-scrollOffset.value / step).toInt()
+            .coerceIn(0, sculptTools.size - 1)
+        val lo = (centerIdx - 3).coerceAtLeast(0)
+        val hi = (centerIdx + 3).coerceAtMost(sculptTools.size - 1)
+        return (lo..hi).filter { abs((it * step) + scrollOffset.value) <= VISIBLE_DEG }
+    }
+
     fun nearestToolIndex(w: Float, h: Float, px: Float, py: Float): Int {
         val cx = w / 2f
         val cy = h
         val halfWW = w / 2f - bandHalf
         var best = -1
         var bestD = 1e9f
-        for (i in sculptTools.indices) {
+        for (i in visibleIndices()) {
             val a = Math.toRadians(((i * step) + scrollOffset.value).toDouble()).toFloat()
             val tx = cx + halfWW * sin(a)
             val ty = cy - arcH * cos(a) * cos(a)
@@ -168,7 +180,7 @@ fun CarouselDock() {
             if (d < bestD) { bestD = d; best = i }
         }
         // Solo selecciona si el tap cae realmente sobre una esfera.
-        return if (bestD <= SPHERE_ACTIVE * 1.6f) best else -1
+        return if (bestD <= SPHERE_ACTIVE * 1.8f) best else -1
     }
 
     fun nearestToApexIndex(): Int {
@@ -221,7 +233,12 @@ fun CarouselDock() {
                 }
                 if (idx >= 0 && idx != lastIdx) {
                     lastIdx = idx
-                    recenterTo(idx)
+                    // No re-centrar durante los 600ms posteriores a una selección del
+                    // usuario: el tap ya re-centró al tool elegido y el poll no debe
+                    // "teletransportar" el carrusel a otro mientras el keymap procesa.
+                    if ((System.currentTimeMillis() - lastUserSelMs) > 600) {
+                        recenterTo(idx)
+                    }
                 }
             } else {
                 lastIdx = -2
@@ -277,14 +294,13 @@ fun CarouselDock() {
                         }
                     },
                     onDragEnd = {
-                        if (gestureArmed) {
-                            if (dragAccum < 12f) {
-                                if (highlightIndex >= 0) selectTool(highlightIndex)
-                                else recenterTo(nearestToApexIndex())
-                            } else {
-                                recenterTo(nearestToApexIndex())
-                            }
+                        if (gestureArmed && dragAccum >= 12f) {
+                            // Drag real: snap al tool más cercano al ápice (solo navega).
+                            recenterTo(nearestToApexIndex())
                         }
+                        // Tap / micro-movimiento: la selección la hace SOLO onTap.
+                        // (antes onDragEnd seleccionaba el tool del ápice y pisaba el tool
+                        //  que el usuario acababa de tocar -> "se teletransporta")
                         gestureArmed = false
                         highlightIndex = -1
                     },
@@ -337,13 +353,11 @@ fun CarouselDock() {
             drawPath(bandPath, Color(0xFF1B1B1B).copy(alpha = 0.60f))
 
             // Esferas de herramientas en carousel, con la distribución parabólica.
-            val centerIdx = Math.round(-scrollOffset.value / step).toInt()
-                .coerceIn(0, sculptTools.size - 1)
-            val lo = (centerIdx - 3).coerceAtLeast(0)
-            val hi = (centerIdx + 3).coerceAtMost(sculptTools.size - 1)
-            for (i in lo..hi) {
+            // Mismo filtro de visibilidad que el hit-test (visibleIndices).
+            val lo = (Math.round(-scrollOffset.value / step).toInt() - 3).coerceAtLeast(0)
+            val hi = (Math.round(-scrollOffset.value / step).toInt() + 3).coerceAtMost(sculptTools.size - 1)
+            for (i in (lo..hi).filter { abs((it * step) + scrollOffset.value) <= VISIBLE_DEG }) {
                 val angleDeg = (i * step) + scrollOffset.value
-                if (abs(angleDeg) > VISIBLE_DEG) continue
                 val a = Math.toRadians(angleDeg.toDouble()).toFloat()
                 val tx = cx + halfWW * sin(a)
                 val ty = (cy - arcH * cos(a) * cos(a)).coerceAtMost(cy - 10f)
@@ -395,33 +409,33 @@ private fun DrawScope.drawToolSlot(
     )
     drawCircle(brush, r, Offset(cx, cy))
 
-    // Label bajo la esfera, solo si cabe dentro de la ventana.
-    if (cy + r + 18f <= windowH - 4f) {
+    // Solo el tool ACTIVO lleva nombre, en la franja vacía entre la banda y el borde
+    // inferior (no suma altura a la ventana -> el contenedor no tapa el sculpt).
+    if (isActive) {
         drawContext.canvas.nativeCanvas.drawText(
             label,
             cx,
-            cy + r + 18f,
+            windowH - 8f,
             Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = if (highlighted) {
-                    android.graphics.Color.rgb(0xFF, 0xC1, 0x07)
-                } else {
-                    android.graphics.Color.rgb(0xD0, 0xD0, 0xD0)
-                }
-                textSize = if (isActive) 15f else 13f
+                color = android.graphics.Color.rgb(0xFF, 0xC1, 0x07)
+                textSize = 14f
                 textAlign = Paint.Align.CENTER
-                isFakeBoldText = isActive || isHighlight
+                isFakeBoldText = true
             }
         )
     }
 }
 
-/** Tamaño de la ventana del overlay (px): SOLO la franja del arco + margen mínimo,
- *  anclada BOTTOM|CENTER_HORIZONTAL. Todo lo demás queda libre para Blender. */
+/** Tamaño de la ventana del overlay (px): bounding box JUSTO del arco (banda + esferas),
+ *  anclada BOTTOM|CENTER_HORIZONTAL. Todo lo demás queda libre para Blender.
+ *  OJO unidades: halfW/arcH/bandHalf son dp; SPHERE_* son px. Antes se multiplicaba
+ *  (dp+dp+56+SPHERE) por density => box ~525x414px que tapa el sculpt. Ahora:
+ *  h = alto del arco (px) + banda (px) + radio esfera (px) + margen. */
 fun wheelWindowSize(context: Context): Pair<Int, Int> {
     val g = arcGeometry(context)
     val density = context.resources.displayMetrics.density
     val w = ((g.halfW + g.bandHalf) * 2f + 8f) * density
-    val h = (g.arcH + g.bandHalf + 56f + SPHERE_ACTIVE) * density
+    val h = (g.arcH + g.bandHalf * 0.5f) * density + SPHERE_ACTIVE * 1.1f + 8f
     return w.toInt() to h.toInt()
 }
 
