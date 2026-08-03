@@ -1,6 +1,7 @@
 package com.epai.oblender
 
 import android.content.Context
+import android.graphics.Paint
 import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
@@ -9,20 +10,10 @@ import android.view.WindowManager.LayoutParams
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -30,36 +21,30 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.ViewCompositionStrategy
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
+import kotlin.math.asin
 import kotlin.math.cos
+import kotlin.math.hypot
+import kotlin.math.max
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
@@ -80,74 +65,108 @@ val sculptTools = listOf(
  *  WM_toolsystem_ref_set_by_id (drain en creator.cc / mainBlenderLoop). */
 private fun toolId(label: String) = "builtin_brush." + label.replace(" ", "_")
 
-private const val ANGLE_SPACING = 18f   // grados por tool en el carrusel
-private const val VISIBLE_SPAN = 4.5f   // tools visibles a cada lado del centro
-private const val DOCK_H_DP = 44f       // altura del dock "bridge"
-private const val LABEL_H_DP = 28f      // label del tool activo + margen
+private const val ARC_STEP = 20f      // grados por tool a lo largo del arco
+private const val VISIBLE_DEG = 75f   // tools con |angulo| <= VISIBLE_DEG (7 visibles)
+private const val SPHERE_ACTIVE = 46f // radio base de la esfera activa (px)
+private const val SPHERE_IDLE = 38f   // radio base del resto (px)
 
-/** Geometría del dock (dp). Única fuente de verdad: coincide con wheelWindowSize(px)
- *  para que la ventana del overlay no recorte el carrusel ni deje área muerta. */
-private fun wheelMetrics(context: Context): WheelGeometry {
+/** Geometría del arco en dp (misma proporción que el arco que funcionaba: parábola
+ *  "bridge" anclada al borde inferior). Única fuente de verdad, compartida con
+ *  wheelWindowSize(px) para que la ventana del overlay recorte EXACTAMENTE el arco. */
+private data class ArcGeometry(val halfW: Float, val arcH: Float, val bandHalf: Float)
+
+private fun arcGeometry(context: Context): ArcGeometry {
     val sw = context.resources.displayMetrics.widthPixels.toFloat()
     val density = context.resources.displayMetrics.density
     val screenWd = sw / density
-    val radius = screenWd * 0.36f
-    val sphere = screenWd * 0.10f
-    return WheelGeometry(
-        radius = radius,
-        sphere = sphere,
-        boxW = 2 * radius + sphere,
-        boxH = radius + sphere + DOCK_H_DP
+    return ArcGeometry(
+        halfW = screenWd * 0.30f,
+        arcH = screenWd * 0.13f,
+        bandHalf = max(28f, screenWd * 0.03f)
     )
 }
 
-private data class WheelGeometry(val radius: Float, val sphere: Float, val boxW: Float, val boxH: Float)
-
 /**
- * Carrusel de herramientas de Sculpt ("dock" flotante bottom-center).
+ * Carrusel de Sculpt = arco/parábola inferior (anillo cortado en arco), compacto y
+ * pegado al borde inferior-centro de la pantalla.
  *
- * 1) TRANSPARENCIA: el Box raíz NO tiene .background() opaco; solo se pinta el dock
- *    "bridge" (Path) y las esferas. Fuera de ellos, la ventana es 100% transparente.
- * 2) TOUCH PASSTHROUGH: la ventana (WindowManager) se redimensiona a wheelWindowSize()
- *    = solo el área del dock, anclada BOTTOM|CENTER_HORIZONTAL con FLAG_NOT_TOUCH_MODAL.
- *    Todo toque FUERA de esa ventana cae directamente en el GLSurfaceView de Blender
- *    (esculpir/rotar/dibujar sin interferencias). Cuando el dock está oculto la ventana
- *    pasa a GONE + FLAG_NOT_TOUCHABLE.
- * 3) VISIBILIDAD: solo se muestra si Blender está en modo SCULPT dentro del workspace
- *    "Sculpting" (poll de modo/workspace, igual que el arco anterior).
- * 4) ACCIONES: el tap en una esfera anima el centrado Y llama oblSetToolByIdStatic(id)
- *    -> JNI oblSetToolById -> oblSetSculptToolRequest -> WM_toolsystem_ref_set_by_id
- *    en el hilo de render (activación real del tool de sculpt).
+ * - POSICIÓN/ESCALA: la ventana (WindowManager) se redimensiona a wheelWindowSize() =
+ *   SOLO la franja del arco (~66% ancho x ~11% alto, BOTTOM|CENTER_HORIZONTAL). El arco
+ *   se dibuja con `ty = cy - arcH*cos^2(a)`, `tx = cx + halfW*sin(a)` (misma parábola
+ *   del arco original), con el ápice a poca altura sobre el borde inferior.
+ * - TOUCH PASSTHROUGH: como una ventana de overlay no puede ser transparente al toque
+ *   por píxel hacia la ventana de Blender, la clave es que la VENTANA sea diminuta
+ *   (solo el arco) con FLAG_NOT_TOUCH_MODAL: todo toque FUERA de esa franja llega
+ *   directo al GLSurfaceView. Dentro de la franja, el hit-test es preciso: el tap solo
+ *   selecciona si cae sobre una esfera (nearestToolIndex con umbral) y el drag solo se
+ *   arma si empieza sobre la banda (gestureArmed). El Box raíz NO consume nada por sí
+ *   mismo; las zonas vacías no disparan ninguna acción.
+ * - VISIBILIDAD: solo en modo SCULPT + workspace "Sculpting" (poll); oculto =
+ *   GONE + NOT_TOUCHABLE.
+ * - ACCIONES: tap/select llama oblSetToolByIdStatic(id) -> WM_toolsystem_ref_set_by_id.
  */
 @Composable
 fun CarouselDock() {
     val density = LocalDensity.current
     val context = LocalContext.current
-    val m = wheelMetrics(context)
-    val radius = m.radius.dp
-    val sphere = m.sphere.dp
-    val boxW = m.boxW.dp
-    val boxH = m.boxH.dp
+    val g = arcGeometry(context)
+    val halfW = with(density) { g.halfW.dp.toPx() }
+    val arcH = with(density) { g.arcH.dp.toPx() }
+    val bandHalf = with(density) { g.bandHalf.dp.toPx() }
 
-    val radiusPx = with(density) { radius.toPx() }
-    val spherePx = with(density) { sphere.toPx() }
-    val boxWpx = with(density) { boxW.toPx() }
-    val halfSphere = spherePx / 2f
-    val cx = boxWpx / 2f
-    val cy0 = spherePx + radiusPx   // centro del arco; ápice activo en y = spherePx
+    val step = ARC_STEP
+    val maxOffset = -((sculptTools.size - 1) * step).toFloat()
 
-    val totalTools = sculptTools.size.toFloat()
-
-    val dragAngle = remember { Animatable(0f) }
-    val coroutineScope = rememberCoroutineScope()
-
-    val selectedIndex = ((dragAngle.value / ANGLE_SPACING).roundToInt() %
-            sculptTools.size + sculptTools.size) % sculptTools.size
+    val scrollOffset = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
 
     var activeSel by remember { mutableStateOf(-1) }
     var lastUserSelMs by remember { mutableStateOf(0L) }
+    var highlightIndex by remember { mutableStateOf(-1) }
 
-    // Poll: solo muestro el dock en Sculpting (modo + workspace); sincroniza el
+    fun nearestToolIndex(w: Float, h: Float, px: Float, py: Float): Int {
+        val cx = w / 2f
+        val cy = h
+        val halfWW = w / 2f - bandHalf
+        var best = -1
+        var bestD = 1e9f
+        for (i in sculptTools.indices) {
+            val a = Math.toRadians(((i * step) + scrollOffset.value).toDouble()).toFloat()
+            val tx = cx + halfWW * sin(a)
+            val ty = cy - arcH * cos(a) * cos(a)
+            val d = hypot(px - tx, py - ty)
+            if (d < bestD) { bestD = d; best = i }
+        }
+        // Solo selecciona si el tap cae realmente sobre una esfera.
+        return if (bestD <= SPHERE_ACTIVE * 1.6f) best else -1
+    }
+
+    fun nearestToApexIndex(): Int {
+        // Tool cuyo ángulo (i*step + offset) queda en el ápice (a=0).
+        return Math.round(-scrollOffset.value / step).toInt()
+            .coerceIn(0, sculptTools.size - 1)
+    }
+
+    fun recenterTo(sel: Int) {
+        scope.launch {
+            scrollOffset.animateTo(
+                targetValue = -(sel * step).toFloat(),
+                animationSpec = spring(stiffness = 300f, dampingRatio = 0.8f)
+            )
+        }
+    }
+
+    fun selectTool(sel: Int) {
+        if (sel < 0 || sel >= sculptTools.size) return
+        val id = toolId(sculptTools[sel])
+        android.util.Log.d("OBL.WHEEL", "select label=${sculptTools[sel]} id=$id")
+        OBLNativeActivity.oblSetToolByIdStatic(id)
+        activeSel = sel
+        lastUserSelMs = System.currentTimeMillis()
+        recenterTo(sel)
+    }
+
+    // Poll: solo muestro el arco en Sculpting (modo + workspace); sincroniza el
     // highlight y re-centra el tool activo reportado por Blender.
     LaunchedEffect(Unit) {
         var lastIdx = -2
@@ -165,12 +184,7 @@ fun CarouselDock() {
                 }
                 if (idx >= 0 && idx != lastIdx) {
                     lastIdx = idx
-                    coroutineScope.launch {
-                        dragAngle.animateTo(
-                            targetValue = idx * ANGLE_SPACING,
-                            animationSpec = spring(stiffness = 300f, dampingRatio = 0.8f)
-                        )
-                    }
+                    recenterTo(idx)
                 }
             } else {
                 lastIdx = -2
@@ -184,288 +198,194 @@ fun CarouselDock() {
         }
     }
 
-    // Fuera de Sculpting: no se renderiza nada (la ventana ya está GONE + NOT_TOUCHABLE).
+    // Fuera de Sculpting no se renderiza nada (la ventana ya está GONE + NOT_TOUCHABLE).
     if (!OverlayState.sculptArcActive) return
 
-    // Raíz SIN fondo sólido (requisito 1): la ventana está recortada al dock
-    // (wheelWindowSize), así los toques fuera del carrusel pasan a Blender (req. 2).
+    // Raíz SIN fondo sólido. Los detectores solo reaccionan con hit-test de banda/esfera;
+    // las zonas vacías de la ventana no consumen ni disparan nada.
     Box(
-        Modifier.fillMaxSize(),
-        contentAlignment = Alignment.BottomCenter
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = sculptTools[selectedIndex],
-                color = if (activeSel >= 0) Color(0xFFFFAB40) else Color(0xFFA0A0A0),
-                fontWeight = FontWeight.Bold,
-                fontSize = 14.sp,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-
-            Box(
-                modifier = Modifier
-                    .size(boxW, boxH)
-                    .pointerInput(Unit) {
-                        detectHorizontalDragGestures(
-                            onDragEnd = {
-                                val target = (dragAngle.value / ANGLE_SPACING).roundToInt()
-                                coroutineScope.launch {
-                                    dragAngle.animateTo(
-                                        targetValue = target * ANGLE_SPACING,
-                                        animationSpec = spring(stiffness = 300f, dampingRatio = 0.8f)
-                                    )
-                                }
-                            }
-                        ) { change, dragAmount ->
-                            change.consume()
-                            coroutineScope.launch {
-                                dragAngle.snapTo(dragAngle.value - dragAmount * 0.20f)
-                            }
-                        }
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = { pos ->
+                        val w = size.width.toFloat()
+                        val h = size.height.toFloat()
+                        val sel = nearestToolIndex(w, h, pos.x, pos.y)
+                        if (sel >= 0) selectTool(sel)
                     }
-            ) {
-                val goldOrangeGradient = Brush.linearGradient(
-                    colors = listOf(Color(0xFFE5C158), Color(0xFFFF6F00))
                 )
-                val interactionSource = remember { MutableInteractionSource() }
-                val centerPos = dragAngle.value / ANGLE_SPACING
-
-                sculptTools.forEachIndexed { index, label ->
-                    val diffUnwrapped = index - centerPos
-                    var diff = diffUnwrapped % totalTools
-                    if (diff > totalTools / 2f) diff -= totalTools
-                    if (diff < -totalTools / 2f) diff += totalTools
-                    if (abs(diff) <= VISIBLE_SPAN) {
-                        val ang = Math.toRadians((diff * ANGLE_SPACING - 90f).toDouble())
-                        val cosA = cos(ang).toFloat()
-                        val sinA = sin(ang).toFloat()
-                        val dist = abs(diff * ANGLE_SPACING)
-                        val itemAlpha = (1f - (dist / 75f)).coerceIn(0f, 1f)
-                        val itemScale = (1f - (dist / 130f)).coerceIn(0.5f, 1f)
-                        val isSelected = abs(diff) < 0.5f
-                        val sx = (cx + cosA * radiusPx - halfSphere).roundToInt()
-                        val sy = (cy0 + sinA * radiusPx - halfSphere).roundToInt()
-                        val id = toolId(label)
-                        Box(
-                            modifier = Modifier
-                                .offset { IntOffset(sx, sy) }
-                                .size(sphere)
-                                .clickable(interactionSource = interactionSource, indication = null) {
-                                    android.util.Log.d("OBL.WHEEL", "select label=$label id=$id")
-                                    // Req. 4: activación real del tool en Blender (JNI).
-                                    OBLNativeActivity.oblSetToolByIdStatic(id)
-                                    lastUserSelMs = System.currentTimeMillis()
-                                    val cur = dragAngle.value / ANGLE_SPACING
-                                    var delta = index - cur
-                                    delta = ((delta + totalTools / 2f) % totalTools) - totalTools / 2f
-                                    coroutineScope.launch {
-                                        dragAngle.animateTo(
-                                            dragAngle.value + delta * ANGLE_SPACING,
-                                            spring(stiffness = 300f)
-                                        )
-                                    }
-                                }
-                                .graphicsLayer {
-                                    alpha = itemAlpha
-                                    scaleX = itemScale
-                                    scaleY = itemScale
-                                }
-                                .background(
-                                    brush = if (isSelected) goldOrangeGradient else Brush.linearGradient(listOf(Color(0xFF3B3B3B), Color(0xFF3B3B3B))),
-                                    shape = CircleShape
-                                )
-                                .padding(if (isSelected) 3.dp else 2.dp)
-                                .background(Color(0xFF2C2C2C), CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            ToolIcon(label)
+            }
+            .pointerInput(Unit) {
+                var gestureArmed = false
+                var dragAccum = 0f
+                detectDragGestures(
+                    onDragStart = { start ->
+                        gestureArmed = false
+                        dragAccum = 0f
+                        val w = size.width.toFloat()
+                        val h = size.height.toFloat()
+                        val cx = w / 2f
+                        val cy = h
+                        val halfWW = w / 2f - bandHalf
+                        val sx = (start.x - cx) / halfWW
+                        // El drag solo se arma si empieza SOBRE la banda del arco.
+                        if (start.x >= 0 && start.y >= 0 && sx >= -1f && sx <= 1f) {
+                            val theta = asin(sx.coerceIn(-1f, 1f))
+                            val curveY = cy - arcH * cos(theta) * cos(theta)
+                            if (abs(start.y - curveY) <= bandHalf * 2f) {
+                                gestureArmed = true
+                                highlightIndex = nearestToApexIndex()
+                            }
+                        }
+                    },
+                    onDragEnd = {
+                        if (gestureArmed) {
+                            if (dragAccum < 12f) {
+                                if (highlightIndex >= 0) selectTool(highlightIndex)
+                                else recenterTo(nearestToApexIndex())
+                            } else {
+                                recenterTo(nearestToApexIndex())
+                            }
+                        }
+                        gestureArmed = false
+                        highlightIndex = -1
+                    },
+                    onDragCancel = {
+                        gestureArmed = false
+                        highlightIndex = -1
+                    },
+                    onDrag = { change, dragAmount ->
+                        if (!gestureArmed) return@detectDragGestures
+                        change.consume()
+                        val halfWW = size.width / 2f - bandHalf
+                        val degPerPx = 180f / halfWW
+                        val delta = dragAmount.x * degPerPx
+                        if (abs(delta) < 120f) {
+                            val target = (scrollOffset.value + delta).coerceIn(maxOffset, 0f)
+                            scope.launch { scrollOffset.snapTo(target) }
+                            dragAccum += abs(delta)
+                            highlightIndex = nearestToApexIndex()
                         }
                     }
-                }
+                )
+            }
+    ) {
+        Canvas(Modifier.fillMaxSize()) {
+            val w = size.width
+            val h = size.height
+            val cx = w / 2f
+            val cy = h
+            val halfWW = w / 2f - bandHalf
 
-                // Único elemento opaco del overlay: el dock "bridge" anclado al borde
-                // inferior de la ventana (fuera de él todo es transparente).
-                Canvas(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .height(DOCK_H_DP.dp)
-                ) {
-                    val w = size.width
-                    val h = size.height
-                    val dock = Path().apply {
-                        moveTo(0f, h)
-                        cubicTo(w * 0.20f, h * 0.35f, w * 0.80f, h * 0.35f, w, h)
-                        lineTo(w, h)
-                        close()
-                    }
-                    drawPath(dock, Color(0xFF2C2C2C))
-                    drawPath(dock, Color(0xFFE5C158), style = Stroke(2.5f))
-                }
+            // Banda "bridge": anillo cortado en arco inferior (parábola cos^2),
+            // mismo trazado del arco original.
+            val bandPath = Path()
+            val n = 120
+            for (i in 0..n) {
+                val theta = -90f + 180f * i / n
+                val a = Math.toRadians(theta.toDouble()).toFloat()
+                val px = cx + (halfWW + bandHalf) * sin(a)
+                val py = cy - (arcH + bandHalf) * cos(a) * cos(a)
+                if (i == 0) bandPath.moveTo(px, py) else bandPath.lineTo(px, py)
+            }
+            for (i in n downTo 0) {
+                val theta = -90f + 180f * i / n
+                val a = Math.toRadians(theta.toDouble()).toFloat()
+                val px = cx + (halfWW - bandHalf) * sin(a)
+                val py = cy - (arcH - bandHalf) * cos(a) * cos(a)
+                bandPath.lineTo(px, py)
+            }
+            bandPath.close()
+            drawPath(bandPath, Color(0xFF1B1B1B).copy(alpha = 0.60f))
+
+            // Esferas de herramientas en carousel, con la distribución parabólica.
+            val centerIdx = Math.round(-scrollOffset.value / step).toInt()
+                .coerceIn(0, sculptTools.size - 1)
+            val lo = (centerIdx - 3).coerceAtLeast(0)
+            val hi = (centerIdx + 3).coerceAtMost(sculptTools.size - 1)
+            for (i in lo..hi) {
+                val angleDeg = (i * step) + scrollOffset.value
+                if (abs(angleDeg) > VISIBLE_DEG) continue
+                val a = Math.toRadians(angleDeg.toDouble()).toFloat()
+                val tx = cx + halfWW * sin(a)
+                val ty = (cy - arcH * cos(a) * cos(a)).coerceAtMost(cy - 10f)
+                val isActive = i == activeSel
+                val isHighlight = i == highlightIndex
+                val scale = (1.1f - 0.3f * abs(sin(a))).coerceAtLeast(0.8f)
+                drawToolSlot(tx, ty, sculptTools[i], scale, isActive, isHighlight, h)
             }
         }
     }
 }
 
-@Composable
-private fun ToolIcon(label: String) {
-    // Esfera "arcilla" 3D para toda tool (sombra + gradiente radial).
-    Canvas(modifier = Modifier.fillMaxSize()) {
-        val w = size.width
-        val h = size.height
-        val center = Offset(w * 0.5f, h * 0.5f)
-        drawCircle(color = Color(0xFF181818), radius = w * 0.41f, center = Offset(center.x, center.y + w * 0.03f))
+private fun DrawScope.drawToolSlot(
+    cx: Float,
+    cy: Float,
+    label: String,
+    scale: Float,
+    isActive: Boolean,
+    isHighlight: Boolean,
+    windowH: Float
+) {
+    val r = (if (isActive) SPHERE_ACTIVE else SPHERE_IDLE) * scale
+    val highlighted = isActive || isHighlight
+
+    // Glow ámbar detrás del activo / en selección.
+    if (highlighted) {
+        drawCircle(color = Color(0x33FFC107), radius = r + 14f, center = Offset(cx, cy))
         drawCircle(
-            brush = Brush.radialGradient(
-                colors = listOf(Color(0xFFCECECE), Color(0xFF808080), Color(0xFF424242)),
-                center = Offset(center.x - w * 0.12f, center.y - h * 0.12f),
-                radius = w * 0.5f
-            ),
-            radius = w * 0.39f,
-            center = center
+            color = Color(0xFFFFC107),
+            radius = r + 6f,
+            center = Offset(cx, cy),
+            style = Stroke(width = if (isActive) 3f else 2f)
+        )
+        if (isActive) {
+            drawCircle(
+                color = Color(0xFFCC6F03),
+                radius = r + 1f,
+                center = Offset(cx, cy),
+                style = Stroke(width = 3f)
+            )
+        }
+    }
+
+    // Esfera arcilla: gradiente radial, luz arriba-izquierda, sombra abajo-derecha.
+    val brush = Brush.radialGradient(
+        colors = listOf(Color(0xFFE0E0E0), Color(0xFF9E9E9E), Color(0xFF404040)),
+        center = Offset(cx - r * 0.35f, cy - r * 0.4f),
+        radius = r * 1.25f
+    )
+    drawCircle(brush, r, Offset(cx, cy))
+
+    // Label bajo la esfera, solo si cabe dentro de la ventana.
+    if (cy + r + 18f <= windowH - 4f) {
+        drawContext.canvas.nativeCanvas.drawText(
+            label,
+            cx,
+            cy + r + 18f,
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = if (highlighted) {
+                    android.graphics.Color.rgb(0xFF, 0xC1, 0x07)
+                } else {
+                    android.graphics.Color.rgb(0xD0, 0xD0, 0xD0)
+                }
+                textSize = if (isActive) 15f else 13f
+                textAlign = Paint.Align.CENTER
+                isFakeBoldText = isActive || isHighlight
+            }
         )
     }
-    // Icono 3D esculpido / iniciales, centrado sobre la esfera.
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        when (label) {
-            "Draw" -> Canvas(modifier = Modifier.size(24.dp)) {
-                val w = size.width; val h = size.height
-                val domeGrad = Brush.radialGradient(
-                    colors = listOf(Color(0xFFFFFFFF), Color(0xFFB0B0B0), Color(0xFF424242)),
-                    center = Offset(w * 0.38f, h * 0.35f),
-                    radius = w * 0.5f
-                )
-                drawOval(Color(0xFF111111), topLeft = Offset(w * 0.15f, h * 0.65f), size = Size(w * 0.7f, h * 0.15f))
-                val path = Path().apply {
-                    moveTo(w * 0.20f, h * 0.70f)
-                    cubicTo(w * 0.20f, h * 0.30f, w * 0.80f, h * 0.30f, w * 0.80f, h * 0.70f)
-                    close()
-                }
-                drawPath(path, domeGrad)
-            }
-            "Draw Sharp" -> Canvas(modifier = Modifier.size(24.dp)) {
-                val w = size.width; val h = size.height
-                val bladeGrad = Brush.linearGradient(
-                    colors = listOf(Color(0xFFF0F0F0), Color(0xFF808080), Color(0xFF2A2A2A)),
-                    start = Offset(w * 0.2f, h * 0.8f),
-                    end = Offset(w * 0.8f, h * 0.2f)
-                )
-                val path = Path().apply {
-                    moveTo(w * 0.22f, h * 0.78f)
-                    lineTo(w * 0.72f, h * 0.28f)
-                    lineTo(w * 0.78f, h * 0.38f)
-                    lineTo(w * 0.28f, h * 0.88f)
-                    close()
-                }
-                drawPath(path, bladeGrad)
-                drawCircle(Color(0xFFFFB300), radius = w * 0.12f, center = Offset(w * 0.72f, h * 0.28f))
-            }
-            "Clay" -> Canvas(modifier = Modifier.size(24.dp)) {
-                val w = size.width; val h = size.height
-                val clayGrad = Brush.radialGradient(
-                    colors = listOf(Color(0xFFE8E8E8), Color(0xFF949494), Color(0xFF383838)),
-                    center = Offset(w * 0.35f, h * 0.35f),
-                    radius = w * 0.48f
-                )
-                drawCircle(Color(0xFF151515), radius = w * 0.34f, center = Offset(w * 0.5f, h * 0.55f))
-                drawCircle(clayGrad, radius = w * 0.33f, center = Offset(w * 0.5f, h * 0.5f))
-            }
-            "Clay Strips" -> Canvas(modifier = Modifier.size(24.dp)) {
-                val w = size.width; val h = size.height
-                val stripGrad = Brush.linearGradient(
-                    colors = listOf(Color(0xFFE0E0E0), Color(0xFF707070)),
-                    start = Offset(0f, 0f),
-                    end = Offset(w, h)
-                )
-                drawRect(Color(0xFF151515), topLeft = Offset(w * 0.20f, h * 0.27f), size = Size(w * 0.62f, h * 0.22f))
-                drawRect(stripGrad, topLeft = Offset(w * 0.18f, h * 0.23f), size = Size(w * 0.60f, h * 0.22f))
-                drawRect(Color(0xFF151515), topLeft = Offset(w * 0.20f, h * 0.57f), size = Size(w * 0.62f, h * 0.22f))
-                drawRect(stripGrad, topLeft = Offset(w * 0.18f, h * 0.53f), size = Size(w * 0.60f, h * 0.22f))
-            }
-            "Inflate" -> Canvas(modifier = Modifier.size(24.dp)) {
-                val w = size.width; val h = size.height
-                val sphereGrad = Brush.radialGradient(
-                    colors = listOf(Color(0xFFFFFFFF), Color(0xFF9E9E9E), Color(0xFF333333)),
-                    center = Offset(w * 0.35f, h * 0.35f),
-                    radius = w * 0.3f
-                )
-                drawCircle(sphereGrad, radius = w * 0.24f, center = Offset(w * 0.5f, h * 0.5f))
-                drawCircle(Color(0xFFE0E0E0), radius = w * 0.38f, center = Offset(w * 0.5f, h * 0.5f), style = Stroke(width = w * 0.08f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f))))
-            }
-            "Crease" -> Canvas(modifier = Modifier.size(24.dp)) {
-                val w = size.width; val h = size.height
-                val path = Path().apply {
-                    moveTo(w * 0.20f, h * 0.30f)
-                    lineTo(w * 0.50f, h * 0.75f)
-                    lineTo(w * 0.80f, h * 0.30f)
-                }
-                drawPath(path, Color(0xFF101010), style = Stroke(width = w * 0.22f, cap = StrokeCap.Round, join = StrokeJoin.Round))
-                drawPath(path, Color(0xFFE0E0E0), style = Stroke(width = w * 0.10f, cap = StrokeCap.Round, join = StrokeJoin.Round))
-            }
-            "Smooth" -> Canvas(modifier = Modifier.size(24.dp)) {
-                val w = size.width; val h = size.height
-                val smoothGrad = Brush.linearGradient(
-                    colors = listOf(Color(0xFFFFFFFF), Color(0xFF888888)),
-                    start = Offset(w * 0.2f, h * 0.6f),
-                    end = Offset(w * 0.8f, h * 0.4f)
-                )
-                val path = Path().apply {
-                    moveTo(w * 0.18f, h * 0.55f)
-                    cubicTo(w * 0.35f, h * 0.25f, w * 0.65f, h * 0.75f, w * 0.82f, h * 0.45f)
-                }
-                drawPath(path, smoothGrad, style = Stroke(width = w * 0.18f, cap = StrokeCap.Round))
-            }
-            "Flatten" -> Canvas(modifier = Modifier.size(24.dp)) {
-                val w = size.width; val h = size.height
-                val plateGrad = Brush.linearGradient(
-                    colors = listOf(Color(0xFFFFFFFF), Color(0xFF757575), Color(0xFF303030))
-                )
-                drawRect(plateGrad, topLeft = Offset(w * 0.18f, h * 0.32f), size = Size(w * 0.64f, h * 0.20f))
-                drawRect(Color(0xFFAAAAAA), topLeft = Offset(w * 0.22f, h * 0.64f), size = Size(w * 0.56f, h * 0.08f))
-            }
-            "Grab" -> Canvas(modifier = Modifier.size(24.dp)) {
-                val w = size.width; val h = size.height
-                val grabGrad = Brush.linearGradient(
-                    colors = listOf(Color(0xFFFFFFFF), Color(0xFF808080))
-                )
-                val path = Path().apply {
-                    moveTo(w * 0.20f, h * 0.5f)
-                    lineTo(w * 0.80f, h * 0.5f)
-                    moveTo(w * 0.5f, h * 0.20f)
-                    lineTo(w * 0.5f, h * 0.80f)
-                }
-                drawPath(path, grabGrad, style = Stroke(width = w * 0.16f, cap = StrokeCap.Round))
-                drawCircle(Color(0xFFFFB300), radius = w * 0.14f, center = Offset(w * 0.5f, h * 0.5f))
-            }
-            "Mask" -> Canvas(modifier = Modifier.size(24.dp)) {
-                val w = size.width; val h = size.height
-                drawRect(Color(0xFF333333), topLeft = Offset(w * 0.22f, h * 0.22f), size = Size(w * 0.56f, h * 0.56f))
-                val maskBorder = Path().apply {
-                    addRect(Rect(w * 0.22f, h * 0.22f, w * 0.78f, h * 0.78f))
-                }
-                drawPath(maskBorder, Color(0xFFE0E0E0), style = Stroke(width = w * 0.12f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f))))
-            }
-            else -> Text(
-                text = label.split(" ").let { parts ->
-                    if (parts.size > 1) "${parts[0].take(1)}${parts[1].take(1)}" else parts[0].take(2)
-                }.uppercase(),
-                color = Color.White,
-                fontWeight = FontWeight.Black,
-                fontSize = 11.sp
-            )
-        }
-    }
 }
 
-/** Tamaño de la ventana del overlay (px), anclada BOTTOM|CENTER_HORIZONTAL.
- *  Recortada al dock: los toques fuera de ella llegan a Blender (passthrough). */
+/** Tamaño de la ventana del overlay (px): SOLO la franja del arco + margen mínimo,
+ *  anclada BOTTOM|CENTER_HORIZONTAL. Todo lo demás queda libre para Blender. */
 fun wheelWindowSize(context: Context): Pair<Int, Int> {
-    val m = wheelMetrics(context)
+    val g = arcGeometry(context)
     val density = context.resources.displayMetrics.density
-    val w = ((m.boxW + 6) * density).toInt()
-    val h = ((LABEL_H_DP + m.boxH + 6) * density).toInt()
-    return w to h
+    val w = ((g.halfW + g.bandHalf) * 2f + 8f) * density
+    val h = (g.arcH + g.bandHalf + 56f + SPHERE_ACTIVE) * density
+    return w.toInt() to h.toInt()
 }
 
 fun createSculptWheelOverlay(context: Context, lifecycleOwner: LifecycleOwner): ComposeView {
