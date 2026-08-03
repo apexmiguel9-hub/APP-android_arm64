@@ -485,11 +485,12 @@ private fun sculptArcWindowSize(context: android.content.Context, collapsed: Boo
     return w to h
 }
 
-/** Resize / re-touchability of the overlay window. Touchable only when active. */
-private fun updateSculptArcWindow(collapsed: Boolean, touchable: Boolean) {
+/** Resize / re-touchability of the overlay window. Touchable only when active.
+ * Uses the wheel geometry (wheelWindowSize) since the wheel replaced the arc. */
+internal fun updateSculptArcWindow(collapsed: Boolean, touchable: Boolean) {
     val view = OverlayState.sculptArcView ?: return
     val lp = OverlayState.sculptArcLp ?: return
-    val (w, h) = sculptArcWindowSize(view.context, collapsed)
+    val (w, h) = wheelWindowSize(view.context)
     lp.width = w
     lp.height = h
     lp.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
@@ -499,7 +500,7 @@ private fun updateSculptArcWindow(collapsed: Boolean, touchable: Boolean) {
         try {
             val wm = view.context.getSystemService(android.content.Context.WINDOW_SERVICE) as WindowManager
             wm.updateViewLayout(view, lp)
-            android.util.Log.d("OBL.ARC", "updateSculptArcWindow collapsed=$collapsed touchable=$touchable size=${w}x$h")
+            android.util.Log.d("OBL.ARC", "updateSculptArcWindow touchable=$touchable size=${w}x${h}")
         } catch (e: Exception) {
             android.util.Log.e("OBL.ARC", "updateSculptArcWindow: UPDATE FAILED", e)
         }

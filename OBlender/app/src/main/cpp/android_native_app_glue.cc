@@ -717,6 +717,15 @@ extern "C" JNIEXPORT jstring JNICALL Java_com_epai_oblender_OBLNativeActivity_st
     return env->NewStringUTF(hello.c_str());
 }
 
+extern "C" JNIEXPORT void JNICALL Java_com_epai_oblender_OBLNativeActivity_oblSetToolById(
+        JNIEnv *env,
+        jobject /* this */,
+        jstring jidname) {
+    std::string id = jstring2string(env, jidname);
+    __android_log_print(ANDROID_LOG_INFO, "OBL.WHEEL", "JNI oblSetToolById: %s", id.c_str());
+    oblSetSculptToolRequest(id.c_str());
+}
+
 extern "C" JNIEXPORT jintArray JNICALL Java_com_epai_oblender_OBLNativeActivity_getCursorPosition(
         JNIEnv *env,
         jobject /* this */) {

@@ -350,6 +350,9 @@ public class OBLNativeActivity extends NativeActivity
 
     public native int getActiveMode();
 
+    /** Sculpt wheel overlay: set the active sculpt tool directly (bypasses key dispatch). */
+    public native void oblSetToolById(String idname);
+
     /** Static accessor for the overlay (Kotlin) to query the real GHOST cursor position. */
     public static int[] getCursorPositionStatic() {
         if (sActivity == null) return new int[] { -1, -1 };
@@ -362,11 +365,16 @@ public class OBLNativeActivity extends NativeActivity
         return sActivity.getTouchDown();
     }
 
-    /** Static accessor: idname of the active tool (e.g. "builtin_brush.Clay"), empty if none. */
-    public static String getActiveToolIdStatic() {
-        if (sActivity == null) return "";
-        return sActivity.getActiveToolId();
-    }
+     /** Static accessor: idname of the active tool (e.g. "builtin_brush.Clay"), empty if none. */
+     public static String getActiveToolIdStatic() {
+         if (sActivity == null) return "";
+         return sActivity.getActiveToolId();
+     }
+
+     /** Static accessor: set the active sculpt tool by idname (e.g. "builtin_brush.Clay"). */
+     public static void oblSetToolByIdStatic(String idname) {
+         if (sActivity != null) sActivity.oblSetToolById(idname);
+     }
 
     /** Static accessor: name of the active workspace (e.g. "Sculpting", "2D Animation"). */
     public static String getActiveWorkspaceStatic() {

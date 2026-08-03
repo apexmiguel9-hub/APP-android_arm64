@@ -8,6 +8,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <android/log.h>
+#include <mutex>
+#include <string>
 #include "creator.h"
 
 char strHomePath[256]={0};
@@ -285,6 +287,26 @@ void gmp_blender_init_allocator()
  *   or exit immediately when running in background-mode.
  */
 static bool g_open_shortcut_grid = false;
+
+/* Pending sculpt tool-set request arriving from the UI thread (Kotlin).
+ * The JNI thread is NOT the Blender main thread, so we cannot invoke the
+ * WM tool-set operator from there. Instead we stash the idname here and drain
+ * it on the render thread inside #mainBlenderLoop, where a valid bContext (C)
+ * is available. This drives the sculpt wheel overlay (all 42 tools) and does
+ * NOT depend on key-event dispatch — which is what avoids the "first entry to
+ * sculpt reverts to Draw" race that the keyboard-based arc used to trigger. */
+static std::mutex g_tool_mutex;
+static std::string g_pending_tool_id;
+static bool g_pending_tool_set = false;
+
+extern "C" void blenderSetActiveTool(const char *idname);
+
+void oblSetSculptToolRequest(const char *idname) {
+    if (!idname || !idname[0]) return;
+    std::lock_guard<std::mutex> lock(g_tool_mutex);
+    g_pending_tool_id = idname;
+    g_pending_tool_set = true;
+}
 
 void* mainBlenderInitial(int argc,
 #ifdef USE_WIN32_UNICODE_ARGS
@@ -664,6 +686,46 @@ int mainBlenderLoop(void*pContext) {
     g_open_shortcut_grid = false;
     const char *imports[] = {"bpy", NULL};
     BPY_run_string_exec(C, imports, "bpy.ops.obl.shortcut_grid('INVOKE_DEFAULT')");
+  }
+  /* Drain sculpt-tool-set requests queued from the overlay UI thread.
+   * Done on the render thread where bContext (C) is valid, so the tool is
+   * applied through the real toolsystem (no key-dispatch race) and the mobile
+   * "active tool" static is updated for the overlay poll. */
+  {
+    std::string pending;
+    {
+      std::lock_guard<std::mutex> lock(g_tool_mutex);
+      if (g_pending_tool_set) {
+        g_pending_tool_set = false;
+        pending = g_pending_tool_id;
+      }
+    }
+    if (!pending.empty()) {
+      __android_log_print(ANDROID_LOG_INFO, "OBL.WHEEL",
+          "drain tool_set_by_id: %s", pending.c_str());
+      bool ctx_ok = false;
+      if (WM_toolsystem_ref_set_by_id(C, pending.c_str()) != NULL) {
+        ctx_ok = true;
+        __android_log_print(ANDROID_LOG_INFO, "OBL.WHEEL",
+            "tool_set C-API OK: %s", pending.c_str());
+      } else {
+        /* Fallback: context-resolved Python operator (same proven path as
+         * the shortcut-grid dispatch above). */
+        char cmd[512];
+        SNPRINTF(cmd,
+            "import bpy\n"
+            "try:\n"
+            "  bpy.ops.wm.tool_set_by_id('INVOKE_DEFAULT', name=\"%s\")\n"
+            "except Exception as e:\n"
+            "  print('OBL.WHEEL tool_set_by_id FAILED:', e)\n",
+            pending.c_str());
+        const char *imports[] = {"bpy", NULL};
+        BPY_run_string_exec(C, imports, cmd);
+      }
+      blenderSetActiveTool(pending.c_str());
+      __android_log_print(ANDROID_LOG_INFO, "OBL.WHEEL",
+          "static updated -> %s | ctx_ok=%d", pending.c_str(), ctx_ok);
+    }
   }
   Wm_loop(C);
     return 0;

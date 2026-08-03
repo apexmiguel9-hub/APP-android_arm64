@@ -457,7 +457,7 @@ fun hidePrecisionLensOverlay() {
 
 fun showSculptArcOverlay(context: Context, lifecycleOwner: LifecycleOwner) {
     hideSculptArcOverlay()
-    OverlayState.sculptArcView = createSculptArcOverlay(context, lifecycleOwner)
+    OverlayState.sculptArcView = createSculptWheelOverlay(context, lifecycleOwner)
 }
 
 fun hideSculptArcOverlay() {
