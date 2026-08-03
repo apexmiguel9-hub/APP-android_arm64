@@ -61,9 +61,38 @@ val sculptTools = listOf(
     "Multires Displacement", "Sculpt Curves"
 )
 
-/** idname real de Blender (builtin_brush.<Label_con_underscores>) para el puente JNI
- *  WM_toolsystem_ref_set_by_id (drain en creator.cc / mainBlenderLoop). */
-private fun toolId(label: String) = "builtin_brush." + label.replace(" ", "_")
+/** idname real de Blender (builtin_brush.<Label> tal cual, p.ej. "builtin_brush.Snake Hook"
+ *  con espacio) para el poll de sync y el puente JNI. */
+private fun toolId(label: String) = "builtin_brush." + label
+
+/** Teclas del keymap de sculpt (blender_default.py, operador C paint.brush_select que SÍ
+ *  cambia el brush real; wm.tool_set_by_id es Python y puede no correr en este build).
+ *  Ordinales = OBLButtonID.h. Camino PROBADO en device (lo usaba el arco anterior). */
+private data class ToolKey(val key: Int, val shift: Boolean = false)
+
+private val toolKeys = mapOf(
+    "Draw" to ToolKey(27),               // X
+    "Clay" to ToolKey(29),               // C
+    "Smooth" to ToolKey(44, shift = true),   // Shift+S
+    "Flatten" to ToolKey(22, shift = true),  // Shift+T
+    "Pinch" to ToolKey(73),              // P
+    "Grab" to ToolKey(45),               // G
+    "Snake Hook" to ToolKey(71),         // K
+    "Inflate" to ToolKey(23),            // I
+    "Layer" to ToolKey(72),              // L
+    "Crease" to ToolKey(29, shift = true),   // Shift+C
+    "Mask" to ToolKey(31)                // M
+)
+
+private fun emitToolKey(key: ToolKey) {
+    if (key.shift) {
+        OBLNativeActivity.oblSetValueOnStatic("0")  // Shift down
+        OBLNativeActivity.oblSetValueStatic(key.key.toString())
+        OBLNativeActivity.oblSetValueOffStatic("0") // Shift up
+    } else {
+        OBLNativeActivity.oblSetValueStatic(key.key.toString())
+    }
+}
 
 private const val ARC_STEP = 20f      // grados por tool a lo largo del arco
 private const val VISIBLE_DEG = 75f   // tools con |angulo| <= VISIBLE_DEG (7 visibles)
@@ -80,9 +109,9 @@ private fun arcGeometry(context: Context): ArcGeometry {
     val density = context.resources.displayMetrics.density
     val screenWd = sw / density
     return ArcGeometry(
-        halfW = screenWd * 0.30f,
-        arcH = screenWd * 0.13f,
-        bandHalf = max(28f, screenWd * 0.03f)
+        halfW = screenWd * 0.21f,  // más compacto: no tapa el área de sculpt
+        arcH = screenWd * 0.08f,
+        bandHalf = max(22f, screenWd * 0.025f)
     )
 }
 
@@ -103,7 +132,8 @@ private fun arcGeometry(context: Context): ArcGeometry {
  *   mismo; las zonas vacías no disparan ninguna acción.
  * - VISIBILIDAD: solo en modo SCULPT + workspace "Sculpting" (poll); oculto =
  *   GONE + NOT_TOUCHABLE.
- * - ACCIONES: tap/select llama oblSetToolByIdStatic(id) -> WM_toolsystem_ref_set_by_id.
+ * - ACCIONES: tap/select emite la TECLA del keymap (paint.brush_select, C -> cambia el brush
+ *   real). Fallback JNI (oblSetToolByIdStatic) solo para tools sin tecla en el keymap.
  */
 @Composable
 fun CarouselDock() {
@@ -158,9 +188,16 @@ fun CarouselDock() {
 
     fun selectTool(sel: Int) {
         if (sel < 0 || sel >= sculptTools.size) return
-        val id = toolId(sculptTools[sel])
-        android.util.Log.d("OBL.WHEEL", "select label=${sculptTools[sel]} id=$id")
-        OBLNativeActivity.oblSetToolByIdStatic(id)
+        val label = sculptTools[sel]
+        android.util.Log.d("OBL.WHEEL", "select label=$label")
+        val key = toolKeys[label]
+        if (key != null) {
+            emitToolKey(key)   // paint.brush_select (C): cambia el brush real, camino probado
+        } else {
+            val id = toolId(label)
+            android.util.Log.d("OBL.WHEEL", "no key -> JNI fallback id=$id")
+            OBLNativeActivity.oblSetToolByIdStatic(id)
+        }
         activeSel = sel
         lastUserSelMs = System.currentTimeMillis()
         recenterTo(sel)

@@ -722,7 +722,13 @@ int mainBlenderLoop(void*pContext) {
         const char *imports[] = {"bpy", NULL};
         BPY_run_string_exec(C, imports, cmd);
       }
-      blenderSetActiveTool(pending.c_str());
+      /* Solo actualizar el static si la activación realmente tuvo efecto en el
+       * toolsystem (C-API o bpy OK). Si falló, NO mentirle al overlay: el poll
+       * seguirá mostrando el brush real. La vía primaria (teclas del keymap /
+       * paint.brush_select) actualiza este static desde el hook de Blender. */
+      if (ctx_ok) {
+        blenderSetActiveTool(pending.c_str());
+      }
       __android_log_print(ANDROID_LOG_INFO, "OBL.WHEEL",
           "static updated -> %s | ctx_ok=%d", pending.c_str(), ctx_ok);
     }
