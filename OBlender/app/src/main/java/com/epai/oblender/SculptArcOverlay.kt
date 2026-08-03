@@ -495,7 +495,13 @@ internal fun updateSculptArcWindow(collapsed: Boolean, touchable: Boolean) {
     lp.height = h
     lp.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
             (if (touchable) 0 else WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE)
+    // Hide (GONE) + NOT_TOUCHABLE outside sculpt so the window neither renders nor
+    // consumes any touch events; otherwise leave VISIBLE + touchable.
+    view.post {
+        view.visibility = if (touchable) android.view.View.VISIBLE else android.view.View.GONE
+    }
     Handler(Looper.getMainLooper()).post {
         try {
             val wm = view.context.getSystemService(android.content.Context.WINDOW_SERVICE) as WindowManager

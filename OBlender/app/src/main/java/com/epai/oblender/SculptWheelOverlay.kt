@@ -39,6 +39,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.text.font.FontWeight
@@ -74,22 +75,39 @@ val WheelTools = listOf(
 
 private const val STEP = 20f
 
+/** Single source of truth for wheel size: radius/sphere in dp derived from screen width.
+ * Used by BOTH the Compose layout (dp) and wheelWindowSize (px) so they always match. */
+private fun wheelMetrics(context: Context): Triple<Float, Float, Float> {
+    val sw = context.resources.displayMetrics.widthPixels.toFloat()
+    val density = context.resources.displayMetrics.density
+    val screenWd = sw / density
+    val radius = screenWd * 0.44f
+    val sphere = screenWd * 0.10f
+    val box = 2 * radius + sphere
+    return Triple(radius, sphere, box)
+}
+
 @Composable
 fun SculptWheelContent() {
     val density = LocalDensity.current
+    val context = LocalContext.current
+    val metrics = wheelMetrics(context)
+    val radiusDp = metrics.first
+    val sphereDp = metrics.second
+    val boxDp = metrics.third
+    val radius = radiusDp.dp
+    val sphere = sphereDp.dp
+    val boxSize = boxDp.dp
 
-    // Wheel geometry (dp). The draggable box is a square large enough to contain the
-    // full circle (radius + sphere halfs) so the per-tool spheres are never clipped
-    // and their clickable bounds stay intact. The ACTIVE tool rests at the apex
-    // (top of the circle); neighbours fan out along the ring.
-    val radius = 180f.dp
-    val sphere = 42f.dp
-    val boxSize = (2 * 180 + 42).dp
     val angleSpacing = 18f
     val totalTools = WheelTools.size.toFloat()
     val boxSizePx = with(density) { boxSize.toPx() }
+    val radiusPx = with(density) { radius.toPx() }
     val cx = boxSizePx / 2f
-    val cy = boxSizePx / 2f
+    // Circle top-anchored so the BOTTOM point (apex) sits at the box bottom =
+    // screen bottom. The ACTIVE tool rests at that bottom-center apex; neighbours
+    // fan out along the lower arc.
+    val cy = boxSizePx - radiusPx
 
     var collapsed by remember { mutableStateOf(OverlayState.sculptArcCollapsed) }
     var activeSel by remember { mutableStateOf(-1) }
@@ -132,109 +150,111 @@ fun SculptWheelContent() {
     }
 
     // Only render the wheel when in sculpt mode (sculptArcActive is observable
-    // state, so this recomposes when the poll toggles it). The window itself is
-    // already removed of touch interception via updateSculptArcWindow(..., touchable).
+    // state, so this recomposes when the poll toggles it). The window is also
+    // flagged NOT_TOUCHABLE + GONE outside sculpt so it never consumes touches.
     if (!OverlayState.sculptArcActive) {
         Box(Modifier.fillMaxSize())
         return
     }
 
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.padding(bottom = 12.dp)
-    ) {
-        val centerPos = dragAngle.value / STEP
-        val apexIdx = ((centerPos.roundToInt() % WheelTools.size) + WheelTools.size) % WheelTools.size
-        val toolAtApex = WheelTools[apexIdx]
-        Text(
-            text = toolAtApex.label,
-            color = if (activeSel >= 0) Color(0xFFFFAB40) else Color(0xFFA0A0A0),
-            fontWeight = FontWeight.Bold,
-            fontSize = 14.sp,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(bottom = 6.dp)
-        )
-
-        Box(
-            modifier = Modifier
-                .size(boxSize, boxSize)
-                .pointerInput(Unit) {
-                    detectHorizontalDragGestures(
-                        onDragEnd = {
-                            val cur = dragAngle.value / STEP
-                            val target = cur.roundToInt()
-                            val targetAngle = target * STEP
-                            coroutineScope.launch {
-                                dragAngle.animateTo(targetValue = targetAngle, animationSpec = spring(stiffness = 300f, dampingRatio = 0.8f))
-                            }
-                        }
-                    ) { change, dragAmount ->
-                        change.consume()
-                        coroutineScope.launch { dragAngle.snapTo(dragAngle.value - dragAmount * 0.20f) }
-                    }
-                }
+    // Root: fill the (bottom-anchored) window; anchor the wheel at bottom-center.
+    Box(Modifier.fillMaxSize()) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.align(Alignment.BottomCenter)
         ) {
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val w = size.width
-                val h = size.height
-                val dock = Path().apply {
-                    moveTo(0f, h)
-                    cubicTo(w * 0.25f, h + 48f, w * 0.75f, h + 48f, w, h)
-                    lineTo(w * 0.88f, h)
-                    cubicTo(w * 0.75f, h * 0.90f, w * 0.25f, h * 0.90f, w * 0.12f, h)
-                    close()
-                }
-                drawPath(dock, Color(0xFF2C2C2C))
-                drawPath(dock, Color(0xFFE5C158), style = Stroke(2.5f))
-            }
-
-            val goldOrangeGradient = Brush.linearGradient(
-                colors = listOf(Color(0xFFE5C158), Color(0xFFFF6F00))
+            val centerPos = dragAngle.value / STEP
+            val apexIdx = ((centerPos.roundToInt() % WheelTools.size) + WheelTools.size) % WheelTools.size
+            val toolAtApex = WheelTools[apexIdx]
+            Text(
+                text = toolAtApex.label,
+                color = if (activeSel >= 0) Color(0xFFFFAB40) else Color(0xFFA0A0A0),
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(bottom = 8.dp)
             )
-            val interactionSource = remember { MutableInteractionSource() }
 
-            WheelTools.forEachIndexed { index, tool ->
-                val diffUnwrapped = index - centerPos
-                var diff = diffUnwrapped % totalTools
-                if (diff > totalTools / 2f) diff -= totalTools
-                if (diff < -totalTools / 2f) diff += totalTools
-                if (abs(diff) <= 4.5f) {
-                    val currentAngle = -90f + (diff * angleSpacing)
+            Box(
+                modifier = Modifier
+                    .size(boxSize, boxSize)
+                    .pointerInput(Unit) {
+                        detectHorizontalDragGestures(
+                            onDragEnd = {
+                                val cur = dragAngle.value / STEP
+                                val target = cur.roundToInt()
+                                val targetAngle = target * STEP
+                                coroutineScope.launch {
+                                    dragAngle.animateTo(targetValue = targetAngle, animationSpec = spring(stiffness = 300f, dampingRatio = 0.8f))
+                                }
+                            }
+                        ) { change, dragAmount ->
+                            change.consume()
+                            coroutineScope.launch { dragAngle.snapTo(dragAngle.value - dragAmount * 0.20f) }
+                        }
+                    }
+            ) {
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val w = size.width
+                    val h = size.height
+                    val dock = Path().apply {
+                        moveTo(0f, h)
+                        cubicTo(w * 0.25f, h - 8f, w * 0.75f, h + 8f, w, h)
+                        lineTo(w, h)
+                        close()
+                    }
+                    drawPath(dock, Color(0xFF2C2C2C))
+                    drawPath(dock, Color(0xFFE5C158), style = Stroke(2.5f))
+                }
+
+                val goldOrangeGradient = Brush.linearGradient(
+                    colors = listOf(Color(0xFFE5C158), Color(0xFFFF6F00))
+                )
+                val interactionSource = remember { MutableInteractionSource() }
+
+                WheelTools.forEachIndexed { index, tool ->
+                    val diffUnwrapped = index - centerPos
+                    var diff = diffUnwrapped % totalTools
+                    if (diff > totalTools / 2f) diff -= totalTools
+                    if (diff < -totalTools / 2f) diff += totalTools
+                    if (abs(diff) <= 4.5f) {
+                    val currentAngle = 90f + (diff * angleSpacing)
                     val currentAngleRad = Math.toRadians(currentAngle.toDouble())
-                    val distanceFromCenter = abs(-90f - currentAngle)
-                    val itemAlpha = (1f - (distanceFromCenter / 75f)).coerceIn(0f, 1f)
-                    val itemScale = (1f - (distanceFromCenter / 130f)).coerceIn(0.5f, 1f)
-                    val isSelected = distanceFromCenter < (angleSpacing / 2f)
-                    val cosA = cos(currentAngleRad).toFloat()
-                    val sinA = sin(currentAngleRad).toFloat()
-                    Box(
-                        modifier = Modifier
-                            .offset {
-                                val radiusPx = radius.toPx()
-                                IntOffset(
-                                    (cx + cosA * radiusPx).roundToInt(),
-                                    (cy + sinA * radiusPx).roundToInt()
+                    val distanceFromCenter = abs(90f - currentAngle)
+                        val itemAlpha = (1f - (distanceFromCenter / 75f)).coerceIn(0f, 1f)
+                        val itemScale = (1f - (distanceFromCenter / 130f)).coerceIn(0.5f, 1f)
+                        val isSelected = distanceFromCenter < (angleSpacing / 2f)
+                        val cosA = cos(currentAngleRad).toFloat()
+                        val sinA = sin(currentAngleRad).toFloat()
+                        Box(
+                            modifier = Modifier
+                                .offset {
+                                    val rPx = radius.toPx()
+                                    IntOffset(
+                                        (cx + cosA * rPx).roundToInt(),
+                                        (cy + sinA * rPx).roundToInt()
+                                    )
+                                }
+                                .size(sphere)
+                                .clickable(interactionSource = interactionSource, indication = null) {
+                                    android.util.Log.d("OBL.WHEEL", "select label=${tool.label} id=${tool.id}")
+                                    OBLNativeActivity.oblSetToolByIdStatic(tool.id)
+                                }
+                                .graphicsLayer {
+                                    alpha = itemAlpha
+                                    scaleX = itemScale
+                                    scaleY = itemScale
+                                }
+                                .background(
+                                    brush = if (isSelected) goldOrangeGradient else Brush.linearGradient(listOf(Color(0xFF3B3B3B), Color(0xFF3B3B3B))),
+                                    shape = CircleShape
                                 )
-                            }
-                            .size(sphere)
-                            .clickable(interactionSource = interactionSource, indication = null) {
-                                android.util.Log.d("OBL.WHEEL", "select label=${tool.label} id=${tool.id}")
-                                OBLNativeActivity.oblSetToolByIdStatic(tool.id)
-                            }
-                            .graphicsLayer {
-                                alpha = itemAlpha
-                                scaleX = itemScale
-                                scaleY = itemScale
-                            }
-                            .background(
-                                brush = if (isSelected) goldOrangeGradient else Brush.linearGradient(listOf(Color(0xFF3B3B3B), Color(0xFF3B3B3B))),
-                                shape = CircleShape
-                            )
-                            .padding(if (isSelected) 3.dp else 2.dp)
-                            .background(Color(0xFF2C2C2C), CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        wheelToolIcon(tool)
+                                .padding(if (isSelected) 3.dp else 2.dp)
+                                .background(Color(0xFF2C2C2C), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            wheelToolIcon(tool)
+                        }
                     }
                 }
             }
@@ -283,13 +303,14 @@ private fun wheelToolIcon(tool: WheelTool) {
     }
 }
 
+/** Window size in px, derived from the SAME screen-relative metric as the Compose
+ * layout, so width/height and dp/px always agree. */
 fun wheelWindowSize(context: Context): Pair<Int, Int> {
-    val sw = context.resources.displayMetrics.widthPixels.toFloat()
-    val radius = sw * 0.46f
-    val sphere = sw * 0.10f
-    val box = radius * 2 + sphere
-    val w = (box + 16).toInt()
-    val h = (box + 16).toInt()
+    val metrics = wheelMetrics(context)
+    val density = context.resources.displayMetrics.density
+    val box = metrics.third
+    val w = ((box + 8) * density).toInt()
+    val h = ((box + 72) * density).toInt()
     return w to h
 }
 
@@ -299,6 +320,9 @@ fun createSculptWheelOverlay(context: Context, lifecycleOwner: LifecycleOwner): 
         setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
         setContent { SculptWheelContent() }
         setBackgroundColor(android.graphics.Color.TRANSPARENT)
+        // Start hidden + not-touchable; the poll will reveal it (VISIBLE +
+        // touchable) only when entering sculpt mode.
+        visibility = android.view.View.GONE
     }
     composeView.setViewTreeLifecycleOwner(lifecycleOwner)
     composeView.setViewTreeSavedStateRegistryOwner(SimpleSavedStateRegistryOwner())
@@ -309,7 +333,7 @@ fun createSculptWheelOverlay(context: Context, lifecycleOwner: LifecycleOwner): 
         LayoutParams.TYPE_APPLICATION_PANEL,
         LayoutParams.FLAG_NOT_FOCUSABLE or
                 LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                LayoutParams.FLAG_NOT_TOUCH_MODAL,
+                LayoutParams.FLAG_NOT_TOUCHABLE,
         android.graphics.PixelFormat.TRANSPARENT
     )
     lp.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
