@@ -37,7 +37,6 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
@@ -58,69 +57,56 @@ import kotlin.math.cos
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
-data class WheelTool(val label: String, val id: String = "builtin_brush." + label.replace(" ", "_"))
-
-val WheelTools = listOf(
-    WheelTool("Draw"), WheelTool("Draw Sharp"), WheelTool("Clay"), WheelTool("Clay Strips"),
-    WheelTool("Clay Tubes"), WheelTool("Layer"), WheelTool("Inflate"), WheelTool("Blob"),
-    WheelTool("Crease"), WheelTool("Smooth"), WheelTool("Flatten"), WheelTool("Fill"),
-    WheelTool("Scrape"), WheelTool("Pinch"), WheelTool("Grab"), WheelTool("Snake Hook"),
-    WheelTool("Thumb"), WheelTool("Pose"), WheelTool("Nudge"), WheelTool("Rotate"),
-    WheelTool("Slide Relax"), WheelTool("Boundary"), WheelTool("Cloth"), WheelTool("Simplify"),
-    WheelTool("Mask"), WheelTool("Face Set"), WheelTool("Mesh Filter"), WheelTool("Color Filter"),
-    WheelTool("Box Mask"), WheelTool("Lasso Mask"), WheelTool("Line Mask"), WheelTool("Poly Mask"),
-    WheelTool("Box Trim"), WheelTool("Lasso Trim"), WheelTool("Slice"), WheelTool("Box Hide"),
-    WheelTool("Lasso Hide"), WheelTool("Line Project"), WheelTool("Expand"), WheelTool("Sample Detail"),
-    WheelTool("Multires Displacement"), WheelTool("Sculpt Curves")
-)
-
-private const val STEP = 20f
-
-/** Single source of truth for wheel size (dp). Used by the Compose layout AND wheelWindowSize
- * so the overlay window and its content always agree and never clip. */
-private fun wheelMetrics(context: Context): Triple<Float, Float, Float> {
+/** Single source of truth for wheel geometry (dp). Matches BOTH the Compose layout
+ * (dp) and wheelWindowSize (px) so the overlay window and its content never disagree
+ * (the old 350x100 box clipped the 180dp-radius arc and shifted it to the top). */
+private fun wheelMetrics(context: Context): WheelGeometry {
     val sw = context.resources.displayMetrics.widthPixels.toFloat()
     val density = context.resources.displayMetrics.density
     val screenWd = sw / density
     val radius = screenWd * 0.44f
     val sphere = screenWd * 0.10f
-    val box = 2 * radius + sphere
-    val boxH = radius + sphere
-    return Triple(radius, sphere, box)
+    return WheelGeometry(
+        radius = radius,
+        sphere = sphere,
+        boxW = 2 * radius + sphere,            // full circle width
+        boxH = radius + 2 * sphere             // lower-semicircle (active at bottom apex)
+    )
 }
+
+private data class WheelGeometry(val radius: Float, val sphere: Float, val boxW: Float, val boxH: Float)
 
 @Composable
 fun SculptWheelContent() {
     val density = LocalDensity.current
     val context = LocalContext.current
-    val metrics = wheelMetrics(context)
-    val radiusDp = metrics.first
-    val sphereDp = metrics.second
-    val boxDp = metrics.third
-    val radius = radiusDp.dp
-    val sphere = sphereDp.dp
+    val m = wheelMetrics(context)
+    val radius = m.radius.dp
+    val sphere = m.sphere.dp
+    val boxW = m.boxW.dp
+    val boxH = m.boxH.dp
+
+    val radiusPx = with(density) { radius.toPx() }
+    val spherePx = with(density) { sphere.toPx() }
+    val boxWpx = with(density) { boxW.toPx() }
+    val halfSphere = spherePx / 2f
+    val cx = boxWpx / 2f          // center the circle horizontally in the box
+    val cy = spherePx             // circle center near top; active apex at bottom-center (cy + radius = boxH)
 
     val angleSpacing = 18f
     val totalTools = WheelTools.size.toFloat()
 
-    val boxWpx = with(density) { boxDp.dp.toPx() }
-    val radiusPx = with(density) { radius.toPx() }
-    val spherePx = with(density) { sphere.toPx() }
-    // Lower-semicircle: circle center near the top of the box, apex (active) at the
-    // box BOTTOM = screen bottom (bottom-center dock). centerY = sphere so the arc
-    // rises from the apex up into the box without clipping.
-    val cx = boxWpx / 2f
-    val cy = spherePx
-    val halfSphere = spherePx / 2f
+    val dragAngle = remember { Animatable(0f) }
+    val coroutineScope = rememberCoroutineScope()
 
-    var collapsed by remember { mutableStateOf(OverlayState.sculptArcCollapsed) }
+    // Tool at the bottom-center apex (diff = 0).
+    val selectedIndex = ((dragAngle.value / angleSpacing).roundToInt() %
+            WheelTools.size + WheelTools.size) % WheelTools.size
+
     var activeSel by remember { mutableStateOf(-1) }
     var lastUserSelMs by remember { mutableStateOf(0L) }
 
-    val coroutineScope = rememberCoroutineScope()
-    val dragAngle = remember { Animatable(0f) }
-
-    // Poll: show/hide wheel based on sculpt mode + sync active highlight from Blender.
+    // Sync active highlight + visibility from Blender; reveal/hide the window.
     LaunchedEffect(Unit) {
         var lastIdx = -2
         var lastActive = OverlayState.sculptArcActive
@@ -139,7 +125,12 @@ fun SculptWheelContent() {
                 }
                 if (idx != lastIdx) {
                     lastIdx = idx
-                    coroutineScope.launch { dragAngle.animateTo(-(idx * STEP), spring(stiffness = 300f, dampingRatio = 0.8f)) }
+                    coroutineScope.launch {
+                        dragAngle.animateTo(
+                            targetValue = -(idx * STEP),
+                            animationSpec = spring(stiffness = 300f, dampingRatio = 0.8f)
+                        )
+                    }
                 }
             } else {
                 lastIdx = -2
@@ -147,31 +138,30 @@ fun SculptWheelContent() {
             }
             if (inSculpt != lastActive) {
                 lastActive = inSculpt
-                updateSculptArcWindow(collapsed, inSculpt)
+                updateSculptArcWindow(false, inSculpt)
             }
             delay(200)
         }
     }
 
-    // Only render the wheel when in sculpt mode (sculptArcActive is observable state).
+    // Outside sculpt: the window is GONE + NOT_TOUCHABLE (handled in updateSculptArcWindow).
     if (!OverlayState.sculptArcActive) {
-        Box(Modifier.fillMaxSize())
+        Box(Modifier.fillMaxSize().background(Color(0xFF202124)))
         return
     }
 
-    // Root: fill the bottom-anchored overlay window; dock the wheel at bottom-center.
+    // Root: full window, dark backdrop, wheel docked at bottom-center.
     Box(
         Modifier
             .fillMaxSize()
-            .background(Color(0xCC202124)),
+            .background(Color(0xFF202124)),
         contentAlignment = Alignment.BottomCenter
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            val centerPos = dragAngle.value / STEP
-            val apexIdx = ((centerPos.roundToInt() % WheelTools.size) + WheelTools.size) % WheelTools.size
-            val toolAtApex = WheelTools[apexIdx]
+            // Nombre de la herramienta activa (en el ápice inferior/centro).
+            val label = WheelTools[selectedIndex].label
             Text(
-                text = toolAtApex.label,
+                text = label,
                 color = if (activeSel >= 0) Color(0xFFFFAB40) else Color(0xFFA0A0A0),
                 fontWeight = FontWeight.Bold,
                 fontSize = 14.sp,
@@ -179,19 +169,20 @@ fun SculptWheelContent() {
                 modifier = Modifier.padding(bottom = 8.dp)
             )
 
-            // Container sized to fully hold the lower semicircle (no clipping).
-            val boxHdp = (radiusDp + sphereDp).dp
             Box(
                 modifier = Modifier
-                    .size(boxDp.dp, boxHdp)
+                    .size(boxW, boxH)
                     .pointerInput(Unit) {
                         detectHorizontalDragGestures(
                             onDragEnd = {
-                                val cur = dragAngle.value / STEP
+                                val cur = dragAngle.value / angleSpacing
                                 val target = cur.roundToInt()
-                                val targetAngle = target * STEP
+                                val targetAngle = target * angleSpacing
                                 coroutineScope.launch {
-                                    dragAngle.animateTo(targetValue = targetAngle, animationSpec = spring(stiffness = 300f, dampingRatio = 0.8f))
+                                    dragAngle.animateTo(
+                                        targetValue = targetAngle,
+                                        animationSpec = spring(stiffness = 300f, dampingRatio = 0.8f)
+                                    )
                                 }
                             }
                         ) { change, dragAmount ->
@@ -206,15 +197,15 @@ fun SculptWheelContent() {
                     colors = listOf(Color(0xFFE5C158), Color(0xFFFF6F00))
                 )
                 val interactionSource = remember { MutableInteractionSource() }
-                val centerPosVal = dragAngle.value / STEP
+                val centerPos = dragAngle.value / angleSpacing
 
                 WheelTools.forEachIndexed { index, tool ->
-                    val diffUnwrapped = index - centerPosVal
+                    val diffUnwrapped = index - centerPos
                     var diff = diffUnwrapped % totalTools
                     if (diff > totalTools / 2f) diff -= totalTools
                     if (diff < -totalTools / 2f) diff += totalTools
                     if (abs(diff) <= 4.5f) {
-                        // angle (radians): 0 = apex (bottom), +/- to the sides.
+                        // angle 0 = bottom apex (active); +/- sweep the lower arc.
                         val angle = Math.toRadians((diff * angleSpacing).toDouble())
                         val sinA = sin(angle).toFloat()
                         val cosA = cos(angle).toFloat()
@@ -250,29 +241,18 @@ fun SculptWheelContent() {
                     }
                 }
 
-                // Dock baseline band.
+                // Dock baseline bridge at the bottom edge of the box.
                 Canvas(modifier = Modifier.align(Alignment.BottomCenter)) {
                     val w = size.width
                     val h = size.height
-                    drawPath(
-                        Path().apply {
-                            moveTo(0f, h)
-                            cubicTo(w * 0.25f, h - 10f, w * 0.75f, h + 10f, w, h)
-                            lineTo(w, h)
-                            close()
-                        },
-                        Color(0xFF2C2C2C)
-                    )
-                    drawPath(
-                        Path().apply {
-                            moveTo(0f, h)
-                            cubicTo(w * 0.25f, h - 10f, w * 0.75f, h + 10f, w, h)
-                            lineTo(w, h)
-                            close()
-                        },
-                        Color(0xFFE5C158),
-                        style = Stroke(2.5f)
-                    )
+                    val dock = Path().apply {
+                        moveTo(20f, h)
+                        cubicTo(w * 0.25f, h - 34f, w * 0.75f, h - 34f, w - 20f, h)
+                        lineTo(w - 20f, h)
+                        close()
+                    }
+                    drawPath(dock, Color(0xFF2C2C2C))
+                    drawPath(dock, Color(0xFFE5C158), style = Stroke(2.5f))
                 }
             }
         }
@@ -282,7 +262,7 @@ fun SculptWheelContent() {
 @Composable
 private fun wheelToolIcon(tool: WheelTool) {
     val label = tool.label
-    // 3D "clay" sphere (drawn behind).
+    // 3D "clay" sphere for every tool.
     Canvas(modifier = Modifier.fillMaxSize()) {
         val w = size.width
         val h = size.height
@@ -340,12 +320,10 @@ private fun wheelToolIcon(tool: WheelTool) {
 }
 
 fun wheelWindowSize(context: Context): Pair<Int, Int> {
-    val metrics = wheelMetrics(context)
+    val m = wheelMetrics(context)
     val density = context.resources.displayMetrics.density
-    val box = metrics.third
-    val boxH = metrics.first + metrics.second
-    val w = ((box + 16) * density).toInt()
-    val h = ((boxH + 72) * density).toInt()
+    val w = ((m.boxW + 12) * density).toInt()
+    val h = ((m.boxH + 72) * density).toInt()
     return w to h
 }
 
@@ -355,7 +333,7 @@ fun createSculptWheelOverlay(context: Context, lifecycleOwner: LifecycleOwner): 
         setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
         setContent { SculptWheelContent() }
         setBackgroundColor(android.graphics.Color.TRANSPARENT)
-        // Start hidden + not-touchable; the poll reveals it only in sculpt mode.
+        // Start hidden + not-touchable; revealed by the poll only in sculpt mode.
         visibility = android.view.View.GONE
     }
     composeView.setViewTreeLifecycleOwner(lifecycleOwner)
