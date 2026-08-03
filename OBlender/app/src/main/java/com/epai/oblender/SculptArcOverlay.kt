@@ -76,6 +76,12 @@ fun SculptArcContent() {
 
     var collapsed by remember { mutableStateOf(OverlayState.sculptArcCollapsed) }
     var highlightIndex by remember { mutableStateOf(-1) }
+    // Source of truth for which tool is SELECTED (the amber glow). Updated
+    // immediately on tap/drag-select; the poll syncs it from Blender for
+    // external tool changes, guarded by a grace period so a stale static read
+    // right after a tap can't flip the outline back to the previous tool.
+    var activeSel by remember { mutableStateOf(-1) }
+    var lastUserSelMs by remember { mutableStateOf(0L) }
     val scrollOffset = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
 
@@ -107,7 +113,9 @@ fun SculptArcContent() {
         val tool = SculptTools[sel]
         android.util.Log.d("OBL.ARC", "select ${tool.id} key=${tool.key} shift=${tool.shift}")
         if (sel != currentActive) emitToolKey(tool)
-        highlightIndex = sel
+        // Mark as selected immediately so the glow never waits for the poll.
+        activeSel = sel
+        lastUserSelMs = System.currentTimeMillis()
         scope.launch { scrollOffset.animateTo(-(sel * step).toFloat()) }
     }
 
@@ -128,12 +136,21 @@ fun SculptArcContent() {
             val inSculpt = idx >= 0
             OverlayState.sculptArcActive = inSculpt
             if (inSculpt) {
+                // Sync the selected-tool glow from Blender only when it is NOT
+                // a just-made user selection (grace 600ms) — otherwise a stale
+                // static read (tool change not yet processed) would flip the
+                // glow back to the previous tool right after a tap.
+                if (idx != activeSel &&
+                    (System.currentTimeMillis() - lastUserSelMs) > 600) {
+                    activeSel = idx
+                }
                 if (idx != lastIdx) {
                     lastIdx = idx
                     scope.launch { scrollOffset.animateTo(-(idx * step).toFloat()) }
                 }
             } else {
                 lastIdx = -2
+                activeSel = -1
             }
             // When not in the Sculpting workspace the window must not block
             // touches anywhere (pass-through). When active it is touchable.
@@ -182,9 +199,9 @@ fun SculptArcContent() {
                         }
                         val sel = nearestToolIndex(w, h, pos.x, pos.y)
                         if (sel >= 0) {
-                            // Show the selection glow immediately (the active-tool
-                            // poll takes ~200ms to confirm from Blender).
-                            highlightIndex = sel
+                            // selectTool() marks activeSel immediately (instant
+                            // glow); highlightIndex stays drag-only so it can't
+                            // linger and double-highlight another tool.
                             selectTool(sel, activeIdx)
                         }
                     }
@@ -322,7 +339,6 @@ fun SculptArcContent() {
 
                     // Tool slots in carousel order. Only the 7 tools around the
                     // current center are drawn (culling per spec).
-                    val activeId = OBLNativeActivity.getActiveToolIdStatic()
                     val centerIdx = Math.round(-scrollOffset.value / step).toInt()
                     val lo = (centerIdx - 3).coerceAtLeast(0)
                     val hi = (centerIdx + 3).coerceAtMost(SculptTools.size - 1)
@@ -331,7 +347,7 @@ fun SculptArcContent() {
                         val a = Math.toRadians(angleDeg.toDouble()).toFloat()
                         val tx = cx + halfW * sin(a)
                         val ty = (cy - arcH * cos(a) * cos(a)).coerceAtMost(cy - 10f)
-                        val isActive = SculptTools[i].id == activeId
+                        val isActive = i == activeSel
                         val isHighlight = i == highlightIndex
                         val scale = (1.1f - 0.3f * abs(sin(a))).coerceAtLeast(0.8f)
                         drawToolSlot(tx, ty, SculptTools[i].label, scale, isActive, isHighlight)
