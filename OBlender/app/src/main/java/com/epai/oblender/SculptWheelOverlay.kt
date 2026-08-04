@@ -378,7 +378,9 @@ fun CarouselDock() {
                 bandPath.lineTo(px, py)
             }
             bandPath.close()
-            drawPath(bandPath, Color(0xFF1B1B1B).copy(alpha = 0.60f))
+            // Fondo gris + borde dorado (mismo acento ámbar/dorado del arco).
+            drawPath(bandPath, Color(0xFF4A4A4A).copy(alpha = 0.90f))
+            drawPath(bandPath, Color(0xFFFFC107), style = Stroke(width = 3f))
 
             // Esferas de herramientas en carousel, con la distribución parabólica.
             // Mismo filtro de visibilidad que el hit-test (visibleIndices).
