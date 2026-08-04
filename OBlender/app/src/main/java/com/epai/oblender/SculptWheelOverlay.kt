@@ -23,9 +23,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
@@ -34,6 +37,8 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.setViewTreeLifecycleOwner
@@ -90,6 +95,37 @@ private val nonBrushTools = mapOf(
 )
 
 private fun toolId(label: String) = nonBrushTools[label] ?: "builtin_brush." + label
+
+/** Icono del tool Clay (clay.xml, vector 1024x1032 ~462KB). Se infla desde res/raw
+ *  (no res/drawable: un pathData tan grande se pasa del límite del string-pool de
+ *  AAPT2 y falla al compilar) con VectorDrawableCompat.create usando el propio
+ *  parser como AttributeSet. Se cachea en un Bitmap de ~128px una sola vez. */
+private var clayIconBitmap: android.graphics.Bitmap? = null
+
+private fun loadClayIcon(context: Context): android.graphics.Bitmap? {
+    clayIconBitmap?.let { return it }
+    try {
+        val res = context.resources
+        val parser = res.getXml(R.raw.clay)
+        val drawable = androidx.core.graphics.drawable.VectorDrawableCompat.create(
+            res, parser, parser, null
+        )
+        if (drawable != null) {
+            val w = 128
+            val h = (128f * 1032f / 1024f).toInt()
+            val bmp = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888)
+            val canvas = android.graphics.Canvas(bmp)
+            drawable.setBounds(0, 0, w, h)
+            drawable.draw(canvas)
+            clayIconBitmap = bmp
+            android.util.Log.d("OBL.WHEEL", "clay icon loaded ${bmp.width}x${bmp.height}")
+            return bmp
+        }
+    } catch (e: Exception) {
+        android.util.Log.e("OBL.WHEEL", "loadClayIcon failed", e)
+    }
+    return null
+}
 
 /** Teclas del keymap de sculpt (blender_default.py, operador C paint.brush_select).
  *  Ordinales = OBLButtonID.h. Camino PROBADO en device (lo usaba el arco anterior).
@@ -243,6 +279,9 @@ fun CarouselDock() {
         recenterTo(sel)
     }
 
+    // Carga (una vez, cacheada) el icono de Clay desde res/raw/clay.xml.
+    LaunchedEffect(Unit) { loadClayIcon(context) }
+
     // Poll: solo muestro el arco en Sculpting (modo + workspace); sincroniza el
     // highlight y re-centra el tool activo reportado por Blender.
     LaunchedEffect(Unit) {
@@ -384,6 +423,7 @@ fun CarouselDock() {
 
             // Esferas de herramientas en carousel, con la distribución parabólica.
             // Mismo filtro de visibilidad que el hit-test (visibleIndices).
+            val clayBmp = clayIconBitmap?.asImageBitmap()
             val lo = (Math.round(-scrollOffset.value / step).toInt() - 3).coerceAtLeast(0)
             val hi = (Math.round(-scrollOffset.value / step).toInt() + 3).coerceAtMost(sculptTools.size - 1)
             for (i in (lo..hi).filter { abs((it * step) + scrollOffset.value) <= VISIBLE_DEG }) {
@@ -394,7 +434,7 @@ fun CarouselDock() {
                 val isActive = i == activeSel
                 val isHighlight = i == highlightIndex
                 val scale = (1.1f - 0.3f * abs(sin(a))).coerceAtLeast(0.8f)
-                drawToolSlot(tx, ty, sculptTools[i], scale, isActive, isHighlight, h)
+                drawToolSlot(tx, ty, sculptTools[i], scale, isActive, isHighlight, h, clayBmp)
             }
         }
     }
@@ -407,7 +447,8 @@ private fun DrawScope.drawToolSlot(
     scale: Float,
     isActive: Boolean,
     isHighlight: Boolean,
-    windowH: Float
+    windowH: Float,
+    clayBmp: ImageBitmap?
 ) {
     val r = (if (isActive) SPHERE_ACTIVE else SPHERE_IDLE) * scale
     val highlighted = isActive || isHighlight
@@ -438,6 +479,19 @@ private fun DrawScope.drawToolSlot(
         radius = r * 1.25f
     )
     drawCircle(brush, r, Offset(cx, cy))
+
+    // Icono del tool Clay (clay.xml): dibujado sobre la esfera, recortado al círculo.
+    if (label == "Clay" && clayBmp != null) {
+        val iconSize = r * 2f * 0.86f
+        val clip = Path().apply { addOval(Rect(cx - r, cy - r, cx + r, cy + r)) }
+        clipPath(clip) {
+            drawImage(
+                clayBmp,
+                dstOffset = IntOffset((cx - iconSize / 2f).toInt(), (cy - iconSize / 2f).toInt()),
+                dstSize = IntSize(iconSize.toInt(), iconSize.toInt())
+            )
+        }
+    }
 
     // Solo el tool ACTIVO lleva nombre, en la franja vacía entre la banda y el borde
     // inferior (no suma altura a la ventana -> el contenedor no tapa el sculpt).
