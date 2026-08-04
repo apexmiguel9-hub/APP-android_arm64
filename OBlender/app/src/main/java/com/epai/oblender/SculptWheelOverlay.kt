@@ -21,8 +21,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.Modifierimport androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -38,8 +37,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.math.abs
 import kotlin.math.asin
 import kotlin.math.cos
@@ -281,9 +282,13 @@ fun CarouselDock() {
         recenterTo(sel)
     }
 
-    // Carga (una vez, cacheada) el icono de Clay desde res/raw/clay.xml.
-    // Estado reactivo: al terminar, el Canvas se redibuja con el icono.
-    LaunchedEffect(Unit) { clayIcon = loadClayIcon(context) }
+    // Carga (una vez, cacheada) el icono de Clay desde res/drawable/clay.xml.
+    // Se infla/rasteriza FUERA del hilo principal (el vector tiene 2251 paths; el
+    // costo único no debe jankear la UI). Estado reactivo: al terminar, el Canvas
+    // se redibuja con el icono.
+    LaunchedEffect(Unit) {
+        clayIcon = withContext(Dispatchers.Default) { loadClayIcon(context) }
+    }
 
     // Poll: solo muestro el arco en Sculpting (modo + workspace); sincroniza el
     // highlight y re-centra el tool activo reportado por Blender.
