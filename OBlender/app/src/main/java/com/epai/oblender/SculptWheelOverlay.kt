@@ -355,6 +355,7 @@ private fun panelControls(panelIndex: Int): Triple<List<ExtraParam>, List<Dropdo
         toolDropdowns[label] ?: emptyList(),
         toolToggles[label] ?: emptyList()
     )
+}
 
 
 /** HSV -> RGB (0..1). h en grados 0..360, s/v 0..1. */
