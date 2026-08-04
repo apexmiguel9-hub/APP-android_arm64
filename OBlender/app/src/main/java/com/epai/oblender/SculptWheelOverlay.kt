@@ -32,7 +32,6 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.awaitPointerEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
@@ -395,7 +394,7 @@ fun CarouselDock() {
                 // dedo se queda quieto (sin moverse más allá del touchSlop durante 500ms);
                 // si se mueve, el drag del carrusel toma el gesto (nada de confusión).
                 detectLongPressStill(
-                    onTap = { pos ->
+                    onTap = onTap@ { pos ->
                         val w = size.width.toFloat()
                         val h = size.height.toFloat()
                         val cx = w / 2f
@@ -432,7 +431,7 @@ fun CarouselDock() {
                         val sel = nearestToolIndex(w, h, pos.x, pos.y)
                         if (sel >= 0) selectTool(sel)
                     },
-                    onLongPress = { pos ->
+                    onLongPress = onLongPress@ { pos ->
                         val w = size.width.toFloat()
                         val h = size.height.toFloat()
                         if (collapsed) {
@@ -797,7 +796,7 @@ private suspend fun androidx.compose.ui.input.pointer.PointerInputScope.detectLo
             while (true) {
                 val event = awaitPointerEvent()
                 event.changes.forEach { it.consume() }
-                if (event.changes.any { it.changedToUp() }) break
+                if (event.changes.none { it.pressed }) break
             }
         } else if (gesture == 1) {
             down.consume()
