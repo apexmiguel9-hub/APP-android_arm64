@@ -171,17 +171,74 @@ private const val SPHERE_ACTIVE = 30f // radio base de la esfera activa (px)
 private const val SPHERE_IDLE = 24f   // radio base del resto (px)
 
 // --- Mini menu (long-press en un tool) ---
-// Card redondeada arriba de la banda: 2 sliders apilados (Radius + Strength).
-// La ventana crece hacia arriba en PANEL_H + PANEL_GAP px cuando el panel está abierto.
+// Card redondeada arriba de la banda. Fase 1: 2 sliders (Radius + Strength).
+// Fase 2: +3 sliders HSV (Hue/Saturation/Value) para brushes que pintan color
+// (Paint, Smear, Draw Face Sets, Displacement Eraser/Smear -> brush->rgb).
+// La ventana crece hacia arriba en PANEL_H(+COLOR) + PANEL_GAP px cuando el panel está abierto.
 private const val PANEL_W = 220f
 private const val PANEL_H = 96f
+private const val PANEL_H_COLOR = 200f
 private const val PANEL_GAP = 10f
 private const val PANEL_TITLE_Y = 16f
 private const val ROW1_Y = 40f   // centro del track de Radius (y en canvas, arriba del arco)
 private const val ROW2_Y = 72f   // centro del track de Strength
+private const val ROW3_Y = 104f  // Hue
+private const val ROW4_Y = 136f  // Saturation
+private const val ROW5_Y = 168f  // Value
 private const val TRACK_HALF = 9f
 private const val RADIUS_MIN = 2
 private const val RADIUS_MAX = 150
+
+/** Brushes que pintan color (brush->rgb): el panel se amplía con el picker HSV. */
+private val paintTools = setOf(
+    "Paint", "Smear", "Draw Face Sets",
+    "Multires Displacement Eraser", "Multires Displacement Smear"
+)
+
+private fun panelHasColor(panelIndex: Int): Boolean =
+    panelIndex >= 0 && panelIndex < sculptTools.size && sculptTools[panelIndex] in paintTools
+
+/** HSV -> RGB (0..1). h en grados 0..360, s/v 0..1. */
+private fun hsvToRgb(h: Float, s: Float, v: Float): Triple<Float, Float, Float> {
+    val hh = ((h % 360f) + 360f) % 360f
+    val hi = (hh / 60f).toInt() % 6
+    val f = hh / 60f - hi
+    val p = v * (1f - s)
+    val q = v * (1f - f * s)
+    val t = v * (1f - (1f - f) * s)
+    return when (hi) {
+        0 -> Triple(v, t, p)
+        1 -> Triple(q, v, p)
+        2 -> Triple(p, v, t)
+        3 -> Triple(p, q, v)
+        4 -> Triple(t, p, v)
+        else -> Triple(v, p, q)
+    }
+}
+
+/** RGB (0..1) -> HSV. h 0..360, s 0..1, v 0..1. */
+private fun rgbToHsv(r: Float, g: Float, b: Float): FloatArray {
+    val mx = maxOf(r, g, b)
+    val mn = minOf(r, g, b)
+    val d = mx - mn
+    var h = 0f
+    if (d > 0f) {
+        h = when (mx) {
+            r -> 60f * (((g - b) / d) % 6f)
+            g -> 60f * (((b - r) / d) + 2f)
+            else -> 60f * (((r - g) / d) + 4f)
+        }
+        if (h < 0f) h += 360f
+    }
+    val s = if (mx > 0f) d / mx else 0f
+    return floatArrayOf(h, s, mx)
+}
+
+/** Color ARGB (para dibujar/preview) desde HSV. */
+private fun hsvToColorInt(h: Float, s: Float, v: Float): Int {
+    val (r, g, b) = hsvToRgb(h, s, v)
+    return android.graphics.Color.rgb((r * 255f).roundToInt(), (g * 255f).roundToInt(), (b * 255f).roundToInt())
+}
 
 /** Geometría del arco en dp (misma parábola "bridge" del arco original, anclada al
  *  borde inferior). Única fuente de verdad, compartida con wheelWindowSize(px) para
@@ -244,6 +301,10 @@ fun CarouselDock() {
     var panelIndex by remember { mutableStateOf(-1) }
     var panelRadius by remember { mutableStateOf(RADIUS_MIN) }
     var panelStrength by remember { mutableStateOf(1f) }
+    // Fase 2: estado HSV del color del brush (solo se muestra si panelHasColor).
+    var panelHue by remember { mutableStateOf(0f) }
+    var panelSat by remember { mutableStateOf(1f) }
+    var panelVal by remember { mutableStateOf(0.5f) }
 
     // Posición del chevron (manija de colapsar/expandir): colapsado -> centro de la
     // ventana chica; expandido -> sobre la curvatura superior del arco.
@@ -310,6 +371,17 @@ fun CarouselDock() {
         recenterTo(sel)
     }
 
+    // Altura extra (px) que debe crecer la ventana del overlay para alojar el panel.
+    fun panelHeightPx(): Int =
+        if (panelIndex < 0) 0
+        else (if (panelHasColor(panelIndex)) PANEL_H_COLOR else PANEL_H).toInt() + PANEL_GAP.toInt()
+
+    // Aplica el color HSV actual del panel al brush activo (en vivo, como radius/strength).
+    fun pushColor() {
+        val (r, g, b) = hsvToRgb(panelHue, panelSat, panelVal)
+        OBLNativeActivity.setActiveBrushColorStatic(r, g, b)
+    }
+
     // Carga (una vez, cacheada) el icono de Clay desde res/drawable/clay.xml.
     // Se infla/rasteriza FUERA del hilo principal (el vector tiene 2251 paths; el
     // costo único no debe jankear la UI). Estado reactivo: al terminar, el Canvas
@@ -349,7 +421,7 @@ fun CarouselDock() {
             }
             if (inSculpt != lastActive) {
                 lastActive = inSculpt
-                updateSculptArcWindow(collapsed, inSculpt, panelIndex >= 0)
+                updateSculptArcWindow(collapsed, inSculpt, panelHeightPx())
             }
             delay(200)
         }
@@ -359,19 +431,26 @@ fun CarouselDock() {
     // con el tamaño de la ventana (chica si está colapsada, arco completo si no).
     LaunchedEffect(collapsed) {
         OverlayState.sculptArcCollapsed = collapsed
-        updateSculptArcWindow(collapsed, OverlayState.sculptArcActive, panelIndex >= 0)
+        updateSculptArcWindow(collapsed, OverlayState.sculptArcActive, panelHeightPx())
     }
 
     // Mini menu: al abrir el panel (long-press), la ventana crece hacia arriba para
     // alojar la card; se re-leen los valores del brush tras activar el tool (el drain
     // tarda unas frames en aplicarlo). Al cerrar, la ventana vuelve al tamaño normal.
     LaunchedEffect(panelIndex) {
-        updateSculptArcWindow(collapsed, OverlayState.sculptArcActive, panelIndex >= 0)
+        updateSculptArcWindow(collapsed, OverlayState.sculptArcActive, panelHeightPx())
         if (panelIndex >= 0) {
             delay(300)
             if (panelIndex >= 0) {
                 panelRadius = OBLNativeActivity.getActiveBrushRadiusStatic()
                 panelStrength = OBLNativeActivity.getActiveBrushStrengthStatic()
+                if (panelHasColor(panelIndex)) {
+                    val c = OBLNativeActivity.getActiveBrushColorStatic()
+                    val hsv = rgbToHsv(c[0], c[1], c[2])
+                    panelHue = hsv[0]
+                    panelSat = hsv[1]
+                    panelVal = hsv[2]
+                }
             }
         }
     }
@@ -406,7 +485,8 @@ fun CarouselDock() {
                         }
                         // Panel abierto: tap en un slider lo ajusta; fuera de sliders lo cierra.
                         if (panelIndex >= 0) {
-                            val s = sliderHit(pos.x, pos.y, cx)
+                            val hasColor = panelHasColor(panelIndex)
+                            val s = sliderHit(pos.x, pos.y, cx, hasColor)
                             when (s) {
                                 1 -> {
                                     panelRadius =
@@ -416,6 +496,18 @@ fun CarouselDock() {
                                 2 -> {
                                     panelStrength = sliderFrac(pos.x, cx)
                                     OBLNativeActivity.setActiveBrushStrengthStatic(panelStrength)
+                                }
+                                3 -> {
+                                    panelHue = sliderFrac(pos.x, cx) * 360f
+                                    pushColor()
+                                }
+                                4 -> {
+                                    panelSat = sliderFrac(pos.x, cx)
+                                    pushColor()
+                                }
+                                5 -> {
+                                    panelVal = sliderFrac(pos.x, cx)
+                                    pushColor()
                                 }
                                 else -> panelIndex = -1
                             }
@@ -476,8 +568,9 @@ fun CarouselDock() {
                         // Panel abierto: drag sobre un slider lo ajusta en vivo; drag
                         // fuera de sliders cierra el panel (y no toca el carrusel).
                         if (panelIndex >= 0) {
-                            val s = sliderHit(start.x, start.y, cx)
-                            if (s == 1 || s == 2) {
+                            val hasColor = panelHasColor(panelIndex)
+                            val s = sliderHit(start.x, start.y, cx, hasColor)
+                            if (s in 1..5) {
                                 panelDrag = s
                             } else {
                                 panelIndex = -1
@@ -538,17 +631,41 @@ fun CarouselDock() {
                             // Aplicación EN VIVO del slider mientras se arrastra.
                             change.consume()
                             val frac = sliderFrac(change.position.x, size.width / 2f)
-                            if (panelDrag == 1) {
-                                val v = (frac * (RADIUS_MAX - RADIUS_MIN) + RADIUS_MIN).roundToInt()
-                                if (v != panelRadius) {
-                                    panelRadius = v
-                                    OBLNativeActivity.setActiveBrushRadiusStatic(v)
+                            when (panelDrag) {
+                                1 -> {
+                                    val v = (frac * (RADIUS_MAX - RADIUS_MIN) + RADIUS_MIN).roundToInt()
+                                    if (v != panelRadius) {
+                                        panelRadius = v
+                                        OBLNativeActivity.setActiveBrushRadiusStatic(v)
+                                    }
                                 }
-                            } else {
-                                val v = frac
-                                if (abs(v - panelStrength) > 0.005f) {
-                                    panelStrength = v
-                                    OBLNativeActivity.setActiveBrushStrengthStatic(v)
+                                2 -> {
+                                    val v = frac
+                                    if (abs(v - panelStrength) > 0.005f) {
+                                        panelStrength = v
+                                        OBLNativeActivity.setActiveBrushStrengthStatic(v)
+                                    }
+                                }
+                                3 -> {
+                                    val v = frac * 360f
+                                    if (abs(v - panelHue) > 1f) {
+                                        panelHue = v
+                                        pushColor()
+                                    }
+                                }
+                                4 -> {
+                                    val v = frac
+                                    if (abs(v - panelSat) > 0.005f) {
+                                        panelSat = v
+                                        pushColor()
+                                    }
+                                }
+                                5 -> {
+                                    val v = frac
+                                    if (abs(v - panelVal) > 0.005f) {
+                                        panelVal = v
+                                        pushColor()
+                                    }
                                 }
                             }
                             return@detectDragGestures
@@ -635,7 +752,11 @@ fun CarouselDock() {
                     cx = cx,
                     label = sculptTools[panelIndex],
                     radius = panelRadius,
-                    strength = panelStrength
+                    strength = panelStrength,
+                    hasColor = panelHasColor(panelIndex),
+                    hue = panelHue,
+                    sat = panelSat,
+                    value = panelVal
                 )
             }
         }
@@ -740,19 +861,19 @@ fun wheelWindowSize(context: Context): Pair<Int, Int> {
 /** Tamaño de la ventana COLAPSADA (px): solo el chevron/manija. */
 fun collapsedWheelWindowSize(): Pair<Int, Int> = 112 to 60
 
-/** Tamaño de la ventana con el mini menu abierto (px): el arco + la card encima. */
-fun wheelPanelWindowSize(context: Context): Pair<Int, Int> {
-    val (w, h) = wheelWindowSize(context)
-    return w to (h + PANEL_H + PANEL_GAP).toInt()
-}
-
-/** Hit-test de los sliders del panel: 1 = Radius, 2 = Strength, 0 = fuera de sliders. */
-private fun sliderHit(x: Float, y: Float, cx: Float): Int {
+/** Hit-test de los sliders del panel: 1 = Radius, 2 = Strength, 3 = Hue, 4 = Saturation,
+ *  5 = Value, 0 = fuera de sliders. Las filas de color solo existen si hasColor. */
+private fun sliderHit(x: Float, y: Float, cx: Float, hasColor: Boolean): Int {
     val left = cx - PANEL_W / 2f + 12f
     val right = cx + PANEL_W / 2f - 12f
     if (x < left || x > right) return 0
     if (abs(y - ROW1_Y) <= TRACK_HALF + 4f) return 1
     if (abs(y - ROW2_Y) <= TRACK_HALF + 4f) return 2
+    if (hasColor) {
+        if (abs(y - ROW3_Y) <= TRACK_HALF + 4f) return 3
+        if (abs(y - ROW4_Y) <= TRACK_HALF + 4f) return 4
+        if (abs(y - ROW5_Y) <= TRACK_HALF + 4f) return 5
+    }
     return 0
 }
 
@@ -806,21 +927,32 @@ private suspend fun androidx.compose.ui.input.pointer.PointerInputScope.detectLo
     }
 }
 
-/** Mini menu: card redondeada arriba del arco con 2 sliders (Radius + Strength).
+/** Mini menu: card redondeada arriba del arco con los sliders del brush.
+ *  Fase 1: Radius + Strength. Fase 2: + swatch de color + Hue/Sat/Value (si hasColor).
  *  Aplicación en vivo al mover (el setter JNI solo stash; el drain del render thread
  *  aplica al brush activo). */
-private fun DrawScope.drawBrushPanel(cx: Float, label: String, radius: Int, strength: Float) {
+private fun DrawScope.drawBrushPanel(
+    cx: Float,
+    label: String,
+    radius: Int,
+    strength: Float,
+    hasColor: Boolean,
+    hue: Float,
+    sat: Float,
+    value: Float
+) {
+    val panelH = if (hasColor) PANEL_H_COLOR else PANEL_H
     val left = cx - PANEL_W / 2f
     drawRoundRect(
         color = Color(0xE62B2B2B),
         topLeft = Offset(left, 0f),
-        size = Size(PANEL_W, PANEL_H),
+        size = Size(PANEL_W, panelH),
         cornerRadius = androidx.compose.ui.geometry.CornerRadius(12f)
     )
     drawRoundRect(
         color = Color(0xFFCC6F03),
         topLeft = Offset(left, 0f),
-        size = Size(PANEL_W, PANEL_H),
+        size = Size(PANEL_W, panelH),
         cornerRadius = androidx.compose.ui.geometry.CornerRadius(12f),
         style = Stroke(width = 2f)
     )
@@ -835,11 +967,55 @@ private fun DrawScope.drawBrushPanel(cx: Float, label: String, radius: Int, stre
             isFakeBoldText = true
         }
     )
+    if (hasColor) {
+        // Swatch de preview del color actual (abajo-derecha del título).
+        val cur = hsvToColorInt(hue, sat, value)
+        drawRoundRect(
+            color = Color(cur),
+            topLeft = Offset(cx + PANEL_W / 2f - 30f, PANEL_TITLE_Y - 11f),
+            size = Size(18f, 18f),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(4f)
+        )
+        drawRoundRect(
+            color = Color(0xFFCC6F03),
+            topLeft = Offset(cx + PANEL_W / 2f - 30f, PANEL_TITLE_Y - 11f),
+            size = Size(18f, 18f),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(4f),
+            style = Stroke(width = 1.5f)
+        )
+    }
     drawSlider(cx, ROW1_Y, "Radius", radius.toString(), (radius - RADIUS_MIN).toFloat() / (RADIUS_MAX - RADIUS_MIN))
     drawSlider(cx, ROW2_Y, "Strength", String.format("%.2f", strength), strength.coerceIn(0f, 1f))
+    if (hasColor) {
+        val cur = hsvToColorInt(hue, sat, value)
+        drawSlider(
+            cx, ROW3_Y, "Hue", String.format("%.0f", hue), hue / 360f,
+            track = Brush.linearGradient(
+                colors = listOf(
+                    Color(0xFFFF0000), Color(0xFFFFFF00), Color(0xFF00FF00),
+                    Color(0xFF00FFFF), Color(0xFF0000FF), Color(0xFFFF00FF), Color(0xFFFF0000)
+                )
+            )
+        )
+        drawSlider(
+            cx, ROW4_Y, "Sat", String.format("%d%%", (sat * 100f).roundToInt()), sat,
+            track = Brush.linearGradient(colors = listOf(Color(0xFFFFFFFF), Color(cur)))
+        )
+        drawSlider(
+            cx, ROW5_Y, "Val", String.format("%d%%", (value * 100f).roundToInt()), value,
+            track = Brush.linearGradient(colors = listOf(Color(0xFF000000), Color(cur)))
+        )
+    }
 }
 
-private fun DrawScope.drawSlider(cx: Float, y: Float, name: String, valueText: String, frac: Float) {
+private fun DrawScope.drawSlider(
+    cx: Float,
+    y: Float,
+    name: String,
+    valueText: String,
+    frac: Float,
+    track: Brush? = null
+) {
     val left = cx - PANEL_W / 2f + 12f
     val right = cx + PANEL_W / 2f - 12f
     val w = right - left
@@ -863,18 +1039,28 @@ private fun DrawScope.drawSlider(cx: Float, y: Float, name: String, valueText: S
             textAlign = Paint.Align.RIGHT
         }
     )
-    drawRoundRect(
-        color = Color(0xFF3A3A3A),
-        topLeft = Offset(left, y - TRACK_HALF),
-        size = Size(w, TRACK_HALF * 2f),
-        cornerRadius = androidx.compose.ui.geometry.CornerRadius(TRACK_HALF)
-    )
-    drawRoundRect(
-        color = Color(0xFFFFC107),
-        topLeft = Offset(left, y - TRACK_HALF),
-        size = Size(w * frac.coerceIn(0f, 1f), TRACK_HALF * 2f),
-        cornerRadius = androidx.compose.ui.geometry.CornerRadius(TRACK_HALF)
-    )
+    if (track != null) {
+        // Slider de color: track con gradiente completo (sin relleno ámbar).
+        drawRoundRect(
+            brush = track,
+            topLeft = Offset(left, y - TRACK_HALF),
+            size = Size(w, TRACK_HALF * 2f),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(TRACK_HALF)
+        )
+    } else {
+        drawRoundRect(
+            color = Color(0xFF3A3A3A),
+            topLeft = Offset(left, y - TRACK_HALF),
+            size = Size(w, TRACK_HALF * 2f),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(TRACK_HALF)
+        )
+        drawRoundRect(
+            color = Color(0xFFFFC107),
+            topLeft = Offset(left, y - TRACK_HALF),
+            size = Size(w * frac.coerceIn(0f, 1f), TRACK_HALF * 2f),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(TRACK_HALF)
+        )
+    }
     drawCircle(
         color = Color(0xFFFFF8E1),
         radius = 7f,

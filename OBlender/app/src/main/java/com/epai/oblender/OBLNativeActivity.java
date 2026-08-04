@@ -355,10 +355,16 @@ public class OBLNativeActivity extends NativeActivity
 
     public native float getActiveBrushStrength();
 
+    /** Sculpt wheel mini menu: current active brush color as linear rgb floats (0..1). */
+    public native float[] getActiveBrushColor();
+
     /** Sculpt wheel mini menu: set the active brush size/strength (drained on render thread). */
     public native void setActiveBrushRadius(int px);
 
     public native void setActiveBrushStrength(float strength);
+
+    /** Sculpt wheel mini menu: set the active brush color (linear rgb 0..1, drained on render thread). */
+    public native void setActiveBrushColor(float r, float g, float b);
 
     /** Sculpt wheel overlay: set the active sculpt tool directly (bypasses key dispatch). */
     public native void oblSetToolById(String idname);
@@ -418,6 +424,17 @@ public class OBLNativeActivity extends NativeActivity
     /** Static accessor: set active sculpt brush strength (0..1). */
     public static void setActiveBrushStrengthStatic(float strength) {
         if (sActivity != null) sActivity.setActiveBrushStrength(strength);
+    }
+
+    /** Static accessor: active sculpt brush color as linear rgb floats (0..1). */
+    public static float[] getActiveBrushColorStatic() {
+        if (sActivity == null) return new float[] { 0.5f, 0.5f, 0.5f };
+        return sActivity.getActiveBrushColor();
+    }
+
+    /** Static accessor: set active sculpt brush color (linear rgb 0..1). */
+    public static void setActiveBrushColorStatic(float r, float g, float b) {
+        if (sActivity != null) sActivity.setActiveBrushColor(r, g, b);
     }
 
     @Override

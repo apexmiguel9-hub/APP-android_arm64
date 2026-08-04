@@ -36,6 +36,7 @@ static bool g_dpi_initialized = false;
 #include "BLI_string.h"
 #include "BLI_system.h"
 #include "BLI_listbase.h"
+#include "BLI_math_vector.h"
 #include "DNA_userdef_types.h"
 #include "BLI_task.h"
 #include "BLI_threads.h"
@@ -313,11 +314,13 @@ static bool g_pending_tool_set = false;
  * can read the CURRENT brush values (synchronously) without waiting. */
 static std::mutex g_brush_mutex;
 static bool g_brush_req_pending = false;
-static int g_brush_req_type = 0; /* 1 = size (px), 2 = strength (0..1) */
+static int g_brush_req_type = 0; /* 1 = size (px), 2 = strength (0..1), 3 = color (rgb) */
 static int g_brush_req_ival = 0;
 static float g_brush_req_fval = 0.0f;
+static float g_brush_req_rgb[3] = {0.0f, 0.0f, 0.0f};
 static int g_obl_active_brush_size = 50;
 static float g_obl_active_brush_strength = 1.0f;
+static float g_obl_active_brush_color[3] = {0.5f, 0.5f, 0.5f};
 
 extern "C" void blenderSetActiveTool(const char *idname);
 
@@ -856,6 +859,7 @@ int mainBlenderLoop(void*pContext) {
         int req_type = 0;
         int req_ival = 0;
         float req_fval = 0.0f;
+        float req_rgb[3] = {0.0f, 0.0f, 0.0f};
         bool req_pending = false;
         {
           std::lock_guard<std::mutex> lock(g_brush_mutex);
@@ -864,10 +868,12 @@ int mainBlenderLoop(void*pContext) {
             req_type = g_brush_req_type;
             req_ival = g_brush_req_ival;
             req_fval = g_brush_req_fval;
+            copy_v3_v3(req_rgb, g_brush_req_rgb);
             g_brush_req_pending = false;
           }
           g_obl_active_brush_size = BKE_brush_size_get(scene, br);
           g_obl_active_brush_strength = BKE_brush_alpha_get(scene, br);
+          copy_v3_v3(g_obl_active_brush_color, BKE_brush_color_get(scene, br));
         }
         if (req_pending) {
           if (req_type == 1) {
@@ -881,6 +887,12 @@ int mainBlenderLoop(void*pContext) {
             g_obl_active_brush_strength = BKE_brush_alpha_get(scene, br);
             __android_log_print(ANDROID_LOG_INFO, "OBL.WHEEL",
                 "brush strength set -> %.3f", req_fval);
+          }
+          else if (req_type == 3) {
+            BKE_brush_color_set(scene, br, req_rgb);
+            copy_v3_v3(g_obl_active_brush_color, BKE_brush_color_get(scene, br));
+            __android_log_print(ANDROID_LOG_INFO, "OBL.WHEEL",
+                "brush color set -> %.3f %.3f %.3f", req_rgb[0], req_rgb[1], req_rgb[2]);
           }
           DEG_id_tag_update(&br->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
           WM_event_add_notifier(C, NC_BRUSH | NA_EDITED, br);
@@ -948,6 +960,11 @@ float oblGetActiveBrushStrength(void){
   return g_obl_active_brush_strength;
 }
 
+void oblGetActiveBrushColor(float rgb[3]){
+  std::lock_guard<std::mutex> lock(g_brush_mutex);
+  copy_v3_v3(rgb, g_obl_active_brush_color);
+}
+
 void oblSetActiveBrushRadius(int px){
   std::lock_guard<std::mutex> lock(g_brush_mutex);
   g_brush_req_type = 1;
@@ -959,6 +976,15 @@ void oblSetActiveBrushStrength(float v){
   std::lock_guard<std::mutex> lock(g_brush_mutex);
   g_brush_req_type = 2;
   g_brush_req_fval = v;
+  g_brush_req_pending = true;
+}
+
+void oblSetActiveBrushColor(float r, float g, float b){
+  std::lock_guard<std::mutex> lock(g_brush_mutex);
+  g_brush_req_type = 3;
+  g_brush_req_rgb[0] = r;
+  g_brush_req_rgb[1] = g;
+  g_brush_req_rgb[2] = b;
   g_brush_req_pending = true;
 }
 

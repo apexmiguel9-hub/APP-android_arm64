@@ -777,6 +777,27 @@ extern "C" JNIEXPORT jfloat JNICALL Java_com_epai_oblender_OBLNativeActivity_get
     return (jfloat)oblGetActiveBrushStrength();
 }
 
+extern "C" JNIEXPORT jfloatArray JNICALL Java_com_epai_oblender_OBLNativeActivity_getActiveBrushColor(
+        JNIEnv *env,
+        jobject /* this */) {
+    float rgb[3];
+    oblGetActiveBrushColor(rgb);
+    jfloatArray result = env->NewFloatArray(3);
+    if (result != nullptr) {
+        env->SetFloatArrayRegion(result, 0, 3, rgb);
+    }
+    return result;
+}
+
+extern "C" JNIEXPORT void JNICALL Java_com_epai_oblender_OBLNativeActivity_setActiveBrushColor(
+        JNIEnv *env,
+        jobject /* this */,
+        jfloat r,
+        jfloat g,
+        jfloat b) {
+    oblSetActiveBrushColor((float)r, (float)g, (float)b);
+}
+
 extern "C" JNIEXPORT void JNICALL Java_com_epai_oblender_OBLNativeActivity_setActiveBrushRadius(
         JNIEnv *env,
         jobject /* this */,
