@@ -486,7 +486,7 @@ private fun DrawScope.drawToolSlot(
     // Icono del tool Clay (clay.xml): dibujado sobre la esfera, recortado al círculo
     // con clip nativo (evita drawImage/clipPath de Compose).
     if (label == "Clay" && clayBmp != null) {
-        val iconSize = r * 2f * 0.86f
+        val iconSize = r * 2f * 0.97f
         val native = drawContext.canvas.nativeCanvas
         native.save()
         native.clipPath(
