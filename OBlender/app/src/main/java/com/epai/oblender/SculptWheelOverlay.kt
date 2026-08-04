@@ -21,7 +21,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifierimport androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -221,6 +223,12 @@ fun CarouselDock() {
     var lastUserSelMs by remember { mutableStateOf(0L) }
     var highlightIndex by remember { mutableStateOf(-1) }
     var clayIcon by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+    var collapsed by remember { mutableStateOf(OverlayState.sculptArcCollapsed) }
+
+    // Posición del chevron (manija de colapsar/expandir): colapsado -> centro de la
+    // ventana chica; expandido -> sobre la curvatura superior del arco.
+    fun chevronHandleY(h: Float): Float =
+        if (collapsed) h / 2f else max(14f, h - (arcH + bandHalf + 24f))
 
     // Mismo filtro que el dibujo: SOLO los tools realmente visibles (centerIdx±3 con
     // |angulo| <= VISIBLE_DEG). Si se considerara el listado completo, un tap cerca de
@@ -321,10 +329,17 @@ fun CarouselDock() {
             }
             if (inSculpt != lastActive) {
                 lastActive = inSculpt
-                updateSculptArcWindow(false, inSculpt)
+                updateSculptArcWindow(collapsed, inSculpt)
             }
             delay(200)
         }
+    }
+
+    // Mantiene el estado Compose `collapsed` sincronizado con el overlay global y
+    // con el tamaño de la ventana (chica si está colapsada, arco completo si no).
+    LaunchedEffect(collapsed) {
+        OverlayState.sculptArcCollapsed = collapsed
+        updateSculptArcWindow(collapsed, OverlayState.sculptArcActive)
     }
 
     // Fuera de Sculpting no se renderiza nada (la ventana ya está GONE + NOT_TOUCHABLE).
@@ -340,6 +355,20 @@ fun CarouselDock() {
                     onTap = { pos ->
                         val w = size.width.toFloat()
                         val h = size.height.toFloat()
+                        val cx = w / 2f
+                        if (collapsed) {
+                            // Colapsado: tocar en cualquier lado expande.
+                            OverlayState.sculptArcCollapsed = false
+                            collapsed = false
+                            return@detectTapGestures
+                        }
+                        val chevronY = chevronHandleY(h)
+                        if (abs(pos.x - cx) <= 40f && abs(pos.y - chevronY) <= 14f) {
+                            // Chevron: colapsa la UI.
+                            OverlayState.sculptArcCollapsed = true
+                            collapsed = true
+                            return@detectTapGestures
+                        }
                         val sel = nearestToolIndex(w, h, pos.x, pos.y)
                         if (sel >= 0) selectTool(sel)
                     }
@@ -348,13 +377,28 @@ fun CarouselDock() {
             .pointerInput(Unit) {
                 var gestureArmed = false
                 var dragAccum = 0f
+                var onHandle = false
+                var handleDelta = 0f
                 detectDragGestures(
                     onDragStart = { start ->
                         gestureArmed = false
                         dragAccum = 0f
+                        onHandle = false
+                        handleDelta = 0f
                         val w = size.width.toFloat()
                         val h = size.height.toFloat()
                         val cx = w / 2f
+                        if (collapsed) {
+                            // Colapsado: cualquier drag hacia arriba expande.
+                            OverlayState.sculptArcCollapsed = false
+                            collapsed = false
+                            return@detectDragGestures
+                        }
+                        val chevronY = chevronHandleY(h)
+                        if (abs(start.x - cx) <= 40f && abs(start.y - chevronY) <= 14f) {
+                            onHandle = true
+                            return@detectDragGestures
+                        }
                         val cy = h
                         val halfWW = w / 2f - bandHalf
                         val sx = (start.x - cx) / halfWW
@@ -369,7 +413,16 @@ fun CarouselDock() {
                         }
                     },
                     onDragEnd = {
-                        if (gestureArmed && dragAccum >= 12f) {
+                        if (onHandle) {
+                            val threshold = 24f
+                            if (handleDelta > threshold) {
+                                OverlayState.sculptArcCollapsed = true
+                                collapsed = true
+                            } else if (handleDelta < -threshold) {
+                                OverlayState.sculptArcCollapsed = false
+                                collapsed = false
+                            }
+                        } else if (gestureArmed && dragAccum >= 12f) {
                             // Drag real: snap al tool más cercano al ápice (solo navega).
                             recenterTo(nearestToApexIndex())
                         }
@@ -377,15 +430,21 @@ fun CarouselDock() {
                         // (antes onDragEnd seleccionaba el tool del ápice y pisaba el tool
                         //  que el usuario acababa de tocar -> "se teletransporta")
                         gestureArmed = false
+                        onHandle = false
                         highlightIndex = -1
                     },
                     onDragCancel = {
                         gestureArmed = false
+                        onHandle = false
                         highlightIndex = -1
                     },
                     onDrag = { change, dragAmount ->
-                        if (!gestureArmed) return@detectDragGestures
+                        if (!gestureArmed && !onHandle) return@detectDragGestures
                         change.consume()
+                        if (onHandle) {
+                            handleDelta += dragAmount.y
+                            return@detectDragGestures
+                        }
                         val halfWW = size.width / 2f - bandHalf
                         val degPerPx = 180f / halfWW
                         val delta = dragAmount.x * degPerPx
@@ -405,6 +464,12 @@ fun CarouselDock() {
             val cx = w / 2f
             val cy = h
             val halfWW = w / 2f - bandHalf
+
+            // Colapsado: solo se dibuja el chevron (apuntando hacia arriba = expandir).
+            if (collapsed) {
+                drawChevron(cx, h / 2f, collapsed = true)
+                return@Canvas
+            }
 
             // Banda "bridge": anillo cortado en arco inferior (parábola cos^2),
             // mismo trazado del arco original.
@@ -444,6 +509,9 @@ fun CarouselDock() {
                 val scale = (1.1f - 0.3f * abs(sin(a))).coerceAtLeast(0.8f)
                 drawToolSlot(tx, ty, sculptTools[i], scale, isActive, isHighlight, h, clayBmp)
             }
+
+            // Chevron (manija de colapsar) en la curvatura superior del arco.
+            drawChevron(cx, chevronHandleY(h.toFloat()), collapsed = false)
         }
     }
 }
@@ -480,18 +548,12 @@ private fun DrawScope.drawToolSlot(
         }
     }
 
-    // Esfera arcilla: gradiente radial, luz arriba-izquierda, sombra abajo-derecha.
-    val brush = Brush.radialGradient(
-        colors = listOf(Color(0xFFE0E0E0), Color(0xFF9E9E9E), Color(0xFF404040)),
-        center = Offset(cx - r * 0.35f, cy - r * 0.4f),
-        radius = r * 1.25f
-    )
-    drawCircle(brush, r, Offset(cx, cy))
-
-    // Icono del tool Clay (clay.xml): dibujado sobre la esfera, recortado al círculo
-    // con clip nativo (evita drawImage/clipPath de Compose).
-    if (label == "Clay" && clayBmp != null) {
-        val iconSize = r * 2f * 0.97f
+    // Icono del tool Clay (clay.xml): SI hay bitmap, el icono ES toda la esfera (no se
+    // dibuja la esfera gris atrás -> solo icono + contorno de selección). Si no hay
+    // bitmap (todavía cargando), se cae a la esfera arcilla normal.
+    val useClayIcon = label == "Clay" && clayBmp != null
+    if (useClayIcon) {
+        val iconSize = r * 2f * 1.06f
         val native = drawContext.canvas.nativeCanvas
         native.save()
         native.clipPath(
@@ -509,6 +571,14 @@ private fun DrawScope.drawToolSlot(
             Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
         )
         native.restore()
+    } else {
+        // Esfera arcilla: gradiente radial, luz arriba-izquierda, sombra abajo-derecha.
+        val brush = Brush.radialGradient(
+            colors = listOf(Color(0xFFE0E0E0), Color(0xFF9E9E9E), Color(0xFF404040)),
+            center = Offset(cx - r * 0.35f, cy - r * 0.4f),
+            radius = r * 1.25f
+        )
+        drawCircle(brush, r, Offset(cx, cy))
     }
 
     // Solo el tool ACTIVO lleva nombre, en la franja vacía entre la banda y el borde
@@ -539,6 +609,47 @@ fun wheelWindowSize(context: Context): Pair<Int, Int> {
     val w = ((g.halfW + g.bandHalf) * 2f + 8f) * density
     val h = (g.arcH + g.bandHalf * 0.5f) * density + SPHERE_ACTIVE * 1.1f + 8f
     return w.toInt() to h.toInt()
+}
+
+/** Tamaño de la ventana COLAPSADA (px): solo el chevron/manija. */
+fun collapsedWheelWindowSize(): Pair<Int, Int> = 112 to 60
+
+/** Chevron amarillo con contorno ámbar, sobre pill oscura. Es la manija que cuelga de
+ *  la curvatura superior del arco: colapsado apunta hacia ARRIBA (expandir), expandido
+ *  hacia ABAJO (colapsar). */
+private fun DrawScope.drawChevron(cx: Float, cy: Float, collapsed: Boolean) {
+    val w = 52f
+    val h = 26f
+    val left = cx - w / 2f
+    val top = cy - h / 2f
+    drawRoundRect(
+        color = Color(0xCC1B1B1B),
+        topLeft = Offset(left, top),
+        size = Size(w, h),
+        cornerRadius = androidx.compose.ui.geometry.CornerRadius(h / 2f, h / 2f)
+    )
+    drawRoundRect(
+        color = Color(0xFFCC6F03),
+        topLeft = Offset(left, top),
+        size = Size(w, h),
+        cornerRadius = androidx.compose.ui.geometry.CornerRadius(h / 2f, h / 2f),
+        style = Stroke(width = 2f)
+    )
+    val r = 8f
+    val path = Path().apply {
+        if (collapsed) {
+            moveTo(cx - r, cy + r * 0.5f)
+            lineTo(cx, cy - r * 0.5f)
+            lineTo(cx + r, cy + r * 0.5f)
+        } else {
+            moveTo(cx - r, cy - r * 0.5f)
+            lineTo(cx, cy + r * 0.5f)
+            lineTo(cx + r, cy - r * 0.5f)
+        }
+        close()
+    }
+    drawPath(path, Color(0xFFFFC107))
+    drawPath(path, Color(0xFFCC6F03), style = Stroke(width = 2f))
 }
 
 fun createSculptWheelOverlay(context: Context, lifecycleOwner: LifecycleOwner): ComposeView {

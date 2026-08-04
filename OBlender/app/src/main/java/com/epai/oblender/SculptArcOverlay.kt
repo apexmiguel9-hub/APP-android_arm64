@@ -490,7 +490,7 @@ private fun sculptArcWindowSize(context: android.content.Context, collapsed: Boo
 internal fun updateSculptArcWindow(collapsed: Boolean, touchable: Boolean) {
     val view = OverlayState.sculptArcView ?: return
     val lp = OverlayState.sculptArcLp ?: return
-    val (w, h) = wheelWindowSize(view.context)
+    val (w, h) = if (collapsed) collapsedWheelWindowSize() else wheelWindowSize(view.context)
     lp.width = w
     lp.height = h
     lp.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
