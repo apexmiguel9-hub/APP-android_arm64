@@ -765,6 +765,32 @@ extern "C" JNIEXPORT jint JNICALL Java_com_epai_oblender_OBLNativeActivity_getAc
     return (jint)oblGetActiveMode();
 }
 
+extern "C" JNIEXPORT jint JNICALL Java_com_epai_oblender_OBLNativeActivity_getActiveBrushRadius(
+        JNIEnv *env,
+        jobject /* this */) {
+    return (jint)oblGetActiveBrushRadius();
+}
+
+extern "C" JNIEXPORT jfloat JNICALL Java_com_epai_oblender_OBLNativeActivity_getActiveBrushStrength(
+        JNIEnv *env,
+        jobject /* this */) {
+    return (jfloat)oblGetActiveBrushStrength();
+}
+
+extern "C" JNIEXPORT void JNICALL Java_com_epai_oblender_OBLNativeActivity_setActiveBrushRadius(
+        JNIEnv *env,
+        jobject /* this */,
+        jint px) {
+    oblSetActiveBrushRadius((int)px);
+}
+
+extern "C" JNIEXPORT void JNICALL Java_com_epai_oblender_OBLNativeActivity_setActiveBrushStrength(
+        JNIEnv *env,
+        jobject /* this */,
+        jfloat strength) {
+    oblSetActiveBrushStrength((float)strength);
+}
+
 
 //  原生Activity入口函数
 JNIEXPORT

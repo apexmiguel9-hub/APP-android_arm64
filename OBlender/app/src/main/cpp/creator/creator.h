@@ -15,6 +15,10 @@ extern bool oblIsTouchDown(void);
 extern const char *oblGetActiveToolId(void);
 extern const char *oblGetActiveWorkspace(void);
 extern int oblGetActiveMode(void);
+extern int oblGetActiveBrushRadius(void);
+extern float oblGetActiveBrushStrength(void);
+extern void oblSetActiveBrushRadius(int px);
+extern void oblSetActiveBrushStrength(float strength);
 extern void oblSetSculptToolRequest(const char *idname);
 extern void inputKey(int p_physical_keycode,
                      int p_unicode, int p_key_label, int p_pressed,

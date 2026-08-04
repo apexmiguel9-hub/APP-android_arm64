@@ -350,6 +350,16 @@ public class OBLNativeActivity extends NativeActivity
 
     public native int getActiveMode();
 
+    /** Sculpt wheel mini menu: current active brush size (px) / strength (0..1). */
+    public native int getActiveBrushRadius();
+
+    public native float getActiveBrushStrength();
+
+    /** Sculpt wheel mini menu: set the active brush size/strength (drained on render thread). */
+    public native void setActiveBrushRadius(int px);
+
+    public native void setActiveBrushStrength(float strength);
+
     /** Sculpt wheel overlay: set the active sculpt tool directly (bypasses key dispatch). */
     public native void oblSetToolById(String idname);
 
@@ -386,6 +396,28 @@ public class OBLNativeActivity extends NativeActivity
     public static int getActiveModeStatic() {
         if (sActivity == null) return -1;
         return sActivity.getActiveMode();
+    }
+
+    /** Static accessor: active sculpt brush size (px). */
+    public static int getActiveBrushRadiusStatic() {
+        if (sActivity == null) return 50;
+        return sActivity.getActiveBrushRadius();
+    }
+
+    /** Static accessor: active sculpt brush strength (0..1). */
+    public static float getActiveBrushStrengthStatic() {
+        if (sActivity == null) return 1.0f;
+        return sActivity.getActiveBrushStrength();
+    }
+
+    /** Static accessor: set active sculpt brush size (px). */
+    public static void setActiveBrushRadiusStatic(int px) {
+        if (sActivity != null) sActivity.setActiveBrushRadius(px);
+    }
+
+    /** Static accessor: set active sculpt brush strength (0..1). */
+    public static void setActiveBrushStrengthStatic(float strength) {
+        if (sActivity != null) sActivity.setActiveBrushStrength(strength);
     }
 
     @Override

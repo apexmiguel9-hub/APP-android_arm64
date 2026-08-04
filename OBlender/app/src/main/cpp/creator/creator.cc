@@ -56,6 +56,7 @@ static bool g_dpi_initialized = false;
 #include "BKE_material.h"
 #include "BKE_modifier.h"
 #include "BKE_node.h"
+#include "BKE_paint.h"
 #include "BKE_particle.h"
 #include "BKE_shader_fx.h"
 #include "BKE_sound.h"
@@ -303,6 +304,19 @@ static bool g_open_shortcut_grid = false;
 static std::mutex g_tool_mutex;
 static std::string g_pending_tool_id;
 static bool g_pending_tool_set = false;
+
+/* Pending brush size/strength requests from the wheel's mini menu (UI thread).
+ * Mirrors the tool-set drain: stash under mutex, apply on the render thread
+ * where bContext (C) and the active sculpt Brush are valid. The statics
+ * g_obl_active_brush_* are refreshed every frame in the drain so the overlay
+ * can read the CURRENT brush values (synchronously) without waiting. */
+static std::mutex g_brush_mutex;
+static bool g_brush_req_pending = false;
+static int g_brush_req_type = 0; /* 1 = size (px), 2 = strength (0..1) */
+static int g_brush_req_ival = 0;
+static float g_brush_req_fval = 0.0f;
+static int g_obl_active_brush_size = 50;
+static float g_obl_active_brush_strength = 1.0f;
 
 extern "C" void blenderSetActiveTool(const char *idname);
 
@@ -829,6 +843,50 @@ int mainBlenderLoop(void*pContext) {
           "static updated -> %s | ctx_ok=%d", pending.c_str(), ctx_ok);
     }
   }
+  /* Drain brush size/strength requests del mini menu del wheel + refrescar los
+   * statics con el brush de sculpt activo (para que el overlay lea los valores
+   * actuales al abrir el panel). C-API -> BKE_brush_* maneja el tamaño/alpha
+   * unificado y refresca el cursor en el siguiente draw. */
+  {
+    Scene *scene = CTX_data_scene(C);
+    if (scene != NULL && scene->toolsettings != NULL && scene->toolsettings->sculpt != NULL) {
+      Brush *br = BKE_paint_brush(&scene->toolsettings->sculpt->paint);
+      if (br != NULL) {
+        int req_type = 0;
+        int req_ival = 0;
+        float req_fval = 0.0f;
+        bool req_pending = false;
+        {
+          std::lock_guard<std::mutex> lock(g_brush_mutex);
+          if (g_brush_req_pending) {
+            req_pending = true;
+            req_type = g_brush_req_type;
+            req_ival = g_brush_req_ival;
+            req_fval = g_brush_req_fval;
+            g_brush_req_pending = false;
+          }
+          g_obl_active_brush_size = BKE_brush_size_get(scene, br);
+          g_obl_active_brush_strength = BKE_brush_alpha_get(scene, br);
+        }
+        if (req_pending) {
+          if (req_type == 1) {
+            BKE_brush_size_set(scene, br, req_ival);
+            g_obl_active_brush_size = BKE_brush_size_get(scene, br);
+            __android_log_print(ANDROID_LOG_INFO, "OBL.WHEEL",
+                "brush size set -> %d", req_ival);
+          }
+          else if (req_type == 2) {
+            BKE_brush_alpha_set(scene, br, req_fval);
+            g_obl_active_brush_strength = BKE_brush_alpha_get(scene, br);
+            __android_log_print(ANDROID_LOG_INFO, "OBL.WHEEL",
+                "brush strength set -> %.3f", req_fval);
+          }
+          DEG_id_tag_update(&br->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
+          WM_event_add_notifier(C, NC_BRUSH | NA_EDITED, br);
+        }
+      }
+    }
+  }
   Wm_loop(C);
     return 0;
 }
@@ -876,6 +934,31 @@ const char *oblGetActiveWorkspace(void){
 
 int oblGetActiveMode(void){
   return blenderGetActiveMode();
+}
+
+/* Mini menu del sculpt wheel: valores actuales del brush de sculpt activo. */
+int oblGetActiveBrushRadius(void){
+  std::lock_guard<std::mutex> lock(g_brush_mutex);
+  return g_obl_active_brush_size;
+}
+
+float oblGetActiveBrushStrength(void){
+  std::lock_guard<std::mutex> lock(g_brush_mutex);
+  return g_obl_active_brush_strength;
+}
+
+void oblSetActiveBrushRadius(int px){
+  std::lock_guard<std::mutex> lock(g_brush_mutex);
+  g_brush_req_type = 1;
+  g_brush_req_ival = px;
+  g_brush_req_pending = true;
+}
+
+void oblSetActiveBrushStrength(float v){
+  std::lock_guard<std::mutex> lock(g_brush_mutex);
+  g_brush_req_type = 2;
+  g_brush_req_fval = v;
+  g_brush_req_pending = true;
 }
 
 void inputKey(int p_physical_keycode,

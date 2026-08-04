@@ -10,8 +10,9 @@ import android.view.WindowManager.LayoutParams
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -30,6 +31,8 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.awaitPointerEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
@@ -43,6 +46,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.abs
 import kotlin.math.asin
 import kotlin.math.cos
@@ -167,6 +171,19 @@ private const val VISIBLE_DEG = 60f   // tools con |angulo| <= VISIBLE_DEG (7 vi
 private const val SPHERE_ACTIVE = 30f // radio base de la esfera activa (px)
 private const val SPHERE_IDLE = 24f   // radio base del resto (px)
 
+// --- Mini menu (long-press en un tool) ---
+// Card redondeada arriba de la banda: 2 sliders apilados (Radius + Strength).
+// La ventana crece hacia arriba en PANEL_H + PANEL_GAP px cuando el panel está abierto.
+private const val PANEL_W = 220f
+private const val PANEL_H = 96f
+private const val PANEL_GAP = 10f
+private const val PANEL_TITLE_Y = 16f
+private const val ROW1_Y = 40f   // centro del track de Radius (y en canvas, arriba del arco)
+private const val ROW2_Y = 72f   // centro del track de Strength
+private const val TRACK_HALF = 9f
+private const val RADIUS_MIN = 2
+private const val RADIUS_MAX = 150
+
 /** Geometría del arco en dp (misma parábola "bridge" del arco original, anclada al
  *  borde inferior). Única fuente de verdad, compartida con wheelWindowSize(px) para
  *  que la ventana del overlay recorte EXACTAMENTE el arco (sin área muerta que tapa
@@ -224,6 +241,10 @@ fun CarouselDock() {
     var highlightIndex by remember { mutableStateOf(-1) }
     var clayIcon by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     var collapsed by remember { mutableStateOf(OverlayState.sculptArcCollapsed) }
+    // Mini menu (long-press): -1 = cerrado; >=0 = índice del tool con el panel abierto.
+    var panelIndex by remember { mutableStateOf(-1) }
+    var panelRadius by remember { mutableStateOf(RADIUS_MIN) }
+    var panelStrength by remember { mutableStateOf(1f) }
 
     // Posición del chevron (manija de colapsar/expandir): colapsado -> centro de la
     // ventana chica; expandido -> sobre la curvatura superior del arco.
@@ -329,7 +350,7 @@ fun CarouselDock() {
             }
             if (inSculpt != lastActive) {
                 lastActive = inSculpt
-                updateSculptArcWindow(collapsed, inSculpt)
+                updateSculptArcWindow(collapsed, inSculpt, panelIndex >= 0)
             }
             delay(200)
         }
@@ -339,7 +360,26 @@ fun CarouselDock() {
     // con el tamaño de la ventana (chica si está colapsada, arco completo si no).
     LaunchedEffect(collapsed) {
         OverlayState.sculptArcCollapsed = collapsed
-        updateSculptArcWindow(collapsed, OverlayState.sculptArcActive)
+        updateSculptArcWindow(collapsed, OverlayState.sculptArcActive, panelIndex >= 0)
+    }
+
+    // Mini menu: al abrir el panel (long-press), la ventana crece hacia arriba para
+    // alojar la card; se re-leen los valores del brush tras activar el tool (el drain
+    // tarda unas frames en aplicarlo). Al cerrar, la ventana vuelve al tamaño normal.
+    LaunchedEffect(panelIndex) {
+        updateSculptArcWindow(collapsed, OverlayState.sculptArcActive, panelIndex >= 0)
+        if (panelIndex >= 0) {
+            delay(300)
+            if (panelIndex >= 0) {
+                panelRadius = OBLNativeActivity.getActiveBrushRadiusStatic()
+                panelStrength = OBLNativeActivity.getActiveBrushStrengthStatic()
+            }
+        }
+    }
+
+    // Fuera de Sculpting se reinicia el panel para no abrir un menú stale al volver.
+    LaunchedEffect(OverlayState.sculptArcActive) {
+        if (!OverlayState.sculptArcActive) panelIndex = -1
     }
 
     // Fuera de Sculpting no se renderiza nada (la ventana ya está GONE + NOT_TOUCHABLE).
@@ -351,7 +391,10 @@ fun CarouselDock() {
         modifier = Modifier
             .fillMaxSize()
             .pointerInput(Unit) {
-                detectTapGestures(
+                // Tap + long-press con control de slop: el long-press SOLO dispara si el
+                // dedo se queda quieto (sin moverse más allá del touchSlop durante 500ms);
+                // si se mueve, el drag del carrusel toma el gesto (nada de confusión).
+                detectLongPressStill(
                     onTap = { pos ->
                         val w = size.width.toFloat()
                         val h = size.height.toFloat()
@@ -360,17 +403,52 @@ fun CarouselDock() {
                             // Colapsado: tocar en cualquier lado expande.
                             OverlayState.sculptArcCollapsed = false
                             collapsed = false
-                            return@detectTapGestures
+                            return@onTap
+                        }
+                        // Panel abierto: tap en un slider lo ajusta; fuera de sliders lo cierra.
+                        if (panelIndex >= 0) {
+                            val s = sliderHit(pos.x, pos.y, cx)
+                            when (s) {
+                                1 -> {
+                                    panelRadius =
+                                        (sliderFrac(pos.x, cx) * (RADIUS_MAX - RADIUS_MIN) + RADIUS_MIN).roundToInt()
+                                    OBLNativeActivity.setActiveBrushRadiusStatic(panelRadius)
+                                }
+                                2 -> {
+                                    panelStrength = sliderFrac(pos.x, cx)
+                                    OBLNativeActivity.setActiveBrushStrengthStatic(panelStrength)
+                                }
+                                else -> panelIndex = -1
+                            }
+                            return@onTap
                         }
                         val chevronY = chevronHandleY(h)
                         if (abs(pos.x - cx) <= 40f && abs(pos.y - chevronY) <= 14f) {
                             // Chevron: colapsa la UI.
                             OverlayState.sculptArcCollapsed = true
                             collapsed = true
-                            return@detectTapGestures
+                            return@onTap
                         }
                         val sel = nearestToolIndex(w, h, pos.x, pos.y)
                         if (sel >= 0) selectTool(sel)
+                    },
+                    onLongPress = { pos ->
+                        val w = size.width.toFloat()
+                        val h = size.height.toFloat()
+                        if (collapsed) {
+                            OverlayState.sculptArcCollapsed = false
+                            collapsed = false
+                            return@onLongPress
+                        }
+                        val idx = nearestToolIndex(w, h, pos.x, pos.y)
+                        // Fase 1: mini menu SOLO para brushes (tienen radius + strength).
+                        if (idx >= 0 && toolId(sculptTools[idx]).startsWith("builtin_brush.")) {
+                            selectTool(idx)
+                            panelIndex = idx
+                            panelRadius = OBLNativeActivity.getActiveBrushRadiusStatic()
+                            panelStrength = OBLNativeActivity.getActiveBrushStrengthStatic()
+                            android.util.Log.d("OBL.WHEEL", "long-press -> panel tool=${sculptTools[idx]}")
+                        }
                     }
                 )
             }
@@ -379,12 +457,14 @@ fun CarouselDock() {
                 var dragAccum = 0f
                 var onHandle = false
                 var handleDelta = 0f
+                var panelDrag = 0 // 1 = slider Radius, 2 = slider Strength
                 detectDragGestures(
                     onDragStart = { start ->
                         gestureArmed = false
                         dragAccum = 0f
                         onHandle = false
                         handleDelta = 0f
+                        panelDrag = 0
                         val w = size.width.toFloat()
                         val h = size.height.toFloat()
                         val cx = w / 2f
@@ -392,6 +472,17 @@ fun CarouselDock() {
                             // Colapsado: cualquier drag hacia arriba expande.
                             OverlayState.sculptArcCollapsed = false
                             collapsed = false
+                            return@detectDragGestures
+                        }
+                        // Panel abierto: drag sobre un slider lo ajusta en vivo; drag
+                        // fuera de sliders cierra el panel (y no toca el carrusel).
+                        if (panelIndex >= 0) {
+                            val s = sliderHit(start.x, start.y, cx)
+                            if (s == 1 || s == 2) {
+                                panelDrag = s
+                            } else {
+                                panelIndex = -1
+                            }
                             return@detectDragGestures
                         }
                         val chevronY = chevronHandleY(h)
@@ -413,6 +504,10 @@ fun CarouselDock() {
                         }
                     },
                     onDragEnd = {
+                        if (panelDrag != 0) {
+                            panelDrag = 0
+                            return@detectDragGestures
+                        }
                         if (onHandle) {
                             val threshold = 24f
                             if (handleDelta > threshold) {
@@ -436,9 +531,29 @@ fun CarouselDock() {
                     onDragCancel = {
                         gestureArmed = false
                         onHandle = false
+                        panelDrag = 0
                         highlightIndex = -1
                     },
                     onDrag = { change, dragAmount ->
+                        if (panelDrag != 0) {
+                            // Aplicación EN VIVO del slider mientras se arrastra.
+                            change.consume()
+                            val frac = sliderFrac(change.position.x, size.width / 2f)
+                            if (panelDrag == 1) {
+                                val v = (frac * (RADIUS_MAX - RADIUS_MIN) + RADIUS_MIN).roundToInt()
+                                if (v != panelRadius) {
+                                    panelRadius = v
+                                    OBLNativeActivity.setActiveBrushRadiusStatic(v)
+                                }
+                            } else {
+                                val v = frac
+                                if (abs(v - panelStrength) > 0.005f) {
+                                    panelStrength = v
+                                    OBLNativeActivity.setActiveBrushStrengthStatic(v)
+                                }
+                            }
+                            return@detectDragGestures
+                        }
                         if (!gestureArmed && !onHandle) return@detectDragGestures
                         change.consume()
                         if (onHandle) {
@@ -511,7 +626,19 @@ fun CarouselDock() {
             }
 
             // Chevron (manija de colapsar) en la curvatura superior del arco.
-            drawChevron(cx, chevronHandleY(h.toFloat()), collapsed = false)
+            // Oculto mientras el mini menu está abierto (la card ocupa esa zona).
+            if (panelIndex < 0) {
+                drawChevron(cx, chevronHandleY(h.toFloat()), collapsed = false)
+            } else {
+                // Mini menu: card redondeada arriba del arco (la ventana creció hacia
+                // arriba, la card se dibuja en el top del canvas).
+                drawBrushPanel(
+                    cx = cx,
+                    label = sculptTools[panelIndex],
+                    radius = panelRadius,
+                    strength = panelStrength
+                )
+            }
         }
     }
 }
@@ -613,6 +740,149 @@ fun wheelWindowSize(context: Context): Pair<Int, Int> {
 
 /** Tamaño de la ventana COLAPSADA (px): solo el chevron/manija. */
 fun collapsedWheelWindowSize(): Pair<Int, Int> = 112 to 60
+
+/** Tamaño de la ventana con el mini menu abierto (px): el arco + la card encima. */
+fun wheelPanelWindowSize(context: Context): Pair<Int, Int> {
+    val (w, h) = wheelWindowSize(context)
+    return w to (h + PANEL_H + PANEL_GAP).toInt()
+}
+
+/** Hit-test de los sliders del panel: 1 = Radius, 2 = Strength, 0 = fuera de sliders. */
+private fun sliderHit(x: Float, y: Float, cx: Float): Int {
+    val left = cx - PANEL_W / 2f + 12f
+    val right = cx + PANEL_W / 2f - 12f
+    if (x < left || x > right) return 0
+    if (abs(y - ROW1_Y) <= TRACK_HALF + 4f) return 1
+    if (abs(y - ROW2_Y) <= TRACK_HALF + 4f) return 2
+    return 0
+}
+
+/** Fracción 0..1 del slider según la posición X (para calcular el valor). */
+private fun sliderFrac(x: Float, cx: Float): Float {
+    val left = cx - PANEL_W / 2f + 12f
+    val right = cx + PANEL_W / 2f - 12f
+    return ((x - left) / (right - left)).coerceIn(0f, 1f)
+}
+
+/** Detector de tap + long-press con control de slop: el long-press SOLO dispara si el
+ *  dedo permanece quieto (dentro del touchSlop) durante holdTimeMillis. Si se mueve,
+ *  no hace nada (el drag del carrusel toma el gesto). */
+private suspend fun androidx.compose.ui.input.pointer.PointerInputScope.detectLongPressStill(
+    holdTimeMillis: Long = 500L,
+    onTap: (Offset) -> Unit,
+    onLongPress: (Offset) -> Unit
+) {
+    awaitEachGesture {
+        val down = awaitFirstDown()
+        val downPos = down.position
+        val slop = viewConfiguration.touchSlop
+        var gesture = 0 // 1=tap, 2=movió (drag), 3=consumido/cancelado
+        val ended = withTimeoutOrNull(holdTimeMillis) {
+            while (true) {
+                val event = awaitPointerEvent(PointerEventPass.Main)
+                // Multi-touch (2 dedos: zoom/órbita) cancela el long-press.
+                if (event.changes.count { it.pressed } > 1) { gesture = 3; break }
+                val primary = event.changes.firstOrNull { it.id == down.id }
+                if (primary == null) { gesture = 2; break }
+                if (primary.isConsumed) { gesture = 3; break }
+                if (!primary.pressed) { gesture = 1; break }
+                if ((primary.position - downPos).getDistance() > slop) { gesture = 2; break }
+            }
+            Unit
+        }
+        if (ended == null) {
+            // Se quedó quieto el tiempo suficiente -> long press. Consume hasta el UP
+            // para que el drag del carrusel no dispare después.
+            onLongPress(downPos)
+            while (true) {
+                val event = awaitPointerEvent()
+                event.changes.forEach { it.consume() }
+                if (event.changes.any { it.changedToUp() }) break
+            }
+        } else if (gesture == 1) {
+            down.consume()
+            onTap(downPos)
+        }
+        // gesture 2/3: el drag (o un consumo ajeno) se llevó el gesto -> no hacer nada.
+    }
+}
+
+/** Mini menu: card redondeada arriba del arco con 2 sliders (Radius + Strength).
+ *  Aplicación en vivo al mover (el setter JNI solo stash; el drain del render thread
+ *  aplica al brush activo). */
+private fun DrawScope.drawBrushPanel(cx: Float, label: String, radius: Int, strength: Float) {
+    val left = cx - PANEL_W / 2f
+    drawRoundRect(
+        color = Color(0xE62B2B2B),
+        topLeft = Offset(left, 0f),
+        size = Size(PANEL_W, PANEL_H),
+        cornerRadius = androidx.compose.ui.geometry.CornerRadius(12f)
+    )
+    drawRoundRect(
+        color = Color(0xFFCC6F03),
+        topLeft = Offset(left, 0f),
+        size = Size(PANEL_W, PANEL_H),
+        cornerRadius = androidx.compose.ui.geometry.CornerRadius(12f),
+        style = Stroke(width = 2f)
+    )
+    drawContext.canvas.nativeCanvas.drawText(
+        label,
+        cx,
+        PANEL_TITLE_Y,
+        Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.rgb(0xD0, 0xD0, 0xD0)
+            textSize = 15f
+            textAlign = Paint.Align.CENTER
+            isFakeBoldText = true
+        }
+    )
+    drawSlider(cx, ROW1_Y, "Radius", radius.toString(), (radius - RADIUS_MIN).toFloat() / (RADIUS_MAX - RADIUS_MIN))
+    drawSlider(cx, ROW2_Y, "Strength", String.format("%.2f", strength), strength.coerceIn(0f, 1f))
+}
+
+private fun DrawScope.drawSlider(cx: Float, y: Float, name: String, valueText: String, frac: Float) {
+    val left = cx - PANEL_W / 2f + 12f
+    val right = cx + PANEL_W / 2f - 12f
+    val w = right - left
+    drawContext.canvas.nativeCanvas.drawText(
+        name,
+        left,
+        y - 12f,
+        Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.rgb(0xD0, 0xD0, 0xD0)
+            textSize = 12f
+            textAlign = Paint.Align.LEFT
+        }
+    )
+    drawContext.canvas.nativeCanvas.drawText(
+        valueText,
+        right,
+        y - 12f,
+        Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.rgb(0xFF, 0xC1, 0x07)
+            textSize = 12f
+            textAlign = Paint.Align.RIGHT
+        }
+    )
+    drawRoundRect(
+        color = Color(0xFF3A3A3A),
+        topLeft = Offset(left, y - TRACK_HALF),
+        size = Size(w, TRACK_HALF * 2f),
+        cornerRadius = androidx.compose.ui.geometry.CornerRadius(TRACK_HALF)
+    )
+    drawRoundRect(
+        color = Color(0xFFFFC107),
+        topLeft = Offset(left, y - TRACK_HALF),
+        size = Size(w * frac.coerceIn(0f, 1f), TRACK_HALF * 2f),
+        cornerRadius = androidx.compose.ui.geometry.CornerRadius(TRACK_HALF)
+    )
+    drawCircle(
+        color = Color(0xFFFFF8E1),
+        radius = 7f,
+        center = Offset(left + w * frac.coerceIn(0f, 1f), y)
+    )
+}
+
 
 /** Chevron amarillo con contorno ámbar, sobre pill oscura. Es la manija que cuelga de
  *  la curvatura superior del arco: colapsado apunta hacia ARRIBA (expandir), expandido
