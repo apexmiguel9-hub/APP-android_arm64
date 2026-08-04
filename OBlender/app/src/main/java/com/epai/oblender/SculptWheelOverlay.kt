@@ -93,8 +93,9 @@ private fun toolId(label: String) = nonBrushTools[label] ?: "builtin_brush." + l
 
 /** Icono del tool Clay (clay.xml, vector 1024x1032 ~462KB). Se infla desde res/raw
  *  (no res/drawable: un pathData tan grande se pasa del límite del string-pool de
- *  AAPT2 y falla al compilar) con VectorDrawableCompat.create usando el propio
- *  parser como AttributeSet. Se cachea en un Bitmap de ~128px una sola vez. */
+ *  AAPT2 y falla al compilar) con android.graphics.drawable.VectorDrawable.createFromXml,
+ *  que parsea el XML directo del raw (sin string-pool, sin límite de tamaño). Se
+ *  cachea en un Bitmap de ~128px una sola vez. */
 private var clayIconBitmap: android.graphics.Bitmap? = null
 
 private fun loadClayIcon(context: Context): android.graphics.Bitmap? {
@@ -102,9 +103,7 @@ private fun loadClayIcon(context: Context): android.graphics.Bitmap? {
     try {
         val res = context.resources
         val parser = res.getXml(R.raw.clay)
-        val drawable = androidx.vectordrawable.graphics.drawable.VectorDrawableCompat.create(
-            res, parser, parser, null
-        )
+        val drawable = android.graphics.drawable.VectorDrawable.createFromXml(res, parser, null)
         if (drawable != null) {
             val w = 128
             val h = (128f * 1032f / 1024f).toInt()
