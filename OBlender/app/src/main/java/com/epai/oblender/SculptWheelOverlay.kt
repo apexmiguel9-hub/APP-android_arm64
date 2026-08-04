@@ -105,18 +105,27 @@ private fun loadClayIcon(context: Context): android.graphics.Bitmap? {
         val parser = res.getXml(R.raw.clay)
         val drawable = android.graphics.drawable.VectorDrawable.createFromXml(res, parser, null)
         if (drawable != null) {
-            val w = 128
-            val h = (128f * 1032f / 1024f).toInt()
+            val w = 256
+            val h = (256f * 1032f / 1024f).toInt()
             val bmp = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888)
             val canvas = android.graphics.Canvas(bmp)
             drawable.setBounds(0, 0, w, h)
             drawable.draw(canvas)
+            // Sanity check: el bitmap debe tener tinta (píxeles no transparentes).
+            val px = IntArray(w * h)
+            bmp.getPixels(px, 0, w, 0, 0, w, h)
+            var ink = 0
+            for (p in px) if (android.graphics.Color.alpha(p) > 0) ink++
+            android.util.Log.d("OBL.WHEEL", "clay icon loaded ${bmp.width}x${bmp.height} ink=$ink/${px.size}")
+            if (ink == 0) {
+                android.util.Log.e("OBL.WHEEL", "loadClayIcon: vector renderizó vacío (sin tinta)")
+                return null
+            }
             clayIconBitmap = bmp
-            android.util.Log.d("OBL.WHEEL", "clay icon loaded ${bmp.width}x${bmp.height}")
             return bmp
         }
     } catch (e: Exception) {
-        android.util.Log.e("OBL.WHEEL", "loadClayIcon failed", e)
+        android.util.Log.e("OBL.WHEEL", "loadClayIcon failed: " + e.message, e)
     }
     return null
 }
@@ -212,6 +221,7 @@ fun CarouselDock() {
     var activeSel by remember { mutableStateOf(-1) }
     var lastUserSelMs by remember { mutableStateOf(0L) }
     var highlightIndex by remember { mutableStateOf(-1) }
+    var clayIcon by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
 
     // Mismo filtro que el dibujo: SOLO los tools realmente visibles (centerIdx±3 con
     // |angulo| <= VISIBLE_DEG). Si se considerara el listado completo, un tap cerca de
@@ -274,7 +284,8 @@ fun CarouselDock() {
     }
 
     // Carga (una vez, cacheada) el icono de Clay desde res/raw/clay.xml.
-    LaunchedEffect(Unit) { loadClayIcon(context) }
+    // Estado reactivo: al terminar, el Canvas se redibuja con el icono.
+    LaunchedEffect(Unit) { clayIcon = loadClayIcon(context) }
 
     // Poll: solo muestro el arco en Sculpting (modo + workspace); sincroniza el
     // highlight y re-centra el tool activo reportado por Blender.
@@ -412,12 +423,12 @@ fun CarouselDock() {
             }
             bandPath.close()
             // Fondo gris + borde dorado (mismo acento ámbar/dorado del arco).
-            drawPath(bandPath, Color(0xFF4A4A4A).copy(alpha = 0.90f))
+            drawPath(bandPath, Color(0xFF3A3A3A).copy(alpha = 0.90f))
             drawPath(bandPath, Color(0xFFFFC107), style = Stroke(width = 3f))
 
             // Esferas de herramientas en carousel, con la distribución parabólica.
             // Mismo filtro de visibilidad que el hit-test (visibleIndices).
-            val clayBmp = clayIconBitmap
+            val clayBmp = clayIcon
             val lo = (Math.round(-scrollOffset.value / step).toInt() - 3).coerceAtLeast(0)
             val hi = (Math.round(-scrollOffset.value / step).toInt() + 3).coerceAtMost(sculptTools.size - 1)
             for (i in (lo..hi).filter { abs((it * step) + scrollOffset.value) <= VISIBLE_DEG }) {
