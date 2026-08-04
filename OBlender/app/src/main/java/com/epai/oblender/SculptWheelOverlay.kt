@@ -23,12 +23,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
@@ -37,8 +34,6 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.ViewCompositionStrategy
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.setViewTreeLifecycleOwner
@@ -107,7 +102,7 @@ private fun loadClayIcon(context: Context): android.graphics.Bitmap? {
     try {
         val res = context.resources
         val parser = res.getXml(R.raw.clay)
-        val drawable = androidx.core.graphics.drawable.VectorDrawableCompat.create(
+        val drawable = androidx.vectordrawable.graphics.drawable.VectorDrawableCompat.create(
             res, parser, parser, null
         )
         if (drawable != null) {
@@ -423,7 +418,7 @@ fun CarouselDock() {
 
             // Esferas de herramientas en carousel, con la distribución parabólica.
             // Mismo filtro de visibilidad que el hit-test (visibleIndices).
-            val clayBmp = clayIconBitmap?.asImageBitmap()
+            val clayBmp = clayIconBitmap
             val lo = (Math.round(-scrollOffset.value / step).toInt() - 3).coerceAtLeast(0)
             val hi = (Math.round(-scrollOffset.value / step).toInt() + 3).coerceAtMost(sculptTools.size - 1)
             for (i in (lo..hi).filter { abs((it * step) + scrollOffset.value) <= VISIBLE_DEG }) {
@@ -448,7 +443,7 @@ private fun DrawScope.drawToolSlot(
     isActive: Boolean,
     isHighlight: Boolean,
     windowH: Float,
-    clayBmp: ImageBitmap?
+    clayBmp: android.graphics.Bitmap?
 ) {
     val r = (if (isActive) SPHERE_ACTIVE else SPHERE_IDLE) * scale
     val highlighted = isActive || isHighlight
@@ -480,17 +475,27 @@ private fun DrawScope.drawToolSlot(
     )
     drawCircle(brush, r, Offset(cx, cy))
 
-    // Icono del tool Clay (clay.xml): dibujado sobre la esfera, recortado al círculo.
+    // Icono del tool Clay (clay.xml): dibujado sobre la esfera, recortado al círculo
+    // con clip nativo (evita drawImage/clipPath de Compose).
     if (label == "Clay" && clayBmp != null) {
         val iconSize = r * 2f * 0.86f
-        val clip = Path().apply { addOval(Rect(cx - r, cy - r, cx + r, cy + r)) }
-        clipPath(clip) {
-            drawImage(
-                clayBmp,
-                dstOffset = IntOffset((cx - iconSize / 2f).toInt(), (cy - iconSize / 2f).toInt()),
-                dstSize = IntSize(iconSize.toInt(), iconSize.toInt())
-            )
-        }
+        val native = drawContext.canvas.nativeCanvas
+        native.save()
+        native.clipPath(
+            android.graphics.Path().apply {
+                addCircle(cx, cy, r, android.graphics.Path.Direction.CW)
+            }
+        )
+        native.drawBitmap(
+            clayBmp,
+            android.graphics.Rect(0, 0, clayBmp.width, clayBmp.height),
+            android.graphics.RectF(
+                cx - iconSize / 2f, cy - iconSize / 2f,
+                cx + iconSize / 2f, cy + iconSize / 2f
+            ),
+            Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
+        )
+        native.restore()
     }
 
     // Solo el tool ACTIVO lleva nombre, en la franja vacía entre la banda y el borde
