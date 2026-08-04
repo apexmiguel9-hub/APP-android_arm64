@@ -331,6 +331,17 @@ static float g_obl_active_brush_height = 0.0f;
 static float g_obl_active_brush_tip_roundness = 0.0f;
 static float g_obl_active_brush_elastic_preserve = 0.0f;
 static float g_obl_active_brush_plane_offset = 0.0f;
+/* Params extra tipo enum / toggle (Fase 3). Sincronizados con Kotlin FIELD_*. */
+static float g_obl_active_brush_blend = 0.0f;
+static float g_obl_active_brush_elastic_deform_type = 0.0f;
+static float g_obl_active_brush_pose_deform_type = 0.0f;
+static float g_obl_active_brush_pose_origin_type = 0.0f;
+static float g_obl_active_brush_cloth_deform_type = 0.0f;
+static float g_obl_active_brush_boundary_deform_type = 0.0f;
+static int g_obl_active_brush_use_persistent = 0;
+static int g_obl_active_brush_use_smooth_stroke = 0;
+static int g_obl_active_brush_use_pressure_area_radius = 0;
+static int g_obl_active_brush_invert_to_scrape_fill = 0;
 
 extern "C" void blenderSetActiveTool(const char *idname);
 
@@ -894,6 +905,16 @@ int mainBlenderLoop(void*pContext) {
           g_obl_active_brush_tip_roundness = br->tip_roundness;
           g_obl_active_brush_elastic_preserve = br->elastic_deform_volume_preservation;
           g_obl_active_brush_plane_offset = br->plane_offset;
+          g_obl_active_brush_blend = (float)br->blend;
+          g_obl_active_brush_elastic_deform_type = (float)br->elastic_deform_type;
+          g_obl_active_brush_pose_deform_type = (float)br->pose_deform_type;
+          g_obl_active_brush_pose_origin_type = (float)br->pose_origin_type;
+          g_obl_active_brush_cloth_deform_type = (float)br->cloth_deform_type;
+          g_obl_active_brush_boundary_deform_type = (float)br->boundary_deform_type;
+          g_obl_active_brush_use_persistent = (br->flag & BRUSH_PERSISTENT) ? 1 : 0;
+          g_obl_active_brush_use_smooth_stroke = (br->flag & BRUSH_SMOOTH_STROKE) ? 1 : 0;
+          g_obl_active_brush_use_pressure_area_radius = (br->flag2 & BRUSH_AREA_RADIUS_PRESSURE) ? 1 : 0;
+          g_obl_active_brush_invert_to_scrape_fill = (br->flag & BRUSH_INVERT_TO_SCRAPE_FILL) ? 1 : 0;
         }
         if (req_pending) {
           if (req_type == 1) {
@@ -924,6 +945,30 @@ int mainBlenderLoop(void*pContext) {
               case 6: br->tip_roundness = CLAMPIS(req_fval, 0.0f, 1.0f); break;
               case 7: br->elastic_deform_volume_preservation = CLAMPIS(req_fval, 0.0f, 1.0f); break;
               case 8: br->plane_offset = CLAMPIS(req_fval, -0.5f, 0.5f); break;
+              /* enums (field ids 101..106) */
+              case 101: br->blend = (short)(int)req_fval; break;
+              case 102: br->elastic_deform_type = (int)req_fval; break;
+              case 103: br->pose_deform_type = (int)req_fval; break;
+              case 104: br->pose_origin_type = (int)req_fval; break;
+              case 105: br->cloth_deform_type = (int)req_fval; break;
+              case 106: br->boundary_deform_type = (int)req_fval; break;
+              /* bools (field ids 201..204) */
+              case 201:
+                if (req_fval >= 0.5f) br->flag |= BRUSH_PERSISTENT;
+                else br->flag &= ~BRUSH_PERSISTENT;
+                break;
+              case 202:
+                if (req_fval >= 0.5f) br->flag2 |= BRUSH_AREA_RADIUS_PRESSURE;
+                else br->flag2 &= ~BRUSH_AREA_RADIUS_PRESSURE;
+                break;
+              case 203:
+                if (req_fval >= 0.5f) br->flag |= BRUSH_INVERT_TO_SCRAPE_FILL;
+                else br->flag &= ~BRUSH_INVERT_TO_SCRAPE_FILL;
+                break;
+              case 204:
+                if (req_fval >= 0.5f) br->flag |= BRUSH_SMOOTH_STROKE;
+                else br->flag &= ~BRUSH_SMOOTH_STROKE;
+                break;
             }
             __android_log_print(ANDROID_LOG_INFO, "OBL.WHEEL",
                 "brush param[%d] set -> %.3f", req_param, req_fval);
@@ -1022,7 +1067,8 @@ void oblSetActiveBrushColor(float r, float g, float b){
   g_brush_req_pending = true;
 }
 
-/* Fase 3: params extra del brush (field ids sincronizados con Kotlin FIELD_*). */
+/* Fase 3: params extra del brush (field ids sincronizados con Kotlin FIELD_*).
+ * floats id 1..8, enums id 101..106, toggles/bools id 201..204. */
 float oblGetActiveBrushExtra(int field){
   std::lock_guard<std::mutex> lock(g_brush_mutex);
   switch (field) {
@@ -1034,10 +1080,22 @@ float oblGetActiveBrushExtra(int field){
     case 6: return g_obl_active_brush_tip_roundness;
     case 7: return g_obl_active_brush_elastic_preserve;
     case 8: return g_obl_active_brush_plane_offset;
+    case 101: return g_obl_active_brush_blend;
+    case 102: return g_obl_active_brush_elastic_deform_type;
+    case 103: return g_obl_active_brush_pose_deform_type;
+    case 104: return g_obl_active_brush_pose_origin_type;
+    case 105: return g_obl_active_brush_cloth_deform_type;
+    case 106: return g_obl_active_brush_boundary_deform_type;
+    case 201: return (float)g_obl_active_brush_use_persistent;
+    case 202: return (float)g_obl_active_brush_use_pressure_area_radius;
+    case 203: return (float)g_obl_active_brush_invert_to_scrape_fill;
+    case 204: return (float)g_obl_active_brush_use_smooth_stroke;
   }
   return 0.0f;
 }
 
+/* Fase 3: parametro extra del brush (req_type 4). field ids: floats 1..8,
+ * enums 101..106, toggles/bools 201..204 (ids sincronizados con Kotlin FIELD_*). */
 void oblSetActiveBrushExtra(int field, float v){
   std::lock_guard<std::mutex> lock(g_brush_mutex);
   g_brush_req_type = 4;

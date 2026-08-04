@@ -195,7 +195,8 @@ private val colorTools = setOf("Paint")
 private fun panelHasColor(panelIndex: Int): Boolean =
     panelIndex >= 0 && panelIndex < sculptTools.size && sculptTools[panelIndex] in colorTools
 
-/** Campo del Brush (creator.cc switch g_brush_req_param). Sincronizado con C++. */
+/** Campo del Brush (creator.cc switch g_brush_req_param). Sincronizado con C++:
+ *  floats id 1..8, enums id 101..106, toggles/bools id 201..204. */
 private const val FIELD_AUTOSMOOTH = 1
 private const val FIELD_NORMAL_WEIGHT = 2
 private const val FIELD_CREASE_PINCH = 3
@@ -204,13 +205,68 @@ private const val FIELD_HEIGHT = 5
 private const val FIELD_TIP_ROUNDNESS = 6
 private const val FIELD_ELASTIC_PRESERVE = 7
 private const val FIELD_PLANE_OFFSET = 8
+private const val FIELD_BLEND = 101
+private const val FIELD_ELASTIC_DEFORM_TYPE = 102
+private const val FIELD_POSE_DEFORM_TYPE = 103
+private const val FIELD_POSE_ORIGIN_TYPE = 104
+private const val FIELD_CLOTH_DEFORM_TYPE = 105
+private const val FIELD_BOUNDARY_DEFORM_TYPE = 106
+private const val FIELD_USE_PERSISTENT = 201
+private const val FIELD_USE_PRESSURE_AREA_RADIUS = 202
+private const val FIELD_INVERT_TO_SCRAPE_FILL = 203
+private const val FIELD_USE_SMOOTH_STROKE = 204
 
 private data class ExtraParam(val field: Int, val name: String, val min: Float, val max: Float)
+private data class DropdownSpec(val field: Int, val name: String, val options: List<String>)
+private data class ToggleSpec(val field: Int, val name: String)
 
-/** Params extra por tool (capabilities reales del fork). DNA: autosmooth_factor,
- *  normal_weight, crease_pinch_factor, rake_factor, height, tip_roundness,
- *  elastic_deform_volume_preservation, plane_offset. */
-private val toolExtras: Map<String, List<ExtraParam>> = mapOf(
+/** Enum value lists, sincronizados con EnumPropertyItem del fork (rna_brush.c). */
+private val blendOptions = listOf(
+    "Mix", "Darken", "Mul", "Lighten", "Screen", "Add", "Overlay", "Sub",
+    "Hue", "Color", "Luminosity", "Erase Alpha", "Add Alpha"
+)
+private val elasticDeformOptions = listOf("Grab", "Grab Biscale", "Grab Triscale", "Scale", "Twist")
+private val poseDeformOptions = listOf("Rotate/Twist", "Scale/Translate", "Squash & Stretch")
+private val poseOriginOptions = listOf("Topology", "Face Sets", "Face Sets FK")
+private val clothDeformOptions = listOf("Drag", "Push", "Grab", "Pinch Point", "Pinch Perp", "Inflate", "Snake Hook")
+private val boundaryDeformOptions = listOf("Bend", "Expand", "Inflate", "Grab", "Twist", "Smooth")
+
+/** Filas del panel: 1=Radius, 2=Strength, 3..5=H/S/V (solo si hasColor),
+ *  100+field = slider extra, 200+field = dropdown, 300+field = toggle.
+ *  y en px, step ROW_STEP desde ROW1_Y. */
+private data class PanelRowSpec(val id: Int, val field: Int, val y: Float)
+
+private fun panelRows(
+    hasColor: Boolean,
+    floatExtras: List<ExtraParam>,
+    dropdowns: List<DropdownSpec>,
+    toggles: List<ToggleSpec>
+): List<PanelRowSpec> {
+    val rows = mutableListOf<PanelRowSpec>()
+    var y = ROW1_Y
+    rows += PanelRowSpec(1, 0, y); y += ROW_STEP
+    rows += PanelRowSpec(2, 0, y); y += ROW_STEP
+    if (hasColor) {
+        rows += PanelRowSpec(3, 0, y); y += ROW_STEP
+        rows += PanelRowSpec(4, 0, y); y += ROW_STEP
+        rows += PanelRowSpec(5, 0, y); y += ROW_STEP
+    }
+    for (e in floatExtras) {
+        rows += PanelRowSpec(100 + e.field, e.field, y); y += ROW_STEP
+    }
+    for (d in dropdowns) {
+        rows += PanelRowSpec(200 + d.field, d.field, y); y += ROW_STEP
+    }
+    for (t in toggles) {
+        rows += PanelRowSpec(300 + t.field, t.field, y); y += ROW_STEP
+    }
+    return rows
+}
+
+private fun panelHeight(rows: List<PanelRowSpec>): Float = 24f + rows.size * ROW_STEP + 8f
+
+/** Params extra flotantes por tool (capabilities reales del fork). */
+private val toolFloatExtras: Map<String, List<ExtraParam>> = mapOf(
     "Snake Hook" to listOf(
         ExtraParam(FIELD_RAKE, "Rake", 0f, 1f),
         ExtraParam(FIELD_CREASE_PINCH, "Magnify", 0f, 1f),
@@ -270,27 +326,36 @@ private val toolExtras: Map<String, List<ExtraParam>> = mapOf(
     )
 )
 
-/** Filas del panel: 1=Radius, 2=Strength, 3..5=H/S/V (solo si hasColor),
- *  100+field = param extra. y en px, step 32 desde ROW1_Y. */
-private data class PanelRowSpec(val id: Int, val y: Float)
+/** Dropdowns (field id 101..106) por tool. */
+private val toolDropdowns: Map<String, List<DropdownSpec>> = mapOf(
+    "Boundary" to listOf(DropdownSpec(FIELD_BOUNDARY_DEFORM_TYPE, "Deform", boundaryDeformOptions)),
+    "Cloth" to listOf(DropdownSpec(FIELD_CLOTH_DEFORM_TYPE, "Deform", clothDeformOptions)),
+    "Elastic Deform" to listOf(DropdownSpec(FIELD_ELASTIC_DEFORM_TYPE, "Type", elasticDeformOptions)),
+    "Pose" to listOf(
+        DropdownSpec(FIELD_POSE_DEFORM_TYPE, "Deform", poseDeformOptions),
+        DropdownSpec(FIELD_POSE_ORIGIN_TYPE, "Origin", poseOriginOptions)
+    )
+)
 
-private fun panelRows(hasColor: Boolean, extras: List<ExtraParam>): List<PanelRowSpec> {
-    val rows = mutableListOf<PanelRowSpec>()
-    var y = ROW1_Y
-    rows += PanelRowSpec(1, y); y += ROW_STEP
-    rows += PanelRowSpec(2, y); y += ROW_STEP
-    if (hasColor) {
-        rows += PanelRowSpec(3, y); y += ROW_STEP
-        rows += PanelRowSpec(4, y); y += ROW_STEP
-        rows += PanelRowSpec(5, y); y += ROW_STEP
-    }
-    for (e in extras) {
-        rows += PanelRowSpec(100 + e.field, y); y += ROW_STEP
-    }
-    return rows
-}
+/** Toggles/bools (field id 201..204) por tool. */
+private val toolToggles: Map<String, List<ToggleSpec>> = mapOf(
+    "Boundary" to listOf(ToggleSpec(FIELD_USE_PERSISTENT, "Persist")),
+    "Cloth" to listOf(ToggleSpec(FIELD_USE_PERSISTENT, "Persist")),
+    "Grab" to listOf(ToggleSpec(FIELD_USE_SMOOTH_STROKE, "Smooth Stroke")),
+    "Snake Hook" to listOf(ToggleSpec(FIELD_INVERT_TO_SCRAPE_FILL, "Invert")),
+    "Pose" to listOf(ToggleSpec(FIELD_USE_SMOOTH_STROKE, "Smooth Stroke"))
+)
 
-private fun panelHeight(rows: List<PanelRowSpec>): Float = 24f + rows.size * ROW_STEP + 8f
+/** Devuelve las 3 listas (float/dropdown/toggle) del tool visible en `panelIndex`. */
+private fun panelControls(panelIndex: Int): Triple<List<ExtraParam>, List<DropdownSpec>, List<ToggleSpec>> {
+    if (panelIndex < 0 || panelIndex >= sculptTools.size) return Triple(emptyList(), emptyList(), emptyList())
+    val label = sculptTools[panelIndex]
+    return Triple(
+        toolFloatExtras[label] ?: emptyList(),
+        toolDropdowns[label] ?: emptyList(),
+        toolToggles[label] ?: emptyList()
+    )
+
 
 /** HSV -> RGB (0..1). h en grados 0..360, s/v 0..1. */
 private fun hsvToRgb(h: Float, s: Float, v: Float): Triple<Float, Float, Float> {
@@ -467,13 +532,13 @@ fun CarouselDock() {
         recenterTo(sel)
     }
 
-    // Altura extra (px) que debe crecer la ventana del overlay para alojar el panel.
-    fun panelHeightPx(): Int {
-        if (panelIndex < 0) return 0
-        val extras = toolExtras[sculptTools[panelIndex]] ?: emptyList()
-        val rows = panelRows(panelHasColor(panelIndex), extras)
-        return (panelHeight(rows) + PANEL_GAP).toInt()
-    }
+     // Altura extra (px) que debe crecer la ventana del overlay para alojar el panel.
+     fun panelHeightPx(): Int {
+         if (panelIndex < 0) return 0
+         val (f, d, t) = panelControls(panelIndex)
+         val rows = panelRows(panelHasColor(panelIndex), f, d, t)
+         return (panelHeight(rows) + PANEL_GAP).toInt()
+     }
 
     // Aplica el color HSV actual del panel al brush activo (en vivo, como radius/strength).
     fun pushColor() {
@@ -560,9 +625,15 @@ fun CarouselDock() {
                     panelSat = hsv[1]
                     panelVal = hsv[2]
                 }
-                val extras = toolExtras[sculptTools[panelIndex]] ?: emptyList()
-                for (e in extras) {
+                val (f, d, t) = panelControls(panelIndex)
+                for (e in f) {
                     panelExtras[e.field] = OBLNativeActivity.getActiveBrushExtraStatic(e.field)
+                }
+                for (dd in d) {
+                    panelExtras[dd.field] = OBLNativeActivity.getActiveBrushExtraStatic(dd.field)
+                }
+                for (tg in t) {
+                    panelExtras[tg.field] = OBLNativeActivity.getActiveBrushExtraStatic(tg.field)
                 }
             }
         }
@@ -604,8 +675,8 @@ fun CarouselDock() {
                                 panelIndex = -1
                                 return@onTap
                             }
-                            val extras = toolExtras[sculptTools[panelIndex]] ?: emptyList()
-                            val rows = panelRows(panelHasColor(panelIndex), extras)
+                            val (f, d, t) = panelControls(panelIndex)
+                            val rows = panelRows(panelHasColor(panelIndex), f, d, t)
                             val s = sliderHit(pos.x, pos.y, cx, rows)
                             when (s) {
                                 1 -> {
@@ -630,12 +701,23 @@ fun CarouselDock() {
                                     pushColor()
                                 }
                                 else -> {
-                                    if (s >= 100) {
-                                        val e = extras.firstOrNull { it.field == s - 100 }
-                                            ?: return@onTap
+                                    if (s in 100..199) {
+                                        val e = f.firstOrNull { it.field == s - 100 } ?: return@onTap
                                         val v = sliderFrac(pos.x, cx) * (e.max - e.min) + e.min
                                         panelExtras[e.field] = v
                                         pushExtra(e.field)
+                                    } else if (s in 200..299) {
+                                        val dd = d.firstOrNull { it.field == s - 200 } ?: return@onTap
+                                        val cur = (panelExtras[dd.field] ?: 0f).toInt()
+                                        val next = (cur + 1) % dd.options.size
+                                        panelExtras[dd.field] = next.toFloat()
+                                        OBLNativeActivity.setActiveBrushExtraStatic(dd.field, next.toFloat())
+                                    } else if (s in 300..399) {
+                                        val tg = t.firstOrNull { it.field == s - 300 } ?: return@onTap
+                                        val cur = panelExtras[tg.field] ?: 0f
+                                        val next = if (cur >= 0.5f) 0f else 1f
+                                        panelExtras[tg.field] = next
+                                        OBLNativeActivity.setActiveBrushExtraStatic(tg.field, next)
                                     }
                                 }
                             }
@@ -701,10 +783,10 @@ fun CarouselDock() {
                                 panelIndex = -1
                                 return@detectDragGestures
                             }
-                            val extras = toolExtras[sculptTools[panelIndex]] ?: emptyList()
-                            val rows = panelRows(panelHasColor(panelIndex), extras)
+                            val (f, d, t) = panelControls(panelIndex)
+                            val rows = panelRows(panelHasColor(panelIndex), f, d, t)
                             val s = sliderHit(start.x, start.y, cx, rows)
-                            if (s == 1 || s == 2 || (s in 3..5) || s >= 100) {
+                            if (s == 1 || s == 2 || (s in 3..5) || (s in 100..199)) {
                                 panelDrag = s
                             }
                             return@detectDragGestures
@@ -799,18 +881,18 @@ fun CarouselDock() {
                                         pushColor()
                                     }
                                 }
-                                else -> {
-                                    if (panelDrag >= 100) {
-                                        val extras = toolExtras[sculptTools[panelIndex]] ?: emptyList()
-                                        val e = extras.firstOrNull { it.field == panelDrag - 100 }
-                                            ?: return@detectDragGestures
-                                        val v = frac * (e.max - e.min) + e.min
-                                        if (abs(v - (panelExtras[e.field] ?: v)) > 0.002f * (e.max - e.min)) {
-                                            panelExtras[e.field] = v
-                                            pushExtra(e.field)
+                                    else -> {
+                                        if (panelDrag in 100..199) {
+                                            val (f, _, _) = panelControls(panelIndex)
+                                            val e = f.firstOrNull { it.field == panelDrag - 100 }
+                                                ?: return@detectDragGestures
+                                            val v = frac * (e.max - e.min) + e.min
+                                            if (abs(v - (panelExtras[e.field] ?: v)) > 0.002f * (e.max - e.min)) {
+                                                panelExtras[e.field] = v
+                                                pushExtra(e.field)
+                                            }
                                         }
                                     }
-                                }
                             }
                             return@detectDragGestures
                         }
@@ -892,6 +974,7 @@ fun CarouselDock() {
             } else {
                 // Mini menu: card redondeada arriba del arco (la ventana creció hacia
                 // arriba, la card se dibuja en el top del canvas).
+                val (pf, pd, pt) = panelControls(panelIndex)
                 drawBrushPanel(
                     cx = cx,
                     label = sculptTools[panelIndex],
@@ -901,7 +984,9 @@ fun CarouselDock() {
                     hue = panelHue,
                     sat = panelSat,
                     value = panelVal,
-                    extras = toolExtras[sculptTools[panelIndex]] ?: emptyList(),
+                    floatExtras = pf,
+                    dropdowns = pd,
+                    toggles = pt,
                     extraValues = panelExtras
                 )
             }
@@ -1073,10 +1158,10 @@ private suspend fun androidx.compose.ui.input.pointer.PointerInputScope.detectLo
     }
 }
 
-/** Mini menu: card redondeada arriba del arco con los sliders del brush.
- *  Filas = panelRows(hasColor, extras): Radius + Strength siempre, + HSV si hasColor
- *  (solo Paint), + params extra por tool (Fase 3). Aplicación en vivo al mover (el
- *  setter JNI solo stash; el drain del render thread aplica al brush activo). */
+/** Mini menu: card redondeada arriba del arco con los sliders/toggles/dropdowns del brush.
+ *  Filas = panelRows(hasColor, floatExtras, dropdowns, toggles): Radius + Strength siempre,
+ *  + HSV si hasColor (solo Paint), + params extra por tool (Fase 3). Aplicación en vivo
+ *  al mover/tap (el setter JNI solo stash; el drain del render thread aplica al brush activo). */
 private fun DrawScope.drawBrushPanel(
     cx: Float,
     label: String,
@@ -1086,10 +1171,12 @@ private fun DrawScope.drawBrushPanel(
     hue: Float,
     sat: Float,
     value: Float,
-    extras: List<ExtraParam>,
+    floatExtras: List<ExtraParam>,
+    dropdowns: List<DropdownSpec>,
+    toggles: List<ToggleSpec>,
     extraValues: Map<Int, Float>
 ) {
-    val rows = panelRows(hasColor, extras)
+    val rows = panelRows(hasColor, floatExtras, dropdowns, toggles)
     val panelH = panelHeight(rows)
     val left = cx - PANEL_W / 2f
     drawRoundRect(
@@ -1191,10 +1278,20 @@ private fun DrawScope.drawBrushPanel(
                 track = Brush.linearGradient(colors = listOf(Color(0xFF000000), Color(cur)))
             )
             else -> {
-                val e = extras.firstOrNull { it.field == r.id - 100 } ?: continue
-                val ev = extraValues[e.field] ?: e.min
-                val frac = ((ev - e.min) / (e.max - e.min)).coerceIn(0f, 1f)
-                drawSlider(cx, r.y, e.name, String.format("%.2f", ev), frac)
+                if (r.id in 100..199) {
+                    val e = floatExtras.firstOrNull { it.field == r.id - 100 } ?: continue
+                    val ev = extraValues[e.field] ?: e.min
+                    val frac = ((ev - e.min) / (e.max - e.min)).coerceIn(0f, 1f)
+                    drawSlider(cx, r.y, e.name, String.format("%.2f", ev), frac)
+                } else if (r.id in 200..299) {
+                    val dd = dropdowns.firstOrNull { it.field == r.id - 200 } ?: continue
+                    drawDropdown(cx, r.y, dd.name, dd.options,
+                        (extraValues[dd.field] ?: 0f).toInt())
+                } else if (r.id in 300..399) {
+                    val tg = toggles.firstOrNull { it.field == r.id - 300 } ?: continue
+                    val on = (extraValues[tg.field] ?: 0f) >= 0.5f
+                    drawToggle(cx, r.y, tg.name, on)
+                }
             }
         }
     }
@@ -1260,6 +1357,75 @@ private fun DrawScope.drawSlider(
     )
 }
 
+/** Dropdown (tap para ciclar): label a la izquierda, opción actual centrada en un "chip"
+ *  gris/dorado a la derecha. Hit area ancho toda la row (sliderHit lo resuelve por y). */
+private fun DrawScope.drawDropdown(
+    cx: Float,
+    y: Float,
+    name: String,
+    options: List<String>,
+    selected: Int
+) {
+    val left = cx - PANEL_W / 2f + 12f
+    val right = cx + PANEL_W / 2f - 12f
+    val p = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.rgb(0xD0, 0xD0, 0xD0)
+        textSize = 12f
+        textAlign = Paint.Align.LEFT
+    }
+    drawContext.canvas.nativeCanvas.drawText(name, left, y - 12f, p)
+    val label = options.getOrElse(selected) { "?" }
+    // Chip
+    val chipW = 72f
+    val chipL = right - chipW
+    drawRoundRect(
+        color = Color(0xFF3A3A3A),
+        topLeft = Offset(chipL, y - TRACK_HALF),
+        size = Size(chipW, TRACK_HALF * 2f),
+        cornerRadius = androidx.compose.ui.geometry.CornerRadius(TRACK_HALF)
+    )
+    drawRoundRect(
+        color = Color(0xFFFFC107),
+        topLeft = Offset(chipL, y - TRACK_HALF),
+        size = Size(chipW, TRACK_HALF * 2f),
+        cornerRadius = androidx.compose.ui.geometry.CornerRadius(TRACK_HALF),
+        style = Stroke(width = 1.5f)
+    )
+    drawContext.canvas.nativeCanvas.drawText(
+        label,
+        right - 6f, y - 12f,
+        Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.rgb(0xFF, 0xC1, 0x07)
+            textSize = 12f
+            textAlign = Paint.Align.RIGHT
+        }
+    )
+}
+
+/** Toggle (switch): label a la izquierda, mini-switch gris/dorado a la derecha. */
+private fun DrawScope.drawToggle(cx: Float, y: Float, name: String, on: Boolean) {
+    val left = cx - PANEL_W / 2f + 12f
+    drawContext.canvas.nativeCanvas.drawText(
+        name, left, y - 12f,
+        Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.rgb(0xD0, 0xD0, 0xD0)
+            textSize = 12f
+            textAlign = Paint.Align.LEFT
+        }
+    )
+    val right = cx + PANEL_W / 2f - 12f
+    val swW = 36f
+    val swL = right - swW
+    val bg = if (on) 0xFFFFC107 else 0xFF555555
+    drawRoundRect(
+        color = Color(bg),
+        topLeft = Offset(swL, y - TRACK_HALF),
+        size = Size(swW, TRACK_HALF * 2f),
+        cornerRadius = androidx.compose.ui.geometry.CornerRadius(TRACK_HALF)
+    )
+    val knobX = if (on) right - 4f else swL + 4f
+    drawCircle(color = Color(0xFFFFF8E1), radius = TRACK_HALF + 1f, center = Offset(knobX, y))
+}
 
 /** Chevron amarillo con contorno ámbar, sobre pill oscura. Es la manija que cuelga de
  *  la curvatura superior del arco: colapsado apunta hacia ARRIBA (expandir), expandido
