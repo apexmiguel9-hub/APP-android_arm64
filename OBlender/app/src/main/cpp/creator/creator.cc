@@ -314,13 +314,23 @@ static bool g_pending_tool_set = false;
  * can read the CURRENT brush values (synchronously) without waiting. */
 static std::mutex g_brush_mutex;
 static bool g_brush_req_pending = false;
-static int g_brush_req_type = 0; /* 1 = size (px), 2 = strength (0..1), 3 = color (rgb) */
+static int g_brush_req_type = 0; /* 1 = size (px), 2 = strength (0..1), 3 = color (rgb), 4 = extra param */
 static int g_brush_req_ival = 0;
+static int g_brush_req_param = 0; /* para req_type 4 (campo del brush) */
 static float g_brush_req_fval = 0.0f;
 static float g_brush_req_rgb[3] = {0.0f, 0.0f, 0.0f};
 static int g_obl_active_brush_size = 50;
 static float g_obl_active_brush_strength = 1.0f;
 static float g_obl_active_brush_color[3] = {0.5f, 0.5f, 0.5f};
+/* Params extra del brush (Fase 3). Sincronizados con Kotlin FIELD_*. */
+static float g_obl_active_brush_autosmooth = 0.0f;
+static float g_obl_active_brush_normal_weight = 0.0f;
+static float g_obl_active_brush_crease_pinch = 0.0f;
+static float g_obl_active_brush_rake = 0.0f;
+static float g_obl_active_brush_height = 0.0f;
+static float g_obl_active_brush_tip_roundness = 0.0f;
+static float g_obl_active_brush_elastic_preserve = 0.0f;
+static float g_obl_active_brush_plane_offset = 0.0f;
 
 extern "C" void blenderSetActiveTool(const char *idname);
 
@@ -858,6 +868,7 @@ int mainBlenderLoop(void*pContext) {
       if (br != NULL) {
         int req_type = 0;
         int req_ival = 0;
+        int req_param = 0;
         float req_fval = 0.0f;
         float req_rgb[3] = {0.0f, 0.0f, 0.0f};
         bool req_pending = false;
@@ -867,6 +878,7 @@ int mainBlenderLoop(void*pContext) {
             req_pending = true;
             req_type = g_brush_req_type;
             req_ival = g_brush_req_ival;
+            req_param = g_brush_req_param;
             req_fval = g_brush_req_fval;
             copy_v3_v3(req_rgb, g_brush_req_rgb);
             g_brush_req_pending = false;
@@ -874,6 +886,14 @@ int mainBlenderLoop(void*pContext) {
           g_obl_active_brush_size = BKE_brush_size_get(scene, br);
           g_obl_active_brush_strength = BKE_brush_alpha_get(scene, br);
           copy_v3_v3(g_obl_active_brush_color, BKE_brush_color_get(scene, br));
+          g_obl_active_brush_autosmooth = br->autosmooth_factor;
+          g_obl_active_brush_normal_weight = br->normal_weight;
+          g_obl_active_brush_crease_pinch = br->crease_pinch_factor;
+          g_obl_active_brush_rake = br->rake_factor;
+          g_obl_active_brush_height = br->height;
+          g_obl_active_brush_tip_roundness = br->tip_roundness;
+          g_obl_active_brush_elastic_preserve = br->elastic_deform_volume_preservation;
+          g_obl_active_brush_plane_offset = br->plane_offset;
         }
         if (req_pending) {
           if (req_type == 1) {
@@ -893,6 +913,20 @@ int mainBlenderLoop(void*pContext) {
             copy_v3_v3(g_obl_active_brush_color, BKE_brush_color_get(scene, br));
             __android_log_print(ANDROID_LOG_INFO, "OBL.WHEEL",
                 "brush color set -> %.3f %.3f %.3f", req_rgb[0], req_rgb[1], req_rgb[2]);
+          }
+          else if (req_type == 4) {
+            switch (req_param) {
+              case 1: br->autosmooth_factor = CLAMP(req_fval, 0.0f, 1.0f); break;
+              case 2: br->normal_weight = CLAMP(req_fval, 0.0f, 1.0f); break;
+              case 3: br->crease_pinch_factor = CLAMP(req_fval, 0.0f, 1.0f); break;
+              case 4: br->rake_factor = CLAMP(req_fval, 0.0f, 1.0f); break;
+              case 5: br->height = CLAMP(req_fval, 0.0f, 1.0f); break;
+              case 6: br->tip_roundness = CLAMP(req_fval, 0.0f, 1.0f); break;
+              case 7: br->elastic_deform_volume_preservation = CLAMP(req_fval, 0.0f, 1.0f); break;
+              case 8: br->plane_offset = CLAMP(req_fval, -0.5f, 0.5f); break;
+            }
+            __android_log_print(ANDROID_LOG_INFO, "OBL.WHEEL",
+                "brush param[%d] set -> %.3f", req_param, req_fval);
           }
           DEG_id_tag_update(&br->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
           WM_event_add_notifier(C, NC_BRUSH | NA_EDITED, br);
@@ -985,6 +1019,30 @@ void oblSetActiveBrushColor(float r, float g, float b){
   g_brush_req_rgb[0] = r;
   g_brush_req_rgb[1] = g;
   g_brush_req_rgb[2] = b;
+  g_brush_req_pending = true;
+}
+
+/* Fase 3: params extra del brush (field ids sincronizados con Kotlin FIELD_*). */
+float oblGetActiveBrushExtra(int field){
+  std::lock_guard<std::mutex> lock(g_brush_mutex);
+  switch (field) {
+    case 1: return g_obl_active_brush_autosmooth;
+    case 2: return g_obl_active_brush_normal_weight;
+    case 3: return g_obl_active_brush_crease_pinch;
+    case 4: return g_obl_active_brush_rake;
+    case 5: return g_obl_active_brush_height;
+    case 6: return g_obl_active_brush_tip_roundness;
+    case 7: return g_obl_active_brush_elastic_preserve;
+    case 8: return g_obl_active_brush_plane_offset;
+  }
+  return 0.0f;
+}
+
+void oblSetActiveBrushExtra(int field, float v){
+  std::lock_guard<std::mutex> lock(g_brush_mutex);
+  g_brush_req_type = 4;
+  g_brush_req_param = field;
+  g_brush_req_fval = v;
   g_brush_req_pending = true;
 }
 

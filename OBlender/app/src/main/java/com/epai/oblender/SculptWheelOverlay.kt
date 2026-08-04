@@ -171,32 +171,126 @@ private const val SPHERE_ACTIVE = 30f // radio base de la esfera activa (px)
 private const val SPHERE_IDLE = 24f   // radio base del resto (px)
 
 // --- Mini menu (long-press en un tool) ---
-// Card redondeada arriba de la banda. Fase 1: 2 sliders (Radius + Strength).
-// Fase 2: +3 sliders HSV (Hue/Saturation/Value) para brushes que pintan color
-// (Paint, Smear, Draw Face Sets, Displacement Eraser/Smear -> brush->rgb).
-// La ventana crece hacia arriba en PANEL_H(+COLOR) + PANEL_GAP px cuando el panel está abierto.
+// Card redondeada arriba de la banda. Filas generadas por panelRows():
+// Radius + Strength (siempre) + picker HSV (solo Paint, tiene brush->rgb) +
+// params extra por tool (Fase 3, verificados contra las capacidades RNA del
+// fork: has_color/has_pinch_factor/has_rake_factor/has_normal_weight/has_height,
+// has_plane_offset, has_auto_smooth).
+// La ventana crece hacia arriba en panelHeight(rows) + PANEL_GAP px.
 private const val PANEL_W = 220f
-private const val PANEL_H = 96f
-private const val PANEL_H_COLOR = 200f
 private const val PANEL_GAP = 10f
 private const val PANEL_TITLE_Y = 16f
-private const val ROW1_Y = 40f   // centro del track de Radius (y en canvas, arriba del arco)
-private const val ROW2_Y = 72f   // centro del track de Strength
-private const val ROW3_Y = 104f  // Hue
-private const val ROW4_Y = 136f  // Saturation
-private const val ROW5_Y = 168f  // Value
+private const val ROW1_Y = 40f   // centro del track del primer slider (step 32)
+private const val ROW_STEP = 32f
 private const val TRACK_HALF = 9f
 private const val RADIUS_MIN = 2
 private const val RADIUS_MAX = 150
 
-/** Brushes que pintan color (brush->rgb): el panel se amplía con el picker HSV. */
-private val paintTools = setOf(
-    "Paint", "Smear", "Draw Face Sets",
-    "Multires Displacement Eraser", "Multires Displacement Smear"
-)
+/** Único brush de sculpt que usa brush->rgb (color) en este fork:
+ *  `rna_BrushCapabilitiesSculpt_has_color_get` = ELEM(tool, SCULPT_TOOL_PAINT).
+ *  Smear mezcla colores existentes, Draw Face Sets usa color aleatorio y los
+ *  Displacement operan el mesh -> NO tienen color picker. */
+private val colorTools = setOf("Paint")
 
 private fun panelHasColor(panelIndex: Int): Boolean =
-    panelIndex >= 0 && panelIndex < sculptTools.size && sculptTools[panelIndex] in paintTools
+    panelIndex >= 0 && panelIndex < sculptTools.size && sculptTools[panelIndex] in colorTools
+
+/** Campo del Brush (creator.cc switch g_brush_req_param). Sincronizado con C++. */
+private const val FIELD_AUTOSMOOTH = 1
+private const val FIELD_NORMAL_WEIGHT = 2
+private const val FIELD_CREASE_PINCH = 3
+private const val FIELD_RAKE = 4
+private const val FIELD_HEIGHT = 5
+private const val FIELD_TIP_ROUNDNESS = 6
+private const val FIELD_ELASTIC_PRESERVE = 7
+private const val FIELD_PLANE_OFFSET = 8
+
+private data class ExtraParam(val field: Int, val name: String, val min: Float, val max: Float)
+
+/** Params extra por tool (capabilities reales del fork). DNA: autosmooth_factor,
+ *  normal_weight, crease_pinch_factor, rake_factor, height, tip_roundness,
+ *  elastic_deform_volume_preservation, plane_offset. */
+private val toolExtras: Map<String, List<ExtraParam>> = mapOf(
+    "Snake Hook" to listOf(
+        ExtraParam(FIELD_RAKE, "Rake", 0f, 1f),
+        ExtraParam(FIELD_CREASE_PINCH, "Magnify", 0f, 1f),
+        ExtraParam(FIELD_NORMAL_WEIGHT, "Nrm Wgt", 0f, 1f)
+    ),
+    "Crease" to listOf(
+        ExtraParam(FIELD_AUTOSMOOTH, "Smooth", 0f, 1f),
+        ExtraParam(FIELD_CREASE_PINCH, "Pinch", 0f, 1f)
+    ),
+    "Blob" to listOf(
+        ExtraParam(FIELD_AUTOSMOOTH, "Smooth", 0f, 1f),
+        ExtraParam(FIELD_CREASE_PINCH, "Magnify", 0f, 1f)
+    ),
+    "Layer" to listOf(
+        ExtraParam(FIELD_AUTOSMOOTH, "Smooth", 0f, 1f),
+        ExtraParam(FIELD_HEIGHT, "Height", 0f, 1f)
+    ),
+    "Clay Strips" to listOf(
+        ExtraParam(FIELD_AUTOSMOOTH, "Smooth", 0f, 1f),
+        ExtraParam(FIELD_PLANE_OFFSET, "Offset", -0.5f, 0.5f),
+        ExtraParam(FIELD_TIP_ROUNDNESS, "Round", 0f, 1f)
+    ),
+    "Clay" to listOf(
+        ExtraParam(FIELD_AUTOSMOOTH, "Smooth", 0f, 1f),
+        ExtraParam(FIELD_PLANE_OFFSET, "Offset", -0.5f, 0.5f)
+    ),
+    "Clay Thumb" to listOf(
+        ExtraParam(FIELD_AUTOSMOOTH, "Smooth", 0f, 1f),
+        ExtraParam(FIELD_PLANE_OFFSET, "Offset", -0.5f, 0.5f)
+    ),
+    "Fill" to listOf(
+        ExtraParam(FIELD_AUTOSMOOTH, "Smooth", 0f, 1f),
+        ExtraParam(FIELD_PLANE_OFFSET, "Offset", -0.5f, 0.5f)
+    ),
+    "Flatten" to listOf(
+        ExtraParam(FIELD_AUTOSMOOTH, "Smooth", 0f, 1f),
+        ExtraParam(FIELD_PLANE_OFFSET, "Offset", -0.5f, 0.5f)
+    ),
+    "Scrape" to listOf(
+        ExtraParam(FIELD_AUTOSMOOTH, "Smooth", 0f, 1f),
+        ExtraParam(FIELD_PLANE_OFFSET, "Offset", -0.5f, 0.5f)
+    ),
+    "Multi-plane Scrape" to listOf(ExtraParam(FIELD_AUTOSMOOTH, "Smooth", 0f, 1f)),
+    "Draw" to listOf(ExtraParam(FIELD_AUTOSMOOTH, "Smooth", 0f, 1f)),
+    "Draw Sharp" to listOf(ExtraParam(FIELD_AUTOSMOOTH, "Smooth", 0f, 1f)),
+    "Inflate" to listOf(ExtraParam(FIELD_AUTOSMOOTH, "Smooth", 0f, 1f)),
+    "Pinch" to listOf(ExtraParam(FIELD_AUTOSMOOTH, "Smooth", 0f, 1f)),
+    "Nudge" to listOf(ExtraParam(FIELD_AUTOSMOOTH, "Smooth", 0f, 1f)),
+    "Rotate" to listOf(ExtraParam(FIELD_AUTOSMOOTH, "Smooth", 0f, 1f)),
+    "Slide Relax" to listOf(ExtraParam(FIELD_AUTOSMOOTH, "Smooth", 0f, 1f)),
+    "Boundary" to listOf(ExtraParam(FIELD_AUTOSMOOTH, "Smooth", 0f, 1f)),
+    "Cloth" to listOf(ExtraParam(FIELD_AUTOSMOOTH, "Smooth", 0f, 1f)),
+    "Grab" to listOf(ExtraParam(FIELD_NORMAL_WEIGHT, "Nrm Wgt", 0f, 1f)),
+    "Elastic Deform" to listOf(
+        ExtraParam(FIELD_NORMAL_WEIGHT, "Nrm Wgt", 0f, 1f),
+        ExtraParam(FIELD_ELASTIC_PRESERVE, "Preserve", 0f, 1f)
+    )
+)
+
+/** Filas del panel: 1=Radius, 2=Strength, 3..5=H/S/V (solo si hasColor),
+ *  100+field = param extra. y en px, step 32 desde ROW1_Y. */
+private data class PanelRowSpec(val id: Int, val y: Float)
+
+private fun panelRows(hasColor: Boolean, extras: List<ExtraParam>): List<PanelRowSpec> {
+    val rows = mutableListOf<PanelRowSpec>()
+    var y = ROW1_Y
+    rows += PanelRowSpec(1, y); y += ROW_STEP
+    rows += PanelRowSpec(2, y); y += ROW_STEP
+    if (hasColor) {
+        rows += PanelRowSpec(3, y); y += ROW_STEP
+        rows += PanelRowSpec(4, y); y += ROW_STEP
+        rows += PanelRowSpec(5, y); y += ROW_STEP
+    }
+    for (e in extras) {
+        rows += PanelRowSpec(100 + e.field, y); y += ROW_STEP
+    }
+    return rows
+}
+
+private fun panelHeight(rows: List<PanelRowSpec>): Float = 24f + rows.size * ROW_STEP + 8f
 
 /** HSV -> RGB (0..1). h en grados 0..360, s/v 0..1. */
 private fun hsvToRgb(h: Float, s: Float, v: Float): Triple<Float, Float, Float> {
@@ -305,6 +399,8 @@ fun CarouselDock() {
     var panelHue by remember { mutableStateOf(0f) }
     var panelSat by remember { mutableStateOf(1f) }
     var panelVal by remember { mutableStateOf(0.5f) }
+    // Fase 3: valores de los params extra por tool (field -> valor actual).
+    val panelExtras = remember { androidx.compose.runtime.mutableStateMapOf<Int, Float>() }
 
     // Posición del chevron (manija de colapsar/expandir): colapsado -> centro de la
     // ventana chica; expandido -> sobre la curvatura superior del arco.
@@ -372,15 +468,28 @@ fun CarouselDock() {
     }
 
     // Altura extra (px) que debe crecer la ventana del overlay para alojar el panel.
-    fun panelHeightPx(): Int =
-        if (panelIndex < 0) 0
-        else (if (panelHasColor(panelIndex)) PANEL_H_COLOR else PANEL_H).toInt() + PANEL_GAP.toInt()
+    fun panelHeightPx(): Int {
+        if (panelIndex < 0) return 0
+        val extras = toolExtras[sculptTools[panelIndex]] ?: emptyList()
+        val rows = panelRows(panelHasColor(panelIndex), extras)
+        return (panelHeight(rows) + PANEL_GAP).toInt()
+    }
 
     // Aplica el color HSV actual del panel al brush activo (en vivo, como radius/strength).
     fun pushColor() {
         val (r, g, b) = hsvToRgb(panelHue, panelSat, panelVal)
         OBLNativeActivity.setActiveBrushColorStatic(r, g, b)
     }
+
+    // Aplica un param extra (field id) al valor ya guardado en panelExtras.
+    fun pushExtra(field: Int) {
+        val v = panelExtras[field] ?: return
+        OBLNativeActivity.setActiveBrushExtraStatic(field, v)
+    }
+
+    // Valor 0..1 de un slider según posición X (rango del param).
+    fun sliderValueToFrac(v: Float, min: Float, max: Float): Float =
+        ((v - min) / (max - min)).coerceIn(0f, 1f)
 
     // Carga (una vez, cacheada) el icono de Clay desde res/drawable/clay.xml.
     // Se infla/rasteriza FUERA del hilo principal (el vector tiene 2251 paths; el
@@ -451,6 +560,10 @@ fun CarouselDock() {
                     panelSat = hsv[1]
                     panelVal = hsv[2]
                 }
+                val extras = toolExtras[sculptTools[panelIndex]] ?: emptyList()
+                for (e in extras) {
+                    panelExtras[e.field] = OBLNativeActivity.getActiveBrushExtraStatic(e.field)
+                }
             }
         }
     }
@@ -487,12 +600,13 @@ fun CarouselDock() {
                         // Tap fuera de sliders NO cierra (anti-cierre accidental al
                         // mover la barra con el dedo apenas desviado de la fila).
                         if (panelIndex >= 0) {
-                            val hasColor = panelHasColor(panelIndex)
                             if (isPanelCloseHit(pos.x, pos.y, cx)) {
                                 panelIndex = -1
                                 return@onTap
                             }
-                            val s = sliderHit(pos.x, pos.y, cx, hasColor)
+                            val extras = toolExtras[sculptTools[panelIndex]] ?: emptyList()
+                            val rows = panelRows(panelHasColor(panelIndex), extras)
+                            val s = sliderHit(pos.x, pos.y, cx, rows)
                             when (s) {
                                 1 -> {
                                     panelRadius =
@@ -514,6 +628,15 @@ fun CarouselDock() {
                                 5 -> {
                                     panelVal = sliderFrac(pos.x, cx)
                                     pushColor()
+                                }
+                                else -> {
+                                    if (s >= 100) {
+                                        val e = extras.firstOrNull { it.field == s - 100 }
+                                            ?: return@onTap
+                                        val v = sliderFrac(pos.x, cx) * (e.max - e.min) + e.min
+                                        panelExtras[e.field] = v
+                                        pushExtra(e.field)
+                                    }
                                 }
                             }
                             return@onTap
@@ -574,13 +697,14 @@ fun CarouselDock() {
                         // Drag fuera de sliders NO cierra (antes lo cerraba y el drag del
                         // carrusel con el dedo apenas desviado del track cerraba el menú).
                         if (panelIndex >= 0) {
-                            val hasColor = panelHasColor(panelIndex)
                             if (isPanelCloseHit(start.x, start.y, cx)) {
                                 panelIndex = -1
                                 return@detectDragGestures
                             }
-                            val s = sliderHit(start.x, start.y, cx, hasColor)
-                            if (s in 1..5) {
+                            val extras = toolExtras[sculptTools[panelIndex]] ?: emptyList()
+                            val rows = panelRows(panelHasColor(panelIndex), extras)
+                            val s = sliderHit(start.x, start.y, cx, rows)
+                            if (s == 1 || s == 2 || (s in 3..5) || s >= 100) {
                                 panelDrag = s
                             }
                             return@detectDragGestures
@@ -675,6 +799,18 @@ fun CarouselDock() {
                                         pushColor()
                                     }
                                 }
+                                else -> {
+                                    if (panelDrag >= 100) {
+                                        val extras = toolExtras[sculptTools[panelIndex]] ?: emptyList()
+                                        val e = extras.firstOrNull { it.field == panelDrag - 100 }
+                                            ?: return@detectDragGestures
+                                        val v = frac * (e.max - e.min) + e.min
+                                        if (abs(v - (panelExtras[e.field] ?: v)) > 0.002f * (e.max - e.min)) {
+                                            panelExtras[e.field] = v
+                                            pushExtra(e.field)
+                                        }
+                                    }
+                                }
                             }
                             return@detectDragGestures
                         }
@@ -764,7 +900,9 @@ fun CarouselDock() {
                     hasColor = panelHasColor(panelIndex),
                     hue = panelHue,
                     sat = panelSat,
-                    value = panelVal
+                    value = panelVal,
+                    extras = toolExtras[sculptTools[panelIndex]] ?: emptyList(),
+                    extraValues = panelExtras
                 )
             }
         }
@@ -873,18 +1011,14 @@ fun collapsedWheelWindowSize(): Pair<Int, Int> = 112 to 60
 private fun isPanelCloseHit(x: Float, y: Float, cx: Float): Boolean =
     hypot(x - (cx + PANEL_W / 2f - 16f), y - 16f) <= 18f
 
-/** Hit-test de los sliders del panel: 1 = Radius, 2 = Strength, 3 = Hue, 4 = Saturation,
- *  5 = Value, 0 = fuera de sliders. Las filas de color solo existen si hasColor. */
-private fun sliderHit(x: Float, y: Float, cx: Float, hasColor: Boolean): Int {
+/** Hit-test de los sliders del panel según sus filas: devuelve el id de la fila
+ *  (1=Radius, 2=Strength, 3..5=H/S/V, 100+field=extra) o 0 si no cae en ninguna. */
+private fun sliderHit(x: Float, y: Float, cx: Float, rows: List<PanelRowSpec>): Int {
     val left = cx - PANEL_W / 2f + 12f
     val right = cx + PANEL_W / 2f - 12f
     if (x < left || x > right) return 0
-    if (abs(y - ROW1_Y) <= TRACK_HALF + 4f) return 1
-    if (abs(y - ROW2_Y) <= TRACK_HALF + 4f) return 2
-    if (hasColor) {
-        if (abs(y - ROW3_Y) <= TRACK_HALF + 4f) return 3
-        if (abs(y - ROW4_Y) <= TRACK_HALF + 4f) return 4
-        if (abs(y - ROW5_Y) <= TRACK_HALF + 4f) return 5
+    for (r in rows) {
+        if (abs(y - r.y) <= TRACK_HALF + 4f) return r.id
     }
     return 0
 }
@@ -940,9 +1074,9 @@ private suspend fun androidx.compose.ui.input.pointer.PointerInputScope.detectLo
 }
 
 /** Mini menu: card redondeada arriba del arco con los sliders del brush.
- *  Fase 1: Radius + Strength. Fase 2: + swatch de color + Hue/Sat/Value (si hasColor).
- *  Aplicación en vivo al mover (el setter JNI solo stash; el drain del render thread
- *  aplica al brush activo). */
+ *  Filas = panelRows(hasColor, extras): Radius + Strength siempre, + HSV si hasColor
+ *  (solo Paint), + params extra por tool (Fase 3). Aplicación en vivo al mover (el
+ *  setter JNI solo stash; el drain del render thread aplica al brush activo). */
 private fun DrawScope.drawBrushPanel(
     cx: Float,
     label: String,
@@ -951,9 +1085,12 @@ private fun DrawScope.drawBrushPanel(
     hasColor: Boolean,
     hue: Float,
     sat: Float,
-    value: Float
+    value: Float,
+    extras: List<ExtraParam>,
+    extraValues: Map<Int, Float>
 ) {
-    val panelH = if (hasColor) PANEL_H_COLOR else PANEL_H
+    val rows = panelRows(hasColor, extras)
+    val panelH = panelHeight(rows)
     val left = cx - PANEL_W / 2f
     drawRoundRect(
         color = Color(0xE62B2B2B),
@@ -1028,27 +1165,38 @@ private fun DrawScope.drawBrushPanel(
             strokeCap = Paint.Cap.ROUND
         }
     )
-    drawSlider(cx, ROW1_Y, "Radius", radius.toString(), (radius - RADIUS_MIN).toFloat() / (RADIUS_MAX - RADIUS_MIN))
-    drawSlider(cx, ROW2_Y, "Strength", String.format("%.2f", strength), strength.coerceIn(0f, 1f))
-    if (hasColor) {
-        val cur = hsvToColorInt(hue, sat, value)
-        drawSlider(
-            cx, ROW3_Y, "Hue", String.format("%.0f", hue), hue / 360f,
-            track = Brush.linearGradient(
-                colors = listOf(
-                    Color(0xFFFF0000), Color(0xFFFFFF00), Color(0xFF00FF00),
-                    Color(0xFF00FFFF), Color(0xFF0000FF), Color(0xFFFF00FF), Color(0xFFFF0000)
+    val cur = hsvToColorInt(hue, sat, value)
+    for (r in rows) {
+        when (r.id) {
+            1 -> drawSlider(
+                cx, r.y, "Radius", radius.toString(),
+                (radius - RADIUS_MIN).toFloat() / (RADIUS_MAX - RADIUS_MIN)
+            )
+            2 -> drawSlider(cx, r.y, "Strength", String.format("%.2f", strength), strength.coerceIn(0f, 1f))
+            3 -> drawSlider(
+                cx, r.y, "Hue", String.format("%.0f", hue), hue / 360f,
+                track = Brush.linearGradient(
+                    colors = listOf(
+                        Color(0xFFFF0000), Color(0xFFFFFF00), Color(0xFF00FF00),
+                        Color(0xFF00FFFF), Color(0xFF0000FF), Color(0xFFFF00FF), Color(0xFFFF0000)
+                    )
                 )
             )
-        )
-        drawSlider(
-            cx, ROW4_Y, "Sat", String.format("%d%%", (sat * 100f).roundToInt()), sat,
-            track = Brush.linearGradient(colors = listOf(Color(0xFFFFFFFF), Color(cur)))
-        )
-        drawSlider(
-            cx, ROW5_Y, "Val", String.format("%d%%", (value * 100f).roundToInt()), value,
-            track = Brush.linearGradient(colors = listOf(Color(0xFF000000), Color(cur)))
-        )
+            4 -> drawSlider(
+                cx, r.y, "Sat", String.format("%d%%", (sat * 100f).roundToInt()), sat,
+                track = Brush.linearGradient(colors = listOf(Color(0xFFFFFFFF), Color(cur)))
+            )
+            5 -> drawSlider(
+                cx, r.y, "Val", String.format("%d%%", (value * 100f).roundToInt()), value,
+                track = Brush.linearGradient(colors = listOf(Color(0xFF000000), Color(cur)))
+            )
+            else -> {
+                val e = extras.firstOrNull { it.field == r.id - 100 } ?: continue
+                val ev = extraValues[e.field] ?: e.min
+                val frac = ((ev - e.min) / (e.max - e.min)).coerceIn(0f, 1f)
+                drawSlider(cx, r.y, e.name, String.format("%.2f", ev), frac)
+            }
+        }
     }
 }
 

@@ -18,8 +18,11 @@ extern int oblGetActiveMode(void);
 extern int oblGetActiveBrushRadius(void);
 extern float oblGetActiveBrushStrength(void);
 extern void oblGetActiveBrushColor(float rgb[3]);
+extern float oblGetActiveBrushExtra(int field);
 extern void oblSetActiveBrushRadius(int px);
 extern void oblSetActiveBrushStrength(float strength);
+extern void oblSetActiveBrushColor(float r, float g, float b);
+extern void oblSetActiveBrushExtra(int field, float v);
 extern void oblSetActiveBrushColor(float r, float g, float b);
 extern void oblSetSculptToolRequest(const char *idname);
 extern void inputKey(int p_physical_keycode,

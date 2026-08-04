@@ -366,6 +366,11 @@ public class OBLNativeActivity extends NativeActivity
     /** Sculpt wheel mini menu: set the active brush color (linear rgb 0..1, drained on render thread). */
     public native void setActiveBrushColor(float r, float g, float b);
 
+    /** Sculpt wheel mini menu (Fase 3): get/set an extra brush param (field id, valor 0..1 o rango propio). */
+    public native float getActiveBrushExtra(int field);
+
+    public native void setActiveBrushExtra(int field, float value);
+
     /** Sculpt wheel overlay: set the active sculpt tool directly (bypasses key dispatch). */
     public native void oblSetToolById(String idname);
 
@@ -435,6 +440,17 @@ public class OBLNativeActivity extends NativeActivity
     /** Static accessor: set active sculpt brush color (linear rgb 0..1). */
     public static void setActiveBrushColorStatic(float r, float g, float b) {
         if (sActivity != null) sActivity.setActiveBrushColor(r, g, b);
+    }
+
+    /** Static accessor: lee un param extra del brush activo (Fase 3). */
+    public static float getActiveBrushExtraStatic(int field) {
+        if (sActivity == null) return 0.0f;
+        return sActivity.getActiveBrushExtra(field);
+    }
+
+    /** Static accessor: escribe un param extra del brush activo (Fase 3). */
+    public static void setActiveBrushExtraStatic(int field, float value) {
+        if (sActivity != null) sActivity.setActiveBrushExtra(field, value);
     }
 
     @Override
