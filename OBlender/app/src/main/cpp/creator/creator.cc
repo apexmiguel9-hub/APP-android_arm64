@@ -916,14 +916,14 @@ int mainBlenderLoop(void*pContext) {
           }
           else if (req_type == 4) {
             switch (req_param) {
-              case 1: br->autosmooth_factor = CLAMP(req_fval, 0.0f, 1.0f); break;
-              case 2: br->normal_weight = CLAMP(req_fval, 0.0f, 1.0f); break;
-              case 3: br->crease_pinch_factor = CLAMP(req_fval, 0.0f, 1.0f); break;
-              case 4: br->rake_factor = CLAMP(req_fval, 0.0f, 1.0f); break;
-              case 5: br->height = CLAMP(req_fval, 0.0f, 1.0f); break;
-              case 6: br->tip_roundness = CLAMP(req_fval, 0.0f, 1.0f); break;
-              case 7: br->elastic_deform_volume_preservation = CLAMP(req_fval, 0.0f, 1.0f); break;
-              case 8: br->plane_offset = CLAMP(req_fval, -0.5f, 0.5f); break;
+              case 1: br->autosmooth_factor = CLAMPIS(req_fval, 0.0f, 1.0f); break;
+              case 2: br->normal_weight = CLAMPIS(req_fval, 0.0f, 1.0f); break;
+              case 3: br->crease_pinch_factor = CLAMPIS(req_fval, 0.0f, 1.0f); break;
+              case 4: br->rake_factor = CLAMPIS(req_fval, 0.0f, 1.0f); break;
+              case 5: br->height = CLAMPIS(req_fval, 0.0f, 1.0f); break;
+              case 6: br->tip_roundness = CLAMPIS(req_fval, 0.0f, 1.0f); break;
+              case 7: br->elastic_deform_volume_preservation = CLAMPIS(req_fval, 0.0f, 1.0f); break;
+              case 8: br->plane_offset = CLAMPIS(req_fval, -0.5f, 0.5f); break;
             }
             __android_log_print(ANDROID_LOG_INFO, "OBL.WHEEL",
                 "brush param[%d] set -> %.3f", req_param, req_fval);
