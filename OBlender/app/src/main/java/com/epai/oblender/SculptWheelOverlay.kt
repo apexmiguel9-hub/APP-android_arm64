@@ -483,9 +483,15 @@ fun CarouselDock() {
                             collapsed = false
                             return@onTap
                         }
-                        // Panel abierto: tap en un slider lo ajusta; fuera de sliders lo cierra.
+                        // Panel abierto: el tap SOLO ajusta un slider o cierra con la X.
+                        // Tap fuera de sliders NO cierra (anti-cierre accidental al
+                        // mover la barra con el dedo apenas desviado de la fila).
                         if (panelIndex >= 0) {
                             val hasColor = panelHasColor(panelIndex)
+                            if (isPanelCloseHit(pos.x, pos.y, cx)) {
+                                panelIndex = -1
+                                return@onTap
+                            }
                             val s = sliderHit(pos.x, pos.y, cx, hasColor)
                             when (s) {
                                 1 -> {
@@ -509,7 +515,6 @@ fun CarouselDock() {
                                     panelVal = sliderFrac(pos.x, cx)
                                     pushColor()
                                 }
-                                else -> panelIndex = -1
                             }
                             return@onTap
                         }
@@ -565,15 +570,18 @@ fun CarouselDock() {
                             collapsed = false
                             return@detectDragGestures
                         }
-                        // Panel abierto: drag sobre un slider lo ajusta en vivo; drag
-                        // fuera de sliders cierra el panel (y no toca el carrusel).
+                        // Panel abierto: el drag SOLO ajusta un slider o cierra con la X.
+                        // Drag fuera de sliders NO cierra (antes lo cerraba y el drag del
+                        // carrusel con el dedo apenas desviado del track cerraba el menú).
                         if (panelIndex >= 0) {
                             val hasColor = panelHasColor(panelIndex)
+                            if (isPanelCloseHit(start.x, start.y, cx)) {
+                                panelIndex = -1
+                                return@detectDragGestures
+                            }
                             val s = sliderHit(start.x, start.y, cx, hasColor)
                             if (s in 1..5) {
                                 panelDrag = s
-                            } else {
-                                panelIndex = -1
                             }
                             return@detectDragGestures
                         }
@@ -861,6 +869,10 @@ fun wheelWindowSize(context: Context): Pair<Int, Int> {
 /** Tamaño de la ventana COLAPSADA (px): solo el chevron/manija. */
 fun collapsedWheelWindowSize(): Pair<Int, Int> = 112 to 60
 
+/** Hit-test del botón X (cerrar el panel), esquina superior derecha de la card. */
+private fun isPanelCloseHit(x: Float, y: Float, cx: Float): Boolean =
+    hypot(x - (cx + PANEL_W / 2f - 16f), y - 16f) <= 18f
+
 /** Hit-test de los sliders del panel: 1 = Radius, 2 = Strength, 3 = Hue, 4 = Saturation,
  *  5 = Value, 0 = fuera de sliders. Las filas de color solo existen si hasColor. */
 private fun sliderHit(x: Float, y: Float, cx: Float, hasColor: Boolean): Int {
@@ -956,8 +968,10 @@ private fun DrawScope.drawBrushPanel(
         cornerRadius = androidx.compose.ui.geometry.CornerRadius(12f),
         style = Stroke(width = 2f)
     )
+    // Título (truncado para nombres largos, sin chocar con la X ni el swatch).
+    val title = if (label.length > 18) label.take(17) + "…" else label
     drawContext.canvas.nativeCanvas.drawText(
-        label,
+        title,
         cx,
         PANEL_TITLE_Y,
         Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -968,22 +982,52 @@ private fun DrawScope.drawBrushPanel(
         }
     )
     if (hasColor) {
-        // Swatch de preview del color actual (abajo-derecha del título).
+        // Swatch de preview del color actual (arriba-izquierda del título).
         val cur = hsvToColorInt(hue, sat, value)
         drawRoundRect(
             color = Color(cur),
-            topLeft = Offset(cx + PANEL_W / 2f - 30f, PANEL_TITLE_Y - 11f),
+            topLeft = Offset(cx - PANEL_W / 2f + 12f, PANEL_TITLE_Y - 11f),
             size = Size(18f, 18f),
             cornerRadius = androidx.compose.ui.geometry.CornerRadius(4f)
         )
         drawRoundRect(
             color = Color(0xFFCC6F03),
-            topLeft = Offset(cx + PANEL_W / 2f - 30f, PANEL_TITLE_Y - 11f),
+            topLeft = Offset(cx - PANEL_W / 2f + 12f, PANEL_TITLE_Y - 11f),
             size = Size(18f, 18f),
             cornerRadius = androidx.compose.ui.geometry.CornerRadius(4f),
             style = Stroke(width = 1.5f)
         )
     }
+    // Botón X (cerrar el panel): esquina superior derecha.
+    val xc = cx + PANEL_W / 2f - 16f
+    val yc = 16f
+    drawCircle(
+        color = Color(0xFF3A3A3A),
+        radius = 10f,
+        center = Offset(xc, yc)
+    )
+    drawCircle(
+        color = Color(0xFFCC6F03),
+        radius = 10f,
+        center = Offset(xc, yc),
+        style = Stroke(width = 1.5f)
+    )
+    drawContext.canvas.nativeCanvas.drawLine(
+        xc - 4.5f, yc - 4.5f, xc + 4.5f, yc + 4.5f,
+        Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.rgb(0xD0, 0xD0, 0xD0)
+            strokeWidth = 2f
+            strokeCap = Paint.Cap.ROUND
+        }
+    )
+    drawContext.canvas.nativeCanvas.drawLine(
+        xc - 4.5f, yc + 4.5f, xc + 4.5f, yc - 4.5f,
+        Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.rgb(0xD0, 0xD0, 0xD0)
+            strokeWidth = 2f
+            strokeCap = Paint.Cap.ROUND
+        }
+    )
     drawSlider(cx, ROW1_Y, "Radius", radius.toString(), (radius - RADIUS_MIN).toFloat() / (RADIUS_MAX - RADIUS_MIN))
     drawSlider(cx, ROW2_Y, "Strength", String.format("%.2f", strength), strength.coerceIn(0f, 1f))
     if (hasColor) {
