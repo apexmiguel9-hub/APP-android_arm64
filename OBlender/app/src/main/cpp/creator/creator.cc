@@ -62,6 +62,7 @@ static bool g_dpi_initialized = false;
 #include "BKE_sound.h"
 #include "BKE_vfont.h"
 #include "BKE_volume.h"
+#include "DNA_brush_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_screen_types.h"
 #include "DNA_space_types.h"
