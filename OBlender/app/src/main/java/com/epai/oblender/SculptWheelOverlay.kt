@@ -91,19 +91,17 @@ private val nonBrushTools = mapOf(
 
 private fun toolId(label: String) = nonBrushTools[label] ?: "builtin_brush." + label
 
-/** Icono del tool Clay (clay.xml, vector 1024x1032 ~462KB). Se infla desde res/raw
- *  (no res/drawable: un pathData tan grande se pasa del límite del string-pool de
- *  AAPT2 y falla al compilar) con android.graphics.drawable.VectorDrawable.createFromXml,
- *  que parsea el XML directo del raw (sin string-pool, sin límite de tamaño). Se
- *  cachea en un Bitmap de ~128px una sola vez. */
+/** Icono del tool Clay (clay.xml, vector 1024x1032 ~462KB) en res/drawable. Se
+ *  infla con ResourcesCompat.getDrawable (vector compilado, mismo camino que el
+ *  prototipo MainActivity_improved.kt que sí lo muestra) y se cachea en un Bitmap
+ *  de ~256px una sola vez. */
 private var clayIconBitmap: android.graphics.Bitmap? = null
 
 private fun loadClayIcon(context: Context): android.graphics.Bitmap? {
     clayIconBitmap?.let { return it }
     try {
         val res = context.resources
-        val parser = res.getXml(R.raw.clay)
-        val drawable = android.graphics.drawable.VectorDrawable.createFromXml(res, parser, null)
+        val drawable = androidx.core.content.res.ResourcesCompat.getDrawable(res, R.drawable.clay, null)
         if (drawable != null) {
             val w = 256
             val h = (256f * 1032f / 1024f).toInt()
