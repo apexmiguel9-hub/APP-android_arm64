@@ -1,35 +1,17 @@
-// DRAFT (LOCAL-ONLY, no commit) — BrushColorPicker HSV circular estilo Blender.
-// Algoritmo basado en el picker inmediato de Blender (source/editors/interface
-// + source/blenkernel/BKE_color.hh): ring hue = theta/2pi, sat radial, val = barra.
-// Reutilizable desde el panel del sculpt wheel. NO integrado todavía a CarouselDock.
-// NOTE: sin Android SDK en este entorno → best-effort; buildear en device/RapidStudio
-// para validar y ajustar. Se conservan los converters (hsvToRgb/rgbToHsv/hsvToColorInt)
-// de SculptWheelOverlay.kt; en el split futuro se unifican en BrushColor.kt.
+// Picker HSV circular estilo Blender, dibujado con android.graphics nativo para
+// encajar en el mini menu del sculpt wheel (todo el panel usa nativeCanvas +
+// hit-test manual). El ring es hue (theta/2pi), el disco interior sat (radial),
+// y el valor se ajusta con el slider "Val" (fila 7) del panel.
 package com.epai.oblender
 
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.RadialGradient
+import android.graphics.Shader
+import android.graphics.SweepGradient
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.hypot
-import kotlin.math.roundToInt
 import kotlin.math.sin
 
 /** HSV -> RGB (0..1). h en grados 0..360, s/v 0..1. */
@@ -50,143 +32,94 @@ internal fun bcpHsvToRgb(h: Float, s: Float, v: Float): Triple<Float, Float, Flo
     }
 }
 
-internal fun bcpColor(h: Float, s: Float, v: Float): Color {
+/** HSV -> ARGB (0xAARRGGBB) para android.graphics. */
+internal fun bcpArgb(h: Float, s: Float, v: Float): Int {
     val (r, g, b) = bcpHsvToRgb(h, s, v)
-    return Color(r, g, b)
+    return Color.rgb((r * 255f).toInt(), (g * 255f).toInt(), (b * 255f).toInt())
 }
 
-private val HUE_STEPS = (0..360 step 12).map { it.toFloat() }
+/** Ancho del anillo de hue en px (depende del radio exterior). */
+private fun bandOf(radius: Float): Float = (radius * 0.34f).coerceIn(18f, 34f)
 
-/**
- * Picker HSV circular estilo Blender.
- * @param hsv FloatArray(3) -> [h° 0..360, s 0..1, v 0..1]
- * @param onHsv callback con el nuevo [h,s,v]
- */
-@Composable
-fun BrushColorPicker(
-    hsv: FloatArray,
-    onHsv: (FloatArray) -> Unit,
-    modifier: Modifier = Modifier,
-    size: Dp = 220.dp
+/** Dibuja el color wheel (ring hue + disco sat + muestra central + marcador hue)
+ *  centrado en (cx, cy) con radio exterior [radius]. El valor [v] se usa solo
+ *  para previsualizar el disco; el ajuste de val es el slider aparte del panel. */
+internal fun drawWheelNative(
+    canvas: android.graphics.Canvas,
+    cx: Float,
+    cy: Float,
+    radius: Float,
+    hue: Float,
+    sat: Float,
+    v: Float
 ) {
-    val hue = hsv.getOrElse(0) { 0f }
-    val sat = hsv.getOrElse(1) { 1f }
-    val v = hsv.getOrElse(2) { 1f }
-    val currentColor = bcpColor(hue, sat, v)
-    val density = LocalDensity.current
-    val sz = with(density) { Size(size.toPx(), size.toPx()) }
+    val band = bandOf(radius)
+    val rIn = radius - band
+    val rMid = (radius + rIn) / 2f
 
-    Box(modifier = modifier.size(size)) {
-        Canvas(
-            modifier = Modifier
-                .fillMaxSize()
-                .pointerInput(Unit) {
-                    detectTapGestures { pos ->
-                        computeHit(pos, sz, hue, sat, v)?.let { onHsv(it) }
-                    }
-                }
-        ) {
-            drawWheel(sz, hue, sat, v, currentColor)
-        }
-
-        // Borde selector hue (piedra)
-        val rOut = sz.minDimension / 2f
-        val sx = (cos(Math.toRadians(hue.toDouble())) * (rOut - 12f)).toFloat()
-        val sy = (sin(Math.toRadians(hue.toDouble())) * (rOut - 12f)).toFloat()
-        Canvas(
-            modifier = Modifier
-                .size(14.dp)
-                .offset { androidx.compose.ui.unit.IntOffset((sz.width / 2f + sx - 7).roundToInt(), (sz.height / 2f + sy - 7).roundToInt()) }
-        ) {
-            drawCircle(Color.White, 4f)
-            drawCircle(currentColor, 2f, style = Stroke(6f))
-        }
-
-        // Barra de brillo (val)
-        BrushValueBar(
-            color = bcpColor(hue, sat, 1f),
-            value = v,
-            onValue = { nv -> onHsv(floatArrayOf(hue, sat, nv)) },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(26.dp)
-                .align(androidx.compose.ui.Alignment.BottomCenter)
-        )
+    // Ring hue: sweep gradient (rojo -> ... -> rojo) alrededor del disco.
+    val sweep = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = band
+        shader = SweepGradient(cx, cy, intArrayOf(
+            Color.rgb(0xFF, 0x00, 0x00), Color.rgb(0xFF, 0xFF, 0x00),
+            Color.rgb(0x00, 0xFF, 0x00), Color.rgb(0x00, 0xFF, 0xFF),
+            Color.rgb(0x00, 0x00, 0xFF), Color.rgb(0xFF, 0x00, 0xFF),
+            Color.rgb(0xFF, 0x00, 0x00)
+        ), null)
     }
+    canvas.drawCircle(cx, cy, rMid, sweep)
+
+    // Disco sat: centro blanco (sat 0) -> borde hue pleno a valor actual (sat 1).
+    val hueFull = bcpArgb(hue, 1f, v)
+    val disc = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        shader = RadialGradient(cx, cy, rIn, intArrayOf(Color.WHITE, hueFull), null,
+            Shader.TileMode.CLAMP)
+    }
+    canvas.drawCircle(cx, cy, rIn, disc)
+
+    // Contorno del anillo interior (separa ring y disco).
+    canvas.drawCircle(cx, cy, rIn, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 1.5f
+        color = Color.argb(80, 0, 0, 0)
+    })
+
+    // Marcador del hue actual sobre el ring.
+    val a = Math.toRadians(hue.toDouble()).toFloat()
+    val mx = cx + cos(a) * rMid
+    val my = cy + sin(a) * rMid
+    val cur = bcpArgb(hue, sat, v)
+    canvas.drawCircle(mx, my, 5f, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+    })
+    canvas.drawCircle(mx, my, 3f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = cur })
+
+    // Muestra del color resultante en el centro del disco.
+    canvas.drawCircle(cx, cy, 11f, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = cur
+        style = Paint.Style.FILL
+    })
+    canvas.drawCircle(cx, cy, 11f, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.argb(120, 0, 0, 0)
+        style = Paint.Style.STROKE
+        strokeWidth = 1.5f
+    })
 }
 
-private fun DrawScope.drawWheel(size: Size, hue: Float, sat: Float, v: Float, currentColor: Color) {
-    val cxy = Offset(size.width / 2f, size.height / 2f)
-    val rOut = minOf(size.width, size.height) / 2f
-    val rIn = rOut - 30f
-    val band = rOut - rIn
-    val rMid = (rOut + rIn) / 2f
-
-    // Ring hue: 60 arcos solidos (~6° c/u) = sweep aproximado (evita Brush.sweepGradient, no existe en este fork)
-    val ringSegs = 60
-    for (i in 0 until ringSegs) {
-        val hDeg = (i * 6f) % 360f
-        drawArc(
-            color = Color.hsv(hDeg, 1f, 1f),
-            startAngle = i * 6f,
-            sweepAngle = 6.01f,
-            useCenter = false,
-            topLeft = Offset(cxy.x - rMid, cxy.y - rMid),
-            size = Size(rMid * 2, rMid * 2),
-            style = Stroke(band)
-        )
-    }
-
-    // Sat: radial transparent -> hue pleno
-    val satBrush = Brush.radialGradient(
-        colors = listOf(Color.Transparent, bcpColor(hue, 1f, v)),
-        center = cxy,
-        radius = rIn
-    )
-    drawCircle(brush = satBrush, radius = rIn, center = cxy)
-
-    // Selector del color resultante en el centro
-    drawCircle(currentColor, radius = 8f, center = cxy, style = Stroke(2f))
-}
-
-@Composable
-private fun BrushValueBar(color: Color, value: Float, onValue: (Float) -> Unit, modifier: Modifier) {
-    Canvas(modifier = modifier.pointerInput(Unit) {
-        detectTapGestures { pos -> onValue((pos.x / size.width).coerceIn(0f, 1f)) }
-    }) {
-        // Gradiente negro->color por strips (evita Brush.horizontalGradient, no existe en este fork)
-        val segs = 32
-        val sw = size.width / segs
-        for (i in 0 until segs) {
-            val f = i / (segs - 1f)
-            drawRect(
-                color = androidx.compose.ui.graphics.lerp(Color.Black, color, f),
-                topLeft = Offset(i * sw, 0f),
-                size = Size(sw + 1f, size.height)
-            )
-        }
-        val sx = value * size.width
-        drawLine(Color.White, Offset(sx, 0f), Offset(sx, size.height), 3f)
-    }
-}
-
-/** Mapea posición touch -> [h,s,v]. null si está fuera del wheel. */
-private fun computeHit(pos: Offset, size: Size, hue: Float, sat: Float, v: Float): FloatArray? {
-    val cx = size.width / 2f
-    val cy = size.height / 2f
-    val dx = pos.x - cx
-    val dy = pos.y - cy
+/** Mapea una posición touch -> [hue, sat]. null si está fuera del wheel.
+ *  Solo toca hue/sat; el valor lo controla el slider "Val" del panel. */
+internal fun hitWheel(x: Float, y: Float, cx: Float, cy: Float, radius: Float): FloatArray? {
+    val dx = x - cx
+    val dy = y - cy
     val dist = hypot(dx, dy)
-    val rOut = minOf(size.width, size.height) / 2f
-    val rIn = rOut - 30f
-    if (dist > rOut) return null
+    val rIn = radius - bandOf(radius)
+    if (dist > radius) return null
     return if (dist > rIn) {
-        // Ring -> hue
         var a = Math.toDegrees(atan2(dy, dx).toDouble()).toFloat()
         if (a < 0) a += 360f
-        floatArrayOf(a, sat, v)
+        floatArrayOf(a, -1f)
     } else {
-        // Interior -> sat (radial), hue/val intactos
-        floatArrayOf(hue, (dist / rIn).coerceIn(0f, 1f), v)
+        floatArrayOf(-1f, (dist / rIn).coerceIn(0f, 1f))
     }
 }

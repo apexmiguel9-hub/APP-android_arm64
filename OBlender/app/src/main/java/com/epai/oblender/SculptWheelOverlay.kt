@@ -183,6 +183,11 @@ private const val PANEL_TITLE_Y = 16f
 private const val ROW1_Y = 40f   // centro del track del primer slider (step 32)
 private const val ROW_STEP = 32f
 private const val TRACK_HALF = 9f
+// Color wheel circular (reemplaza los 3 sliders H/S/V): fila propia de WHEEL_H px
+// de alto con radio WHEEL_R (cabe dentro de PANEL_W=220). El val se ajusta con el
+// slider "Val" (fila 7) debajo del wheel.
+private const val WHEEL_H = 200f
+private const val WHEEL_R = 90f
 private const val RADIUS_MIN = 2
 private const val RADIUS_MAX = 150
 
@@ -247,9 +252,10 @@ private fun panelRows(
     rows += PanelRowSpec(1, 0, y); y += ROW_STEP
     rows += PanelRowSpec(2, 0, y); y += ROW_STEP
     if (hasColor) {
-        rows += PanelRowSpec(3, 0, y); y += ROW_STEP
-        rows += PanelRowSpec(4, 0, y); y += ROW_STEP
-        rows += PanelRowSpec(5, 0, y); y += ROW_STEP
+        // Color wheel circular (id 6): el centro del disco queda en y + WHEEL_H/2.
+        // El valor se ajusta con un slider Val (id 7) debajo del wheel.
+        rows += PanelRowSpec(6, 0, y + WHEEL_H / 2f); y += WHEEL_H
+        rows += PanelRowSpec(7, 0, y); y += ROW_STEP
     }
     for (e in floatExtras) {
         rows += PanelRowSpec(100 + e.field, e.field, y); y += ROW_STEP
@@ -263,7 +269,11 @@ private fun panelRows(
     return rows
 }
 
-private fun panelHeight(rows: List<PanelRowSpec>): Float = 24f + rows.size * ROW_STEP + 8f
+private fun panelHeight(rows: List<PanelRowSpec>): Float {
+    var h = 24f + 8f
+    for (r in rows) h += if (r.id == 6) WHEEL_H else ROW_STEP
+    return h
+}
 
 /** Params extra flotantes por tool (capabilities reales del fork). */
 private val toolFloatExtras: Map<String, List<ExtraParam>> = mapOf(
@@ -689,15 +699,15 @@ fun CarouselDock() {
                                     panelStrength = sliderFrac(pos.x, cx)
                                     OBLNativeActivity.setActiveBrushStrengthStatic(panelStrength)
                                 }
-                                3 -> {
-                                    panelHue = sliderFrac(pos.x, cx) * 360f
-                                    pushColor()
+                                6 -> {
+                                    val r = rows.firstOrNull { it.id == 6 } ?: return@onTap
+                                    hitWheel(pos.x, pos.y, cx, r.y, WHEEL_R)?.let {
+                                        if (it[0] >= 0f) panelHue = it[0]
+                                        if (it[1] >= 0f) panelSat = it[1]
+                                        pushColor()
+                                    }
                                 }
-                                4 -> {
-                                    panelSat = sliderFrac(pos.x, cx)
-                                    pushColor()
-                                }
-                                5 -> {
+                                7 -> {
                                     panelVal = sliderFrac(pos.x, cx)
                                     pushColor()
                                 }
@@ -787,7 +797,7 @@ fun CarouselDock() {
                             val (f, d, t) = panelControls(panelIndex)
                             val rows = panelRows(panelHasColor(panelIndex), f, d, t)
                             val s = sliderHit(start.x, start.y, cx, rows)
-                            if (s == 1 || s == 2 || (s in 3..5) || (s in 100..199)) {
+                            if (s == 1 || s == 2 || s == 6 || s == 7 || (s in 100..199)) {
                                 panelDrag = s
                             }
                             return@detectDragGestures
@@ -861,21 +871,21 @@ fun CarouselDock() {
                                         OBLNativeActivity.setActiveBrushStrengthStatic(v)
                                     }
                                 }
-                                3 -> {
-                                    val v = frac * 360f
-                                    if (abs(v - panelHue) > 1f) {
-                                        panelHue = v
-                                        pushColor()
+                                6 -> {
+                                    val (f2, d2, t2) = panelControls(panelIndex)
+                                    val rows2 = panelRows(panelHasColor(panelIndex), f2, d2, t2)
+                                    val r = rows2.firstOrNull { it.id == 6 } ?: return@detectDragGestures
+                                    hitWheel(change.position.x, change.position.y, size.width / 2f, r.y, WHEEL_R)?.let {
+                                        val nh = if (it[0] >= 0f) it[0] else panelHue
+                                        val ns = if (it[1] >= 0f) it[1] else panelSat
+                                        if (abs(nh - panelHue) > 1f || abs(ns - panelSat) > 0.005f) {
+                                            panelHue = nh
+                                            panelSat = ns
+                                            pushColor()
+                                        }
                                     }
                                 }
-                                4 -> {
-                                    val v = frac
-                                    if (abs(v - panelSat) > 0.005f) {
-                                        panelSat = v
-                                        pushColor()
-                                    }
-                                }
-                                5 -> {
+                                7 -> {
                                     val v = frac
                                     if (abs(v - panelVal) > 0.005f) {
                                         panelVal = v
@@ -1104,7 +1114,10 @@ private fun sliderHit(x: Float, y: Float, cx: Float, rows: List<PanelRowSpec>): 
     val right = cx + PANEL_W / 2f - 12f
     if (x < left || x > right) return 0
     for (r in rows) {
-        if (abs(y - r.y) <= TRACK_HALF + 4f) return r.id
+        if (r.id == 6) {
+            // Color wheel: hit-test circular (ring hue + disco sat).
+            if (hitWheel(x, y, cx, r.y, WHEEL_R) != null) return 6
+        } else if (abs(y - r.y) <= TRACK_HALF + 4f) return r.id
     }
     return 0
 }
@@ -1261,20 +1274,10 @@ private fun DrawScope.drawBrushPanel(
                 (radius - RADIUS_MIN).toFloat() / (RADIUS_MAX - RADIUS_MIN)
             )
             2 -> drawSlider(cx, r.y, "Strength", String.format("%.2f", strength), strength.coerceIn(0f, 1f))
-            3 -> drawSlider(
-                cx, r.y, "Hue", String.format("%.0f", hue), hue / 360f,
-                track = Brush.linearGradient(
-                    colors = listOf(
-                        Color(0xFFFF0000), Color(0xFFFFFF00), Color(0xFF00FF00),
-                        Color(0xFF00FFFF), Color(0xFF0000FF), Color(0xFFFF00FF), Color(0xFFFF0000)
-                    )
-                )
+            6 -> drawWheelNative(
+                drawContext.canvas.nativeCanvas, cx, r.y, WHEEL_R, hue, sat, value
             )
-            4 -> drawSlider(
-                cx, r.y, "Sat", String.format("%d%%", (sat * 100f).roundToInt()), sat,
-                track = Brush.linearGradient(colors = listOf(Color(0xFFFFFFFF), Color(cur)))
-            )
-            5 -> drawSlider(
+            7 -> drawSlider(
                 cx, r.y, "Val", String.format("%d%%", (value * 100f).roundToInt()), value,
                 track = Brush.linearGradient(colors = listOf(Color(0xFF000000), Color(cur)))
             )
