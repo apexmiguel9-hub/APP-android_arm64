@@ -48,6 +48,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.abs
 import kotlin.math.asin
+import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.max
@@ -772,6 +773,7 @@ fun CarouselDock() {
                 var onHandle = false
                 var handleDelta = 0f
                 var panelDrag = 0 // 1 = slider Radius, 2 = slider Strength
+                var panelWheelMode = 0 // color wheel: 0 = none, 1 = disco (sat/val), 2 = ring (hue)
                 detectDragGestures(
                     onDragStart = { start ->
                         gestureArmed = false
@@ -779,6 +781,7 @@ fun CarouselDock() {
                         onHandle = false
                         handleDelta = 0f
                         panelDrag = 0
+                        panelWheelMode = 0
                         val w = size.width.toFloat()
                         val h = size.height.toFloat()
                         val cx = w / 2f
@@ -801,6 +804,17 @@ fun CarouselDock() {
                             val s = sliderHit(start.x, start.y, cx, rows)
                             if (s == 1 || s == 2 || s == 6 || s == 7 || (s in 100..199)) {
                                 panelDrag = s
+                            }
+                            // Bloquear el modo del color wheel al inicio del drag: si
+                            // arranca en el disco se queda en sat/val, si arranca en el
+                            // anillo se queda en hue (aunque el dedo cruce de zona).
+                            if (s == 6) {
+                                val r = rows.firstOrNull { it.id == 6 }
+                                panelWheelMode = if (r != null)
+                                    hitWheel(start.x, start.y, cx, r.y, WHEEL_R)?.let {
+                                        if (it[0] >= 0f) 2 else 1
+                                    } ?: 0
+                                else 0
                             }
                             return@detectDragGestures
                         }
@@ -825,6 +839,7 @@ fun CarouselDock() {
                     onDragEnd = {
                         if (panelDrag != 0) {
                             panelDrag = 0
+                            panelWheelMode = 0
                             return@detectDragGestures
                         }
                         if (onHandle) {
@@ -851,6 +866,7 @@ fun CarouselDock() {
                         gestureArmed = false
                         onHandle = false
                         panelDrag = 0
+                        panelWheelMode = 0
                         highlightIndex = -1
                     },
                     onDrag = { change, dragAmount ->
@@ -877,15 +893,38 @@ fun CarouselDock() {
                                     val (f2, d2, t2) = panelControls(panelIndex)
                                     val rows2 = panelRows(panelHasColor(panelIndex), f2, d2, t2)
                                     val r = rows2.firstOrNull { it.id == 6 } ?: return@detectDragGestures
-                                    hitWheel(change.position.x, change.position.y, size.width / 2f, r.y, WHEEL_R)?.let {
-                                        val nh = if (it[0] >= 0f) it[0] else panelHue
-                                        val ns = if (it[1] >= 0f) it[1] else panelSat
-                                        val nv = if (it[2] >= 0f) it[2] else panelVal
-                                        if (abs(nh - panelHue) > 1f || abs(ns - panelSat) > 0.005f || abs(nv - panelVal) > 0.005f) {
-                                            panelHue = nh
-                                            panelSat = ns
-                                            panelVal = nv
-                                            pushColor()
+                                    val wcx = size.width / 2f
+                                    when (panelWheelMode) {
+                                        // Disco: sat/val con clamp al borde del disco (aunque
+                                        // el dedo siga hasta el anillo o fuera del wheel).
+                                        1 -> {
+                                            val rIn = wheelInnerRadius(WHEEL_R)
+                                            var dx = change.position.x - wcx
+                                            var dy = change.position.y - r.y
+                                            val dist = hypot(dx, dy)
+                                            if (dist > rIn && dist > 0f) {
+                                                dx = dx / dist * rIn
+                                                dy = dy / dist * rIn
+                                            }
+                                            val ns = (0.5f + 0.5f * dx / rIn).coerceIn(0f, 1f)
+                                            val nv = (0.5f - 0.5f * dy / rIn).coerceIn(0f, 1f)
+                                            if (abs(ns - panelSat) > 0.005f || abs(nv - panelVal) > 0.005f) {
+                                                panelSat = ns
+                                                panelVal = nv
+                                                pushColor()
+                                            }
+                                        }
+                                        // Ring: hue por ángulo (sirve en cualquier dirección).
+                                        else -> {
+                                            var a = Math.toDegrees(atan2(
+                                                change.position.y - r.y,
+                                                change.position.x - wcx
+                                            ).toDouble()).toFloat()
+                                            if (a < 0) a += 360f
+                                            if (abs(a - panelHue) > 1f) {
+                                                panelHue = a
+                                                pushColor()
+                                            }
                                         }
                                     }
                                 }

@@ -42,6 +42,9 @@ internal fun bcpArgb(h: Float, s: Float, v: Float): Int {
 /** Ancho del anillo de hue en px (depende del radio exterior). */
 private fun bandOf(radius: Float): Float = (radius * 0.34f).coerceIn(18f, 34f)
 
+/** Radio del disco interior (excluye el anillo de hue). */
+internal fun wheelInnerRadius(radius: Float): Float = radius - bandOf(radius)
+
 /** Dibuja el color wheel (ring hue + disco sat/val 2D + marcadores) centrado en
  *  (cx, cy) con radio exterior [radius]. El disco mapea sat en X y val en Y
  *  (estilo picker circular de Blender); el slider "Val" del panel queda como
@@ -123,7 +126,7 @@ internal fun hitWheel(x: Float, y: Float, cx: Float, cy: Float, radius: Float): 
     val dx = x - cx
     val dy = y - cy
     val dist = hypot(dx, dy)
-    val rIn = radius - bandOf(radius)
+    val rIn = wheelInnerRadius(radius)
     if (dist > radius) return null
     return if (dist > rIn) {
         var a = Math.toDegrees(atan2(dy, dx).toDouble()).toFloat()
