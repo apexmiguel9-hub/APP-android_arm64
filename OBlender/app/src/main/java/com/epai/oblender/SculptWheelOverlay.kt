@@ -196,7 +196,7 @@ private const val RADIUS_MAX = 150
  *  `rna_BrushCapabilitiesSculpt_has_color_get` = ELEM(tool, SCULPT_TOOL_PAINT).
  *  Smear mezcla colores existentes, Draw Face Sets usa color aleatorio y los
  *  Displacement operan el mesh -> NO tienen color picker. */
-private val colorTools = setOf("Paint")
+private val colorTools = setOf("Paint", "Color Filter")
 
 private fun panelHasColor(panelIndex: Int): Boolean =
     panelIndex >= 0 && panelIndex < sculptTools.size && sculptTools[panelIndex] in colorTools
@@ -242,16 +242,24 @@ private val boundaryDeformOptions = listOf("Bend", "Expand", "Inflate", "Grab", 
  *  y en px, step ROW_STEP desde ROW1_Y. */
 private data class PanelRowSpec(val id: Int, val field: Int, val y: Float)
 
+/** ¿El tool del panel es un brush (tiene Radius/Strength)? */
+private fun isBrushTool(panelIndex: Int): Boolean =
+    panelIndex >= 0 && panelIndex < sculptTools.size &&
+        toolId(sculptTools[panelIndex]).startsWith("builtin_brush.")
+
 private fun panelRows(
     hasColor: Boolean,
+    showBrushRows: Boolean,
     floatExtras: List<ExtraParam>,
     dropdowns: List<DropdownSpec>,
     toggles: List<ToggleSpec>
 ): List<PanelRowSpec> {
     val rows = mutableListOf<PanelRowSpec>()
     var y = ROW1_Y
-    rows += PanelRowSpec(1, 0, y); y += ROW_STEP
-    rows += PanelRowSpec(2, 0, y); y += ROW_STEP
+    if (showBrushRows) {
+        rows += PanelRowSpec(1, 0, y); y += ROW_STEP
+        rows += PanelRowSpec(2, 0, y); y += ROW_STEP
+    }
     if (hasColor) {
         // Color wheel circular (id 6): el centro del disco queda en y + WHEEL_H/2.
         // El disco controla sat(x) + val(y) y el ring el hue; el slider Val (id 7)
@@ -549,8 +557,8 @@ fun CarouselDock() {
      fun panelHeightPx(): Int {
          if (panelIndex < 0) return 0
          val (f, d, t) = panelControls(panelIndex)
-         val rows = panelRows(panelHasColor(panelIndex), f, d, t)
-         return (panelHeight(rows) + PANEL_GAP).toInt()
+        val rows = panelRows(panelHasColor(panelIndex), isBrushTool(panelIndex), f, d, t)
+        return (panelHeight(rows) + PANEL_GAP).toInt()
      }
 
     // Aplica el color HSV actual del panel al brush activo (en vivo, como radius/strength).
@@ -689,7 +697,7 @@ fun CarouselDock() {
                                 return@onTap
                             }
                             val (f, d, t) = panelControls(panelIndex)
-                            val rows = panelRows(panelHasColor(panelIndex), f, d, t)
+                            val rows = panelRows(panelHasColor(panelIndex), isBrushTool(panelIndex), f, d, t)
                             val s = sliderHit(pos.x, pos.y, cx, rows)
                             when (s) {
                                 1 -> {
@@ -756,8 +764,9 @@ fun CarouselDock() {
                             return@onLongPress
                         }
                         val idx = nearestToolIndex(w, h, pos.x, pos.y)
-                        // Fase 1: mini menu SOLO para brushes (tienen radius + strength).
-                        if (idx >= 0 && toolId(sculptTools[idx]).startsWith("builtin_brush.")) {
+                        // Mini menu: brushes (radius/strength) + tools con color (Color Filter).
+                        if (idx >= 0 && (toolId(sculptTools[idx]).startsWith("builtin_brush.") ||
+                            panelHasColor(idx))) {
                             selectTool(idx)
                             panelIndex = idx
                             panelRadius = OBLNativeActivity.getActiveBrushRadiusStatic()
@@ -800,7 +809,7 @@ fun CarouselDock() {
                                 return@detectDragGestures
                             }
                             val (f, d, t) = panelControls(panelIndex)
-                            val rows = panelRows(panelHasColor(panelIndex), f, d, t)
+                            val rows = panelRows(panelHasColor(panelIndex), isBrushTool(panelIndex), f, d, t)
                             val s = sliderHit(start.x, start.y, cx, rows)
                             if (s == 1 || s == 2 || s == 6 || s == 7 || (s in 100..199)) {
                                 panelDrag = s
@@ -891,7 +900,7 @@ fun CarouselDock() {
                                 }
                                 6 -> {
                                     val (f2, d2, t2) = panelControls(panelIndex)
-                                    val rows2 = panelRows(panelHasColor(panelIndex), f2, d2, t2)
+                                    val rows2 = panelRows(panelHasColor(panelIndex), isBrushTool(panelIndex), f2, d2, t2)
                                     val r = rows2.firstOrNull { it.id == 6 } ?: return@detectDragGestures
                                     val wcx = size.width / 2f
                                     when (panelWheelMode) {
@@ -1035,6 +1044,7 @@ fun CarouselDock() {
                     radius = panelRadius,
                     strength = panelStrength,
                     hasColor = panelHasColor(panelIndex),
+                    showBrushRows = isBrushTool(panelIndex),
                     hue = panelHue,
                     sat = panelSat,
                     value = panelVal,
@@ -1215,16 +1225,18 @@ private suspend fun androidx.compose.ui.input.pointer.PointerInputScope.detectLo
     }
 }
 
-/** Mini menu: card redondeada arriba del arco con los sliders/toggles/dropdowns del brush.
- *  Filas = panelRows(hasColor, floatExtras, dropdowns, toggles): Radius + Strength siempre,
- *  + HSV si hasColor (solo Paint), + params extra por tool (Fase 3). Aplicación en vivo
- *  al mover/tap (el setter JNI solo stash; el drain del render thread aplica al brush activo). */
+/** Mini menu: card redondeada arriba del arco con los sliders/toggles/dropdowns del tool.
+ *  Filas = panelRows(hasColor, showBrushRows, floatExtras, dropdowns, toggles):
+ *  Radius + Strength solo si es brush, + color wheel si hasColor (Paint / Color Filter),
+ *  + params extra por tool (Fase 3). Aplicación en vivo al mover/tap (el setter JNI
+ *  solo stash; el drain del render thread aplica al brush activo). */
 private fun DrawScope.drawBrushPanel(
     cx: Float,
     label: String,
     radius: Int,
     strength: Float,
     hasColor: Boolean,
+    showBrushRows: Boolean,
     hue: Float,
     sat: Float,
     value: Float,
@@ -1233,7 +1245,7 @@ private fun DrawScope.drawBrushPanel(
     toggles: List<ToggleSpec>,
     extraValues: Map<Int, Float>
 ) {
-    val rows = panelRows(hasColor, floatExtras, dropdowns, toggles)
+    val rows = panelRows(hasColor, showBrushRows, floatExtras, dropdowns, toggles)
     val panelH = panelHeight(rows)
     val left = cx - PANEL_W / 2f
     drawRoundRect(
