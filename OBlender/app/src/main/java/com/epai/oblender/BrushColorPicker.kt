@@ -20,21 +20,17 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.Fill
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import kotlin.math.PI
-import kotlin.math.PI
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.roundToInt
 import kotlin.math.sin
-import kotlin.math.toDegrees
 
 /** HSV -> RGB (0..1). h en grados 0..360, s/v 0..1. */
 internal fun bcpHsvToRgb(h: Float, s: Float, v: Float): Triple<Float, Float, Float> {
@@ -95,8 +91,8 @@ fun BrushColorPicker(
 
         // Borde selector hue (piedra)
         val rOut = sz.minDimension / 2f
-        val sx = (cos(hue * PI.toFloat() / 180f) * (rOut - 12f)).toFloat()
-        val sy = (sin(hue * PI.toFloat() / 180f) * (rOut - 12f)).toFloat()
+        val sx = (cos(Math.toRadians(hue.toDouble())) * (rOut - 12f)).toFloat()
+        val sy = (sin(Math.toRadians(hue.toDouble())) * (rOut - 12f)).toFloat()
         Canvas(
             modifier = Modifier
                 .size(14.dp)
@@ -119,22 +115,27 @@ fun BrushColorPicker(
     }
 }
 
-private fun drawWheel(size: Size, hue: Float, sat: Float, v: Float, currentColor: Color) {
-    val cx = size.width / 2f
-    val cy = size.height / 2f
+private fun DrawScope.drawWheel(size: Size, hue: Float, sat: Float, v: Float, currentColor: Color) {
+    val cxy = Offset(size.width / 2f, size.height / 2f)
     val rOut = minOf(size.width, size.height) / 2f
     val rIn = rOut - 30f
-    val cxy = Offset(cx, cy)
+    val band = rOut - rIn
+    val rMid = (rOut + rIn) / 2f
 
-    // Ring hue (sweep)
-    val hueColors = HUE_STEPS.map { Color.hsv(it, 1f, 1f) }
-    val hueBrush = Brush.sweepGradient(*hueColors.toTypedArray(), center = cxy)
-    val anulus = Path().apply {
-        addOval(androidx.compose.ui.geometry.Rect(cxy - Offset(rOut, rOut), cxy + Offset(rOut, rOut)))
-        addOval(androidx.compose.ui.geometry.Rect(cxy - Offset(rIn, rIn), cxy + Offset(rIn, rIn)))
-        fillType = Path.FillType.EvenOdd
-    }
-    drawPath(anulus, brush = hueBrush)
+    // Ring hue (sweep): arco completo con stroke = ancho del anillo
+    val hueBrush = Brush.sweepGradient(
+        *HUE_STEPS.map { Color.hsv(it, 1f, 1f) }.toTypedArray(),
+        center = cxy
+    )
+    drawArc(
+        brush = hueBrush,
+        startAngle = 0f,
+        sweepAngle = 360f,
+        useCenter = false,
+        topLeft = Offset(cxy.x - rMid, cxy.y - rMid),
+        size = Size(rMid * 2, rMid * 2),
+        style = Stroke(band)
+    )
 
     // Sat: radial transparent -> hue pleno
     val satBrush = Brush.radialGradient(
@@ -142,10 +143,10 @@ private fun drawWheel(size: Size, hue: Float, sat: Float, v: Float, currentColor
         center = cxy,
         radius = rIn
     )
-    drawPath(Path().apply { addOval(androidx.compose.ui.geometry.Rect(cxy - Offset(rIn, rIn), cxy + Offset(rIn, rIn))) }, brush = satBrush)
+    drawCircle(brush = satBrush, radius = rIn, center = cxy)
 
     // Selector del color resultante en el centro
-    drawCircle(currentColor, 8f, style = Stroke(2f))
+    drawCircle(currentColor, radius = 8f, center = cxy, style = Stroke(2f))
 }
 
 @Composable
@@ -172,7 +173,7 @@ private fun computeHit(pos: Offset, size: Size, hue: Float, sat: Float, v: Float
     if (dist > rOut) return null
     return if (dist > rIn) {
         // Ring -> hue
-        var a = toDegrees(atan2(dy, dx)).toFloat()
+        var a = Math.toDegrees(atan2(dy, dx)).toFloat()
         if (a < 0) a += 360f
         floatArrayOf(a, sat, v)
     } else {
