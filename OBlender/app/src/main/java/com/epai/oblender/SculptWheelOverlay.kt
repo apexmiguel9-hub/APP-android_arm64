@@ -253,7 +253,8 @@ private fun panelRows(
     rows += PanelRowSpec(2, 0, y); y += ROW_STEP
     if (hasColor) {
         // Color wheel circular (id 6): el centro del disco queda en y + WHEEL_H/2.
-        // El valor se ajusta con un slider Val (id 7) debajo del wheel.
+        // El disco controla sat(x) + val(y) y el ring el hue; el slider Val (id 7)
+        // queda como control fino adicional debajo del wheel.
         rows += PanelRowSpec(6, 0, y + WHEEL_H / 2f); y += WHEEL_H
         rows += PanelRowSpec(7, 0, y); y += ROW_STEP
     }
@@ -704,6 +705,7 @@ fun CarouselDock() {
                                     hitWheel(pos.x, pos.y, cx, r.y, WHEEL_R)?.let {
                                         if (it[0] >= 0f) panelHue = it[0]
                                         if (it[1] >= 0f) panelSat = it[1]
+                                        if (it[2] >= 0f) panelVal = it[2]
                                         pushColor()
                                     }
                                 }
@@ -878,9 +880,11 @@ fun CarouselDock() {
                                     hitWheel(change.position.x, change.position.y, size.width / 2f, r.y, WHEEL_R)?.let {
                                         val nh = if (it[0] >= 0f) it[0] else panelHue
                                         val ns = if (it[1] >= 0f) it[1] else panelSat
-                                        if (abs(nh - panelHue) > 1f || abs(ns - panelSat) > 0.005f) {
+                                        val nv = if (it[2] >= 0f) it[2] else panelVal
+                                        if (abs(nh - panelHue) > 1f || abs(ns - panelSat) > 0.005f || abs(nv - panelVal) > 0.005f) {
                                             panelHue = nh
                                             panelSat = ns
+                                            panelVal = nv
                                             pushColor()
                                         }
                                     }
