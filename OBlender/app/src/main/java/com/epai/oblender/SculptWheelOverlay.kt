@@ -211,12 +211,14 @@ private const val FIELD_HEIGHT = 5
 private const val FIELD_TIP_ROUNDNESS = 6
 private const val FIELD_ELASTIC_PRESERVE = 7
 private const val FIELD_PLANE_OFFSET = 8
+private const val FIELD_COLOR_FILTER_STRENGTH = 9
 private const val FIELD_BLEND = 101
 private const val FIELD_ELASTIC_DEFORM_TYPE = 102
 private const val FIELD_POSE_DEFORM_TYPE = 103
 private const val FIELD_POSE_ORIGIN_TYPE = 104
 private const val FIELD_CLOTH_DEFORM_TYPE = 105
 private const val FIELD_BOUNDARY_DEFORM_TYPE = 106
+private const val FIELD_COLOR_FILTER_TYPE = 107
 private const val FIELD_USE_PERSISTENT = 201
 private const val FIELD_USE_PRESSURE_AREA_RADIUS = 202
 private const val FIELD_INVERT_TO_SCRAPE_FILL = 203
@@ -236,6 +238,11 @@ private val poseDeformOptions = listOf("Rotate/Twist", "Scale/Translate", "Squas
 private val poseOriginOptions = listOf("Topology", "Face Sets", "Face Sets FK")
 private val clothDeformOptions = listOf("Drag", "Push", "Grab", "Pinch Point", "Pinch Perp", "Inflate", "Snake Hook")
 private val boundaryDeformOptions = listOf("Bend", "Expand", "Inflate", "Grab", "Twist", "Smooth")
+/* eSculptColorFilterTypes (sculpt_filter_color.cc): FILL=0 .. BLUE=9. */
+private val colorFilterOptions = listOf(
+    "Fill", "Hue", "Saturation", "Value", "Brightness", "Contrast",
+    "Smooth", "Red", "Green", "Blue"
+)
 
 /** Filas del panel: 1=Radius, 2=Strength, 3..5=H/S/V (solo si hasColor),
  *  100+field = slider extra, 200+field = dropdown, 300+field = toggle.
@@ -271,10 +278,12 @@ private fun panelRows(
         rows += PanelRowSpec(100 + e.field, e.field, y); y += ROW_STEP
     }
     for (d in dropdowns) {
-        rows += PanelRowSpec(200 + d.field, d.field, y); y += ROW_STEP
+        // Campo enum 101..107 -> fila 201..207 (rango de dropdown en handlers).
+        rows += PanelRowSpec(200 + (d.field - 100), d.field, y); y += ROW_STEP
     }
     for (t in toggles) {
-        rows += PanelRowSpec(300 + t.field, t.field, y); y += ROW_STEP
+        // Campo bool 201..204 -> fila 301..304 (rango de toggle en handlers).
+        rows += PanelRowSpec(300 + (t.field - 200), t.field, y); y += ROW_STEP
     }
     return rows
 }
@@ -343,7 +352,8 @@ private val toolFloatExtras: Map<String, List<ExtraParam>> = mapOf(
     "Elastic Deform" to listOf(
         ExtraParam(FIELD_NORMAL_WEIGHT, "Nrm Wgt", 0f, 1f),
         ExtraParam(FIELD_ELASTIC_PRESERVE, "Preserve", 0f, 1f)
-    )
+    ),
+    "Color Filter" to listOf(ExtraParam(FIELD_COLOR_FILTER_STRENGTH, "Strength", -10f, 10f))
 )
 
 /** Dropdowns (field id 101..106) por tool. */
@@ -354,7 +364,8 @@ private val toolDropdowns: Map<String, List<DropdownSpec>> = mapOf(
     "Pose" to listOf(
         DropdownSpec(FIELD_POSE_DEFORM_TYPE, "Deform", poseDeformOptions),
         DropdownSpec(FIELD_POSE_ORIGIN_TYPE, "Origin", poseOriginOptions)
-    )
+    ),
+    "Color Filter" to listOf(DropdownSpec(FIELD_COLOR_FILTER_TYPE, "Filter", colorFilterOptions))
 )
 
 /** Toggles/bools (field id 201..204) por tool. */
@@ -729,13 +740,13 @@ fun CarouselDock() {
                                         panelExtras[e.field] = v
                                         pushExtra(e.field)
                                     } else if (s in 200..299) {
-                                        val dd = d.firstOrNull { it.field == s - 200 } ?: return@onTap
+                                        val dd = d.firstOrNull { it.field == s - 100 } ?: return@onTap
                                         val cur = (panelExtras[dd.field] ?: 0f).toInt()
                                         val next = (cur + 1) % dd.options.size
                                         panelExtras[dd.field] = next.toFloat()
                                         OBLNativeActivity.setActiveBrushExtraStatic(dd.field, next.toFloat())
                                     } else if (s in 300..399) {
-                                        val tg = t.firstOrNull { it.field == s - 300 } ?: return@onTap
+                                        val tg = t.firstOrNull { it.field == s - 100 } ?: return@onTap
                                         val cur = panelExtras[tg.field] ?: 0f
                                         val next = if (cur >= 0.5f) 0f else 1f
                                         panelExtras[tg.field] = next
@@ -1343,11 +1354,11 @@ private fun DrawScope.drawBrushPanel(
                     val frac = ((ev - e.min) / (e.max - e.min)).coerceIn(0f, 1f)
                     drawSlider(cx, r.y, e.name, String.format("%.2f", ev), frac)
                 } else if (r.id in 200..299) {
-                    val dd = dropdowns.firstOrNull { it.field == r.id - 200 } ?: continue
+                    val dd = dropdowns.firstOrNull { it.field == r.id - 100 } ?: continue
                     drawDropdown(cx, r.y, dd.name, dd.options,
                         (extraValues[dd.field] ?: 0f).toInt())
                 } else if (r.id in 300..399) {
-                    val tg = toggles.firstOrNull { it.field == r.id - 300 } ?: continue
+                    val tg = toggles.firstOrNull { it.field == r.id - 100 } ?: continue
                     val on = (extraValues[tg.field] ?: 0f) >= 0.5f
                     drawToggle(cx, r.y, tg.name, on)
                 }

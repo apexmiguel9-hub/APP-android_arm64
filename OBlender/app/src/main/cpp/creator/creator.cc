@@ -342,8 +342,15 @@ static int g_obl_active_brush_use_persistent = 0;
 static int g_obl_active_brush_use_smooth_stroke = 0;
 static int g_obl_active_brush_use_pressure_area_radius = 0;
 static int g_obl_active_brush_invert_to_scrape_fill = 0;
+/* Color Filter (builtin.color_filter): type/strength leidos del static de Blender
+ * (sculpt_filter_color.cc OBL_color_filter_get) cada frame para el panel. */
+static int g_obl_active_cf_type = 0;          /* 0 = FILL */
+static float g_obl_active_cf_strength = 1.0f;
 
 extern "C" void blenderSetActiveTool(const char *idname);
+/* Definidos en blender .a (sculpt_filter_color.cc): ajustes del Color Filter tool. */
+extern "C" void OBL_color_filter_set(int type, float strength);
+extern "C" void OBL_color_filter_get(int *type, float *strength);
 
 void oblSetSculptToolRequest(const char *idname) {
     if (!idname || !idname[0]) return;
@@ -915,6 +922,14 @@ int mainBlenderLoop(void*pContext) {
           g_obl_active_brush_use_smooth_stroke = (br->flag & BRUSH_SMOOTH_STROKE) ? 1 : 0;
           g_obl_active_brush_use_pressure_area_radius = (br->flag2 & BRUSH_AREA_RADIUS_PRESSURE) ? 1 : 0;
           g_obl_active_brush_invert_to_scrape_fill = (br->flag & BRUSH_INVERT_TO_SCRAPE_FILL) ? 1 : 0;
+          /* Color Filter: reflejar el static de Blender para el panel. */
+          {
+            int t = 0;
+            float s = 1.0f;
+            OBL_color_filter_get(&t, &s);
+            g_obl_active_cf_type = t;
+            g_obl_active_cf_strength = s;
+          }
         }
         if (req_pending) {
           if (req_type == 1) {
@@ -945,6 +960,9 @@ int mainBlenderLoop(void*pContext) {
               case 6: br->tip_roundness = CLAMPIS(req_fval, 0.0f, 1.0f); break;
               case 7: br->elastic_deform_volume_preservation = CLAMPIS(req_fval, 0.0f, 1.0f); break;
               case 8: br->plane_offset = CLAMPIS(req_fval, -0.5f, 0.5f); break;
+              /* Color Filter: strength (float -10..10) y type (enum). No son campos
+                 del Brush -> se persisten en el static de Blender. */
+              case 9: OBL_color_filter_set(g_obl_active_cf_type, req_fval); break;
               /* enums (field ids 101..106) */
               case 101: br->blend = (short)(int)req_fval; break;
               case 102: br->elastic_deform_type = (int)req_fval; break;
@@ -952,6 +970,7 @@ int mainBlenderLoop(void*pContext) {
               case 104: br->pose_origin_type = (int)req_fval; break;
               case 105: br->cloth_deform_type = (int)req_fval; break;
               case 106: br->boundary_deform_type = (int)req_fval; break;
+              case 107: OBL_color_filter_set((int)req_fval, g_obl_active_cf_strength); break;
               /* bools (field ids 201..204) */
               case 201:
                 if (req_fval >= 0.5f) br->flag |= BRUSH_PERSISTENT;
@@ -1080,12 +1099,14 @@ float oblGetActiveBrushExtra(int field){
     case 6: return g_obl_active_brush_tip_roundness;
     case 7: return g_obl_active_brush_elastic_preserve;
     case 8: return g_obl_active_brush_plane_offset;
+    case 9: return g_obl_active_cf_strength;   /* Color Filter strength */
     case 101: return g_obl_active_brush_blend;
     case 102: return g_obl_active_brush_elastic_deform_type;
     case 103: return g_obl_active_brush_pose_deform_type;
     case 104: return g_obl_active_brush_pose_origin_type;
     case 105: return g_obl_active_brush_cloth_deform_type;
     case 106: return g_obl_active_brush_boundary_deform_type;
+    case 107: return (float)g_obl_active_cf_type;   /* Color Filter type */
     case 201: return (float)g_obl_active_brush_use_persistent;
     case 202: return (float)g_obl_active_brush_use_pressure_area_radius;
     case 203: return (float)g_obl_active_brush_invert_to_scrape_fill;
