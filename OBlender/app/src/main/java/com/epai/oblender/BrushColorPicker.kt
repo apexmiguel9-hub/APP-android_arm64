@@ -122,20 +122,20 @@ private fun DrawScope.drawWheel(size: Size, hue: Float, sat: Float, v: Float, cu
     val band = rOut - rIn
     val rMid = (rOut + rIn) / 2f
 
-    // Ring hue (sweep): arco completo con stroke = ancho del anillo
-    val hueBrush = Brush.sweepGradient(
-        *HUE_STEPS.map { Color.hsv(it, 1f, 1f) }.toTypedArray(),
-        center = cxy
-    )
-    drawArc(
-        brush = hueBrush,
-        startAngle = 0f,
-        sweepAngle = 360f,
-        useCenter = false,
-        topLeft = Offset(cxy.x - rMid, cxy.y - rMid),
-        size = Size(rMid * 2, rMid * 2),
-        style = Stroke(band)
-    )
+    // Ring hue: 60 arcos solidos (~6° c/u) = sweep aproximado (evita Brush.sweepGradient, no existe en este fork)
+    val ringSegs = 60
+    for (i in 0 until ringSegs) {
+        val hDeg = (i * 6f) % 360f
+        drawArc(
+            color = Color.hsv(hDeg, 1f, 1f),
+            startAngle = i * 6f,
+            sweepAngle = 6.01f,
+            useCenter = false,
+            topLeft = Offset(cxy.x - rMid, cxy.y - rMid),
+            size = Size(rMid * 2, rMid * 2),
+            style = Stroke(band)
+        )
+    }
 
     // Sat: radial transparent -> hue pleno
     val satBrush = Brush.radialGradient(
@@ -151,11 +151,20 @@ private fun DrawScope.drawWheel(size: Size, hue: Float, sat: Float, v: Float, cu
 
 @Composable
 private fun BrushValueBar(color: Color, value: Float, onValue: (Float) -> Unit, modifier: Modifier) {
-    val track = Brush.horizontalGradient(*listOf(Color.Black, color).toTypedArray())
     Canvas(modifier = modifier.pointerInput(Unit) {
         detectTapGestures { pos -> onValue((pos.x / size.width).coerceIn(0f, 1f)) }
     }) {
-        drawRect(brush = track)
+        // Gradiente negro->color por strips (evita Brush.horizontalGradient, no existe en este fork)
+        val segs = 32
+        val sw = size.width / segs
+        for (i in 0 until segs) {
+            val f = i / (segs - 1f)
+            drawRect(
+                color = androidx.compose.ui.graphics.lerp(Color.Black, color, f),
+                topLeft = Offset(i * sw, 0f),
+                size = Size(sw + 1f, size.height)
+            )
+        }
         val sx = value * size.width
         drawLine(Color.White, Offset(sx, 0f), Offset(sx, size.height), 3f)
     }
@@ -173,7 +182,7 @@ private fun computeHit(pos: Offset, size: Size, hue: Float, sat: Float, v: Float
     if (dist > rOut) return null
     return if (dist > rIn) {
         // Ring -> hue
-        var a = Math.toDegrees(atan2(dy, dx)).toFloat()
+        var a = Math.toDegrees(atan2(dy, dx).toDouble()).toFloat()
         if (a < 0) a += 360f
         floatArrayOf(a, sat, v)
     } else {
