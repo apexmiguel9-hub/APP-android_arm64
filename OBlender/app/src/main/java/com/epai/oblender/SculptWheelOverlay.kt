@@ -213,6 +213,7 @@ private const val FIELD_TIP_ROUNDNESS = 6
 private const val FIELD_ELASTIC_PRESERVE = 7
 private const val FIELD_PLANE_OFFSET = 8
 private const val FIELD_COLOR_FILTER_STRENGTH = 9
+private const val FIELD_HARDNESS = 10
 private const val FIELD_BLEND = 101
 private const val FIELD_ELASTIC_DEFORM_TYPE = 102
 private const val FIELD_POSE_DEFORM_TYPE = 103
@@ -220,10 +221,14 @@ private const val FIELD_POSE_ORIGIN_TYPE = 104
 private const val FIELD_CLOTH_DEFORM_TYPE = 105
 private const val FIELD_BOUNDARY_DEFORM_TYPE = 106
 private const val FIELD_COLOR_FILTER_TYPE = 107
+private const val FIELD_DIRECTION = 108
 private const val FIELD_USE_PERSISTENT = 201
 private const val FIELD_USE_PRESSURE_AREA_RADIUS = 202
 private const val FIELD_INVERT_TO_SCRAPE_FILL = 203
 private const val FIELD_USE_SMOOTH_STROKE = 204
+private const val FIELD_ACCUMULATE = 205
+private const val FIELD_FRONT_FACES = 206
+private const val FIELD_PLANE_TRIM = 207
 
 private data class ExtraParam(val field: Int, val name: String, val min: Float, val max: Float)
 private data class DropdownSpec(val field: Int, val name: String, val options: List<String>)
@@ -239,6 +244,8 @@ private val poseDeformOptions = listOf("Rotate/Twist", "Scale/Translate", "Squas
 private val poseOriginOptions = listOf("Topology", "Face Sets", "Face Sets FK")
 private val clothDeformOptions = listOf("Drag", "Push", "Grab", "Pinch Point", "Pinch Perp", "Inflate", "Snake Hook")
 private val boundaryDeformOptions = listOf("Bend", "Expand", "Inflate", "Grab", "Twist", "Smooth")
+/* Brush.direction (rna_brush.c prop_direction_items): 0=ADD, 1=SUBTRACT (BRUSH_DIR_IN). */
+private val directionOptions = listOf("Add", "Subtract")
 /* eSculptColorFilterTypes (sculpt_filter_color.cc): FILL=0 .. BLUE=9. */
 private val colorFilterOptions = listOf(
     "Fill", "Hue", "Saturation", "Value", "Brightness", "Contrast",
@@ -321,7 +328,8 @@ private val toolFloatExtras: Map<String, List<ExtraParam>> = mapOf(
     ),
     "Clay" to listOf(
         ExtraParam(FIELD_AUTOSMOOTH, "Smooth", 0f, 1f),
-        ExtraParam(FIELD_PLANE_OFFSET, "Offset", -0.5f, 0.5f)
+        ExtraParam(FIELD_PLANE_OFFSET, "Offset", -0.5f, 0.5f),
+        ExtraParam(FIELD_HARDNESS, "Hardness", 0f, 1f)
     ),
     "Clay Thumb" to listOf(
         ExtraParam(FIELD_AUTOSMOOTH, "Smooth", 0f, 1f),
@@ -340,8 +348,14 @@ private val toolFloatExtras: Map<String, List<ExtraParam>> = mapOf(
         ExtraParam(FIELD_PLANE_OFFSET, "Offset", -0.5f, 0.5f)
     ),
     "Multi-plane Scrape" to listOf(ExtraParam(FIELD_AUTOSMOOTH, "Smooth", 0f, 1f)),
-    "Draw" to listOf(ExtraParam(FIELD_AUTOSMOOTH, "Smooth", 0f, 1f)),
-    "Draw Sharp" to listOf(ExtraParam(FIELD_AUTOSMOOTH, "Smooth", 0f, 1f)),
+    "Draw" to listOf(
+        ExtraParam(FIELD_AUTOSMOOTH, "Smooth", 0f, 1f),
+        ExtraParam(FIELD_HARDNESS, "Hardness", 0f, 1f)
+    ),
+    "Draw Sharp" to listOf(
+        ExtraParam(FIELD_AUTOSMOOTH, "Smooth", 0f, 1f),
+        ExtraParam(FIELD_HARDNESS, "Hardness", 0f, 1f)
+    ),
     "Inflate" to listOf(ExtraParam(FIELD_AUTOSMOOTH, "Smooth", 0f, 1f)),
     "Pinch" to listOf(ExtraParam(FIELD_AUTOSMOOTH, "Smooth", 0f, 1f)),
     "Nudge" to listOf(ExtraParam(FIELD_AUTOSMOOTH, "Smooth", 0f, 1f)),
@@ -366,7 +380,10 @@ private val toolDropdowns: Map<String, List<DropdownSpec>> = mapOf(
         DropdownSpec(FIELD_POSE_DEFORM_TYPE, "Deform", poseDeformOptions),
         DropdownSpec(FIELD_POSE_ORIGIN_TYPE, "Origin", poseOriginOptions)
     ),
-    "Color Filter" to listOf(DropdownSpec(FIELD_COLOR_FILTER_TYPE, "Filter", colorFilterOptions))
+    "Color Filter" to listOf(DropdownSpec(FIELD_COLOR_FILTER_TYPE, "Filter", colorFilterOptions)),
+    "Draw" to listOf(DropdownSpec(FIELD_DIRECTION, "Direction", directionOptions)),
+    "Draw Sharp" to listOf(DropdownSpec(FIELD_DIRECTION, "Direction", directionOptions)),
+    "Clay" to listOf(DropdownSpec(FIELD_DIRECTION, "Direction", directionOptions))
 )
 
 /** Toggles/bools (field id 201..204) por tool. */
@@ -375,7 +392,20 @@ private val toolToggles: Map<String, List<ToggleSpec>> = mapOf(
     "Cloth" to listOf(ToggleSpec(FIELD_USE_PERSISTENT, "Persist")),
     "Grab" to listOf(ToggleSpec(FIELD_USE_SMOOTH_STROKE, "Smooth Stroke")),
     "Snake Hook" to listOf(ToggleSpec(FIELD_INVERT_TO_SCRAPE_FILL, "Invert")),
-    "Pose" to listOf(ToggleSpec(FIELD_USE_SMOOTH_STROKE, "Smooth Stroke"))
+    "Pose" to listOf(ToggleSpec(FIELD_USE_SMOOTH_STROKE, "Smooth Stroke")),
+    "Draw" to listOf(
+        ToggleSpec(FIELD_ACCUMULATE, "Accumulate"),
+        ToggleSpec(FIELD_FRONT_FACES, "Front Faces")
+    ),
+    "Draw Sharp" to listOf(
+        ToggleSpec(FIELD_ACCUMULATE, "Accumulate"),
+        ToggleSpec(FIELD_FRONT_FACES, "Front Faces")
+    ),
+    "Clay" to listOf(
+        ToggleSpec(FIELD_ACCUMULATE, "Accumulate"),
+        ToggleSpec(FIELD_FRONT_FACES, "Front Faces"),
+        ToggleSpec(FIELD_PLANE_TRIM, "Plane Trim")
+    )
 )
 
 /** Devuelve las 3 listas (float/dropdown/toggle) del tool visible en `panelIndex`. */

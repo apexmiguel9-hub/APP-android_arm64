@@ -342,6 +342,12 @@ static int g_obl_active_brush_use_persistent = 0;
 static int g_obl_active_brush_use_smooth_stroke = 0;
 static int g_obl_active_brush_use_pressure_area_radius = 0;
 static int g_obl_active_brush_invert_to_scrape_fill = 0;
+/* Batch 1 (Draw/Draw Sharp/Clay): hardness, direction, accumulate, front faces, plane trim. */
+static float g_obl_active_brush_hardness = 0.0f;
+static float g_obl_active_brush_direction = 0.0f; /* 0=Add (BRUSH_DIR_IN off), 1=Subtract */
+static int g_obl_active_brush_accumulate = 0;
+static int g_obl_active_brush_front_faces = 0;
+static int g_obl_active_brush_plane_trim = 0;
 /* Color Filter (builtin.color_filter): type/strength leidos del static de Blender
  * (sculpt_filter_color.cc OBL_color_filter_get) cada frame para el panel. */
 static int g_obl_active_cf_type = 0;          /* 0 = FILL */
@@ -922,6 +928,11 @@ int mainBlenderLoop(void*pContext) {
           g_obl_active_brush_use_smooth_stroke = (br->flag & BRUSH_SMOOTH_STROKE) ? 1 : 0;
           g_obl_active_brush_use_pressure_area_radius = (br->flag2 & BRUSH_AREA_RADIUS_PRESSURE) ? 1 : 0;
           g_obl_active_brush_invert_to_scrape_fill = (br->flag & BRUSH_INVERT_TO_SCRAPE_FILL) ? 1 : 0;
+          g_obl_active_brush_hardness = br->hardness;
+          g_obl_active_brush_direction = (br->flag & BRUSH_DIR_IN) ? 1.0f : 0.0f;
+          g_obl_active_brush_accumulate = (br->flag & BRUSH_ACCUMULATE) ? 1 : 0;
+          g_obl_active_brush_front_faces = (br->flag & BRUSH_FRONTFACE) ? 1 : 0;
+          g_obl_active_brush_plane_trim = (br->flag & BRUSH_PLANE_TRIM) ? 1 : 0;
           /* Color Filter: reflejar el static de Blender para el panel. */
           {
             int t = 0;
@@ -963,6 +974,7 @@ int mainBlenderLoop(void*pContext) {
               /* Color Filter: strength (float -10..10) y type (enum). No son campos
                  del Brush -> se persisten en el static de Blender. */
               case 9: OBL_color_filter_set(g_obl_active_cf_type, req_fval); break;
+              case 10: br->hardness = CLAMPIS(req_fval, 0.0f, 1.0f); break;
               /* enums (field ids 101..106) */
               case 101: br->blend = (short)(int)req_fval; break;
               case 102: br->elastic_deform_type = (int)req_fval; break;
@@ -971,6 +983,11 @@ int mainBlenderLoop(void*pContext) {
               case 105: br->cloth_deform_type = (int)req_fval; break;
               case 106: br->boundary_deform_type = (int)req_fval; break;
               case 107: OBL_color_filter_set((int)req_fval, g_obl_active_cf_strength); break;
+              /* 108 = direction (bitflag BRUSH_DIR_IN): 0=Add, 1=Subtract */
+              case 108:
+                if (req_fval >= 0.5f) br->flag |= BRUSH_DIR_IN;
+                else br->flag &= ~BRUSH_DIR_IN;
+                break;
               /* bools (field ids 201..204) */
               case 201:
                 if (req_fval >= 0.5f) br->flag |= BRUSH_PERSISTENT;
@@ -987,6 +1004,19 @@ int mainBlenderLoop(void*pContext) {
               case 204:
                 if (req_fval >= 0.5f) br->flag |= BRUSH_SMOOTH_STROKE;
                 else br->flag &= ~BRUSH_SMOOTH_STROKE;
+                break;
+              /* 205 = accumulate, 206 = front faces, 207 = plane trim (batch 1) */
+              case 205:
+                if (req_fval >= 0.5f) br->flag |= BRUSH_ACCUMULATE;
+                else br->flag &= ~BRUSH_ACCUMULATE;
+                break;
+              case 206:
+                if (req_fval >= 0.5f) br->flag |= BRUSH_FRONTFACE;
+                else br->flag &= ~BRUSH_FRONTFACE;
+                break;
+              case 207:
+                if (req_fval >= 0.5f) br->flag |= BRUSH_PLANE_TRIM;
+                else br->flag &= ~BRUSH_PLANE_TRIM;
                 break;
             }
             __android_log_print(ANDROID_LOG_INFO, "OBL.WHEEL",
@@ -1100,6 +1130,7 @@ float oblGetActiveBrushExtra(int field){
     case 7: return g_obl_active_brush_elastic_preserve;
     case 8: return g_obl_active_brush_plane_offset;
     case 9: return g_obl_active_cf_strength;   /* Color Filter strength */
+    case 10: return g_obl_active_brush_hardness;
     case 101: return g_obl_active_brush_blend;
     case 102: return g_obl_active_brush_elastic_deform_type;
     case 103: return g_obl_active_brush_pose_deform_type;
@@ -1107,10 +1138,14 @@ float oblGetActiveBrushExtra(int field){
     case 105: return g_obl_active_brush_cloth_deform_type;
     case 106: return g_obl_active_brush_boundary_deform_type;
     case 107: return (float)g_obl_active_cf_type;   /* Color Filter type */
+    case 108: return g_obl_active_brush_direction;   /* 0=Add, 1=Subtract */
     case 201: return (float)g_obl_active_brush_use_persistent;
     case 202: return (float)g_obl_active_brush_use_pressure_area_radius;
     case 203: return (float)g_obl_active_brush_invert_to_scrape_fill;
     case 204: return (float)g_obl_active_brush_use_smooth_stroke;
+    case 205: return (float)g_obl_active_brush_accumulate;
+    case 206: return (float)g_obl_active_brush_front_faces;
+    case 207: return (float)g_obl_active_brush_plane_trim;
   }
   return 0.0f;
 }
