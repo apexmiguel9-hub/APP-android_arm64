@@ -336,16 +336,20 @@ fun showRuntimeButtons(context: Context, lifecycleOwner: LifecycleOwner) {
                 setImageBitmap(bitmap)
                 setOnClickListener {
                     val uuid = btn.uuid
-                    val pressed = if (btn.isToggleable) {
+                    if (btn.isToggleable) {
                         val newState = !(toggleStates[uuid] ?: false)
                         toggleStates[uuid] = newState
                         // Visual feedback: dim/green overlay when pressed
                         alpha = if (newState) 0.6f else 1.0f
-                        newState
+                        OBLNativeActivity.routeClickEvents(btn.clickEvents, newState)
                     } else {
-                        true
+                        // Non-toggle (momentary): send a complete press+release cycle so
+                        // modifiers (Shift/Ctrl/Alt) don't get stuck "held down" internally.
+                        // Regular keys (oblSetValue) already send down+up atomically;
+                        // modifiers (setValueOn/Off) need an explicit release.
+                        OBLNativeActivity.routeClickEvents(btn.clickEvents, true)
+                        OBLNativeActivity.routeClickEvents(btn.clickEvents, false)
                     }
-                    OBLNativeActivity.routeClickEvents(btn.clickEvents, pressed)
                 }
             }
 
