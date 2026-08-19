@@ -491,7 +491,7 @@ private fun sculptArcWindowSize(context: android.content.Context, collapsed: Boo
  *  0 = sin panel (ventana solo del arco).
  *  extraWidthPx: ancho extra (px) para desplegar el submenú de dropdown a la DERECHA
  *  del chip (sin esto se sale de la ventana y queda recortado/intocable). */
-internal fun updateSculptArcWindow(collapsed: Boolean, touchable: Boolean, panelHeightPx: Int = 0, extraWidthPx: Int = 0) {
+internal fun updateSculptArcWindow(collapsed: Boolean, touchable: Boolean, panelHeightPx: Int = 0, extraWidthPx: Int = 0, rightAligned: Boolean = false) {
     val view = OverlayState.sculptArcView ?: return
     val lp = OverlayState.sculptArcLp ?: return
     val (w, h) = when {
@@ -504,6 +504,10 @@ internal fun updateSculptArcWindow(collapsed: Boolean, touchable: Boolean, panel
     }
     lp.width = w
     lp.height = h
+    // Card Nomad: la ventana se ancla a la DERECHA inferior (no centrada) para que la
+    // card salga a la derecha como el prototipo; el arco del wheel queda bajo/atrás.
+    lp.gravity = if (rightAligned) Gravity.BOTTOM or Gravity.RIGHT
+                 else Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
     lp.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
             WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or

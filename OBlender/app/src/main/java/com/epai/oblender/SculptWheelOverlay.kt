@@ -737,7 +737,8 @@ fun CarouselDock() {
             }
             if (inSculpt != lastActive) {
                 lastActive = inSculpt
-                updateSculptArcWindow(collapsed, inSculpt, panelHeightPx(), panelWidthPx())
+                updateSculptArcWindow(collapsed, inSculpt, panelHeightPx(), panelWidthPx(),
+                    rightAligned = panelIndex >= 0 && isNomadTool(panelIndex))
             }
             delay(200)
         }
@@ -747,20 +748,23 @@ fun CarouselDock() {
     // con el tamaño de la ventana (chica si está colapsada, arco completo si no).
     LaunchedEffect(collapsed) {
         OverlayState.sculptArcCollapsed = collapsed
-        updateSculptArcWindow(collapsed, OverlayState.sculptArcActive, panelHeightPx(), panelWidthPx())
+        updateSculptArcWindow(collapsed, OverlayState.sculptArcActive, panelHeightPx(), panelWidthPx(),
+            rightAligned = panelIndex >= 0 && isNomadTool(panelIndex))
     }
 
     // Submenú de dropdown: al abrir/cerrar, la ventana crece/encoge para alojar la
     // lista de opciones (el resto del panel queda igual).
     LaunchedEffect(openDropdown) {
-        updateSculptArcWindow(collapsed, OverlayState.sculptArcActive, panelHeightPx(), panelWidthPx())
+        updateSculptArcWindow(collapsed, OverlayState.sculptArcActive, panelHeightPx(), panelWidthPx(),
+            rightAligned = panelIndex >= 0 && isNomadTool(panelIndex))
     }
 
     // Mini menu: al abrir el panel (long-press), la ventana crece hacia arriba para
     // alojar la card; se re-leen los valores del brush tras activar el tool (el drain
     // tarda unas frames en aplicarlo). Al cerrar, la ventana vuelve al tamaño normal.
     LaunchedEffect(panelIndex) {
-        updateSculptArcWindow(collapsed, OverlayState.sculptArcActive, panelHeightPx(), panelWidthPx())
+        updateSculptArcWindow(collapsed, OverlayState.sculptArcActive, panelHeightPx(), panelWidthPx(),
+            rightAligned = panelIndex >= 0 && isNomadTool(panelIndex))
         if (panelIndex < 0) openDropdown = -1
         if (panelIndex >= 0) {
             delay(300)
