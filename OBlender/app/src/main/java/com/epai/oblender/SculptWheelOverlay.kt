@@ -15,6 +15,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -232,6 +233,12 @@ private const val FIELD_USE_SMOOTH_STROKE = 204
 private const val FIELD_ACCUMULATE = 205
 private const val FIELD_FRONT_FACES = 206
 private const val FIELD_PLANE_TRIM = 207
+
+/** Tools que usan la card "Nomad" (Material3) en vez del mini menu canvas. Por ahora
+ *  SOLO Draw y Draw Sharp (para probar); el resto de tools siguen con el mini menu. */
+private val nomadTools = setOf("Draw", "Draw Sharp")
+private fun isNomadTool(panelIndex: Int): Boolean =
+    panelIndex >= 0 && panelIndex < sculptTools.size && sculptTools[panelIndex] in nomadTools
 
 private data class ExtraParam(val field: Int, val name: String, val min: Float, val max: Float)
 private data class DropdownSpec(val field: Int, val name: String, val options: List<String>)
@@ -546,6 +553,8 @@ fun CarouselDock() {
     val halfW = with(density) { g.halfW.dp.toPx() }
     val arcH = with(density) { g.arcH.dp.toPx() }
     val bandHalf = with(density) { g.bandHalf.dp.toPx() }
+    // Factor px/dp (density del display) para dimensionar la card Nomad en px.
+    val densities = density.density
 
     val step = ARC_STEP
     val maxOffset = -((sculptTools.size - 1) * step).toFloat()
@@ -612,6 +621,12 @@ fun CarouselDock() {
     }
 
     fun recenterTo(sel: Int) {
+        // Navegación del carrusel: el panel (canvas o Nomad) se cierra para que la card
+        // no quede pegada al tool equivocado tras un snap/scroll.
+        if (panelIndex != -1) {
+            panelIndex = -1
+            openDropdown = -1
+        }
         scope.launch {
             scrollOffset.animateTo(
                 targetValue = -(sel * step).toFloat(),
@@ -640,6 +655,9 @@ fun CarouselDock() {
      // Altura extra (px) que debe crecer la ventana del overlay para alojar el panel.
      fun panelHeightPx(): Int {
          if (panelIndex < 0) return 0
+         if (isNomadTool(panelIndex)) {
+             return (NOMAD_CARD_H_DP * densities).toInt()
+         }
          val pc = panelControls(panelIndex)
         val rows = panelRows(panelHasColor(panelIndex), isBrushTool(panelIndex), pc.floats, pc.dropdowns, pc.toggles, pc.radios)
         return (panelHeight(rows) + PANEL_GAP).toInt()
@@ -648,7 +666,14 @@ fun CarouselDock() {
     // Ancho extra (px) para el submenú del dropdown abierto (sale a la derecha del
     // chip; sin esto se saldría de la ventana y quedaría recortado/intocable).
     fun panelWidthPx(): Int {
-        if (panelIndex < 0 || openDropdown < 0) return 0
+        if (panelIndex < 0) return 0
+        if (isNomadTool(panelIndex)) {
+            // La card Nomad (310dp) puede ser más ancha que el arco base: crecer la
+            // ventana lo justo (centrado) para que la card no quede recortada.
+            val bw = wheelWindowSize(context).first.toFloat()
+            val cardW = NOMAD_CARD_W_DP * densities
+            return (cardW - bw).coerceAtLeast(0f).toInt()
+        }
         val dd = panelControls(panelIndex).dropdowns.firstOrNull { it.field == openDropdown } ?: return 0
         val scale = submenuScale(context)
         // El submenú empieza en cx+PANEL_W/2-8 y mide submenuW; la ventana crece
@@ -776,10 +801,13 @@ fun CarouselDock() {
 
     // Raíz SIN fondo sólido. Los detectores solo reaccionan con hit-test de banda/esfera;
     // las zonas vacías de la ventana no consumen ni disparan nada.
+    val nomadCardOpen = panelIndex >= 0 && isNomadTool(panelIndex)
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .pointerInput(Unit) {
+            .pointerInput(nomadCardOpen) {
+                // Card Nomad abierta: el wheel queda inerte (la card gestiona sus gestos).
+                if (nomadCardOpen) return@pointerInput
                 // Tap + long-press con control de slop: el long-press SOLO dispara si el
                 // dedo se queda quieto (sin moverse más allá del touchSlop durante 500ms);
                 // si se mueve, el drag del carrusel toma el gesto (nada de confusión).
@@ -921,7 +949,8 @@ fun CarouselDock() {
                     }
                 )
             }
-            .pointerInput(Unit) {
+            .pointerInput(nomadCardOpen) {
+                if (nomadCardOpen) return@pointerInput
                 var gestureArmed = false
                 var dragAccum = 0f
                 var onHandle = false
@@ -1181,6 +1210,9 @@ fun CarouselDock() {
             // Oculto mientras el mini menu está abierto (la card ocupa esa zona).
             if (panelIndex < 0) {
                 drawChevron(cx, chevronHandleY(h.toFloat()), collapsed = false)
+            } else if (isNomadTool(panelIndex)) {
+                // Draw/Draw Sharp -> la card "Nomad" (Compose Material3) se dibuja
+                // encima del Canvas; aquí NO se dibuja el mini menu canvas.
             } else {
                 // Mini menu: card redondeada arriba del arco (la ventana creció hacia
                 // arriba, la card se dibuja en el top del canvas).
@@ -1204,6 +1236,25 @@ fun CarouselDock() {
                     scale = submenuScale(context)
                 )
             }
+        }
+
+        // Card "Nomad" (Material3) para Draw / Draw Sharp, reemplazando al mini menu
+        // canvas. El overlay crece el alto justo a NOMAD_CARD_H_DP; la card se ancla a
+        // la derecha-centro (estilo del prototipo) con el ancho fijo de la card.
+        if (panelIndex >= 0 && isNomadTool(panelIndex)) {
+            NomadBrushPanel(
+                modifier = Modifier
+                    .align(androidx.compose.ui.Alignment.CenterEnd)
+                    .padding(end = 0.dp, top = 4.dp),
+                label = sculptTools[panelIndex],
+                onClose = {
+                    panelIndex = -1
+                    openDropdown = -1
+                },
+                initialRadius = panelRadius,
+                initialStrength = panelStrength,
+                initialExtras = panelExtras.toMap()
+            )
         }
     }
 }
