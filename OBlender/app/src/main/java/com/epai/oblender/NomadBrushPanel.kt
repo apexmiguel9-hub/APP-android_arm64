@@ -27,8 +27,11 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -72,9 +75,10 @@ val NomadTextMuted = Color(0xFF9E9EA8)
 
 /** Dimensiones de la card Nomad (dp). Se usa para dimensionar la ventana del overlay:
  *  el contenido scrollea hasta NOMAD_CONTENT_MAX_H y la ventana crece NOMAD_CARD_H. */
-const val NOMAD_CARD_W_DP = 300f
-const val NOMAD_CONTENT_MAX_H = 360f
+const val NOMAD_CARD_W_DP = 280f
+const val NOMAD_CONTENT_MAX_H = 340f
 const val NOMAD_CARD_H_DP = NOMAD_CONTENT_MAX_H + 44f // scroll max + paddings/header
+const val NOMAD_LIFT_DP = 40f // eleva la card sobre el arco (ventana más alta hacia arriba)
 
 /** Campos reales del brush usados por Draw / Draw Sharp (mismo IDs que el mini menu). */
 private const val FIELD_AUTOSMOOTH = 1
@@ -113,7 +117,8 @@ private fun NomadSculptSlider(
     isInt: Boolean = false,
     hasPressureIcon: Boolean = false,
     isPressureActive: Boolean = false,
-    onPressureToggle: () -> Unit = {}
+    onPressureToggle: () -> Unit = {},
+    onEditStateChanged: (Boolean) -> Unit = {}
 ) {
     var isEditing by remember { mutableStateOf(false) }
     var inputText by remember(value, isEditing) {
@@ -187,10 +192,11 @@ private fun NomadSculptSlider(
                             .clickable { if (!isEditing) onPressureToggle() },
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = "🖊",
-                            fontSize = 10.sp,
-                            color = Color.White
+                        Icon(
+                            imageVector = Icons.Filled.Edit,
+                            contentDescription = null,
+                            modifier = Modifier.size(12.dp),
+                            tint = Color.White
                         )
                     }
                 }
@@ -272,6 +278,7 @@ private fun NomadSculptSlider(
     }
 
     LaunchedEffect(isEditing) {
+        onEditStateChanged(isEditing)
         if (isEditing) {
             runCatching {
                 delay(50)
@@ -370,7 +377,8 @@ fun NomadBrushPanel(
     onClose: () -> Unit,
     initialRadius: Int,
     initialStrength: Float,
-    initialExtras: Map<Int, Float>
+    initialExtras: Map<Int, Float>,
+    onEditModeChanged: (Boolean) -> Unit = {}
 ) {
     val scrollState = rememberScrollState()
 
@@ -404,7 +412,7 @@ fun NomadBrushPanel(
 
     Box(
         modifier = modifier.fillMaxSize(),
-        contentAlignment = Alignment.CenterEnd
+        contentAlignment = Alignment.TopEnd
     ) {
         Card(
             modifier = Modifier
@@ -482,6 +490,7 @@ fun NomadBrushPanel(
                         hasPressureIcon = true,
                         isPressureActive = radiusPressure,
                         onPressureToggle = { radiusPressure = !radiusPressure },
+                        onEditStateChanged = onEditModeChanged,
                         onValueChange = { r ->
                             radius = r
                             OBLNativeActivity.setActiveBrushRadiusStatic(round(r).toInt())
@@ -525,6 +534,7 @@ fun NomadBrushPanel(
                     hasPressureIcon = true,
                     isPressureActive = strengthPressure,
                     onPressureToggle = { strengthPressure = !strengthPressure },
+                    onEditStateChanged = onEditModeChanged,
                     onValueChange = { s ->
                         strength = s.coerceIn(0f, 1f)
                         OBLNativeActivity.setActiveBrushStrengthStatic(strength)
@@ -536,6 +546,7 @@ fun NomadBrushPanel(
                     label = "Hardness",
                     value = hardness,
                     range = 0f..1f,
+                    onEditStateChanged = onEditModeChanged,
                     onValueChange = { h ->
                         hardness = h.coerceIn(0f, 1f)
                         OBLNativeActivity.setActiveBrushExtraStatic(FIELD_HARDNESS, hardness)
@@ -547,6 +558,7 @@ fun NomadBrushPanel(
                     label = "Normal Radius",
                     value = normalRadius,
                     range = 0f..2f,
+                    onEditStateChanged = onEditModeChanged,
                     onValueChange = { n ->
                         normalRadius = n.coerceIn(0f, 2f)
                         OBLNativeActivity.setActiveBrushExtraStatic(FIELD_NORMAL_RADIUS, normalRadius)
@@ -558,6 +570,7 @@ fun NomadBrushPanel(
                     label = "Auto-Smooth",
                     value = autoSmooth,
                     range = 0f..1f,
+                    onEditStateChanged = onEditModeChanged,
                     onValueChange = { a ->
                         autoSmooth = a.coerceIn(0f, 1f)
                         OBLNativeActivity.setActiveBrushExtraStatic(FIELD_AUTOSMOOTH, autoSmooth)

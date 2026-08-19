@@ -491,7 +491,7 @@ private fun sculptArcWindowSize(context: android.content.Context, collapsed: Boo
  *  0 = sin panel (ventana solo del arco).
  *  extraWidthPx: ancho extra (px) para desplegar el submenú de dropdown a la DERECHA
  *  del chip (sin esto se sale de la ventana y queda recortado/intocable). */
-internal fun updateSculptArcWindow(collapsed: Boolean, touchable: Boolean, panelHeightPx: Int = 0, extraWidthPx: Int = 0, rightAligned: Boolean = false) {
+internal fun updateSculptArcWindow(collapsed: Boolean, touchable: Boolean, panelHeightPx: Int = 0, extraWidthPx: Int = 0, rightAligned: Boolean = false, focusable: Boolean = false) {
     val view = OverlayState.sculptArcView ?: return
     val lp = OverlayState.sculptArcLp ?: return
     val (w, h) = when {
@@ -508,10 +508,20 @@ internal fun updateSculptArcWindow(collapsed: Boolean, touchable: Boolean, panel
     // card salga a la derecha como el prototipo; el arco del wheel queda bajo/atrás.
     lp.gravity = if (rightAligned) Gravity.BOTTOM or Gravity.RIGHT
                  else Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-    lp.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+    // Mientras se edita el valor del chip (card Nomad) la ventana DEBE ser focussable:
+    // con FLAG_NOT_FOCUSABLE el BasicTextField no recibe foco real y el teclado android
+    // nunca aparece. Al terminar la edición se restaura NOT_FOCUSABLE para que la ventana
+    // no robe el foco del resto del sistema.
+    lp.flags = WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
             WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+            (if (focusable) 0 else WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE) or
             (if (touchable) 0 else WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE)
+    lp.softInputMode = if (focusable) {
+        WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE or
+                WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+    } else {
+        WindowManager.LayoutParams.SOFT_INPUT_STATE_UNSPECIFIED
+    }
     // Hide (GONE) + NOT_TOUCHABLE outside sculpt so the window neither renders nor
     // consumes any touch events; otherwise leave VISIBLE + touchable.
     view.post {
@@ -536,6 +546,9 @@ fun createSculptArcOverlay(context: android.content.Context, lifecycleOwner: Lif
             SculptArcContent()
         }
         setBackgroundColor(android.graphics.Color.TRANSPARENT)
+        // Permite que el BasicTextField de la card Nomad reciba foco real (para poder
+        // abrir el teclado cuando la ventana pasa a focusable durante la edición).
+        isFocusableInTouchMode = true
     }
 
     composeView.setViewTreeLifecycleOwner(lifecycleOwner)

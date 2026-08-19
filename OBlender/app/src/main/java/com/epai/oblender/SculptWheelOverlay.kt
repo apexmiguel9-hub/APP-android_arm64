@@ -580,6 +580,9 @@ fun CarouselDock() {
     // Submenú de un dropdown: field id del dropdown expandido (muestra TODAS las
     // opciones para elegir directo, no ciclar con tap). -1 = sin submenú abierto.
     var openDropdown by remember { mutableStateOf(-1) }
+    // Card Nomad: true mientras se edita un valor (chip) para que la ventana pase a
+    // focusable y el teclado android se abra; false al terminar la edición.
+    var nomadEditing by remember { mutableStateOf(false) }
 
     // Posición del chevron (manija de colapsar/expandir): colapsado -> centro de la
     // ventana chica; expandido -> sobre la curvatura superior del arco.
@@ -656,7 +659,7 @@ fun CarouselDock() {
      fun panelHeightPx(): Int {
          if (panelIndex < 0) return 0
          if (isNomadTool(panelIndex)) {
-             return (NOMAD_CARD_H_DP * densities).toInt()
+             return ((NOMAD_CARD_H_DP + NOMAD_LIFT_DP) * densities).toInt()
          }
          val pc = panelControls(panelIndex)
         val rows = panelRows(panelHasColor(panelIndex), isBrushTool(panelIndex), pc.floats, pc.dropdowns, pc.toggles, pc.radios)
@@ -765,7 +768,10 @@ fun CarouselDock() {
     LaunchedEffect(panelIndex) {
         updateSculptArcWindow(collapsed, OverlayState.sculptArcActive, panelHeightPx(), panelWidthPx(),
             rightAligned = panelIndex >= 0 && isNomadTool(panelIndex))
-        if (panelIndex < 0) openDropdown = -1
+        if (panelIndex < 0) {
+            openDropdown = -1
+            nomadEditing = false
+        }
         if (panelIndex >= 0) {
             delay(300)
             if (panelIndex >= 0) {
@@ -793,6 +799,14 @@ fun CarouselDock() {
                 }
             }
         }
+    }
+
+    // Card Nomad: al entrar/salir del modo edición (chip del valor), la ventana pasa a
+    // focusable para que se abra el teclado android; al salir vuelve a NO_FOCUSABLE.
+    LaunchedEffect(nomadEditing) {
+        updateSculptArcWindow(collapsed, OverlayState.sculptArcActive, panelHeightPx(), panelWidthPx(),
+            rightAligned = panelIndex >= 0 && isNomadTool(panelIndex),
+            focusable = nomadEditing)
     }
 
     // Fuera de Sculpting se reinicia el panel para no abrir un menú stale al volver.
@@ -1248,13 +1262,15 @@ fun CarouselDock() {
         if (panelIndex >= 0 && isNomadTool(panelIndex)) {
             NomadBrushPanel(
                 modifier = Modifier
-                    .align(androidx.compose.ui.Alignment.CenterEnd)
-                    .padding(end = 0.dp, top = 4.dp),
+                    .align(androidx.compose.ui.Alignment.TopEnd)
+                    .padding(top = 10.dp, end = 10.dp),
                 label = sculptTools[panelIndex],
                 onClose = {
                     panelIndex = -1
                     openDropdown = -1
+                    nomadEditing = false
                 },
+                onEditModeChanged = { nomadEditing = it },
                 initialRadius = panelRadius,
                 initialStrength = panelStrength,
                 initialExtras = panelExtras.toMap()
