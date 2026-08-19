@@ -484,7 +484,7 @@ fun NomadBrushPanel(
                         onPressureToggle = { radiusPressure = !radiusPressure },
                         onValueChange = { r ->
                             radius = r
-                            OBLNativeActivity.setActiveBrushRadiusStatic(r.round().toInt())
+                            OBLNativeActivity.setActiveBrushRadiusStatic(round(r).toInt())
                         }
                     )
 
