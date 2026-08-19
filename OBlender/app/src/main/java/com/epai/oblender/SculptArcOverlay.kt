@@ -488,15 +488,17 @@ private fun sculptArcWindowSize(context: android.content.Context, collapsed: Boo
 /** Resize / re-touchability of the overlay window. Touchable only when active.
  *  Uses the wheel geometry (wheelWindowSize) since the wheel replaced the arc.
  *  panelHeightPx: altura extra (px) que suma la card del mini menu sobre el arco;
- *  0 = sin panel (ventana solo del arco). */
-internal fun updateSculptArcWindow(collapsed: Boolean, touchable: Boolean, panelHeightPx: Int = 0) {
+ *  0 = sin panel (ventana solo del arco).
+ *  extraWidthPx: ancho extra (px) para desplegar el submenú de dropdown a la DERECHA
+ *  del chip (sin esto se sale de la ventana y queda recortado/intocable). */
+internal fun updateSculptArcWindow(collapsed: Boolean, touchable: Boolean, panelHeightPx: Int = 0, extraWidthPx: Int = 0) {
     val view = OverlayState.sculptArcView ?: return
     val lp = OverlayState.sculptArcLp ?: return
     val (w, h) = when {
         collapsed -> collapsedWheelWindowSize()
         panelHeightPx > 0 -> {
             val (bw, bh) = wheelWindowSize(view.context)
-            bw to bh + panelHeightPx
+            (bw + extraWidthPx) to bh + panelHeightPx
         }
         else -> wheelWindowSize(view.context)
     }

@@ -344,7 +344,9 @@ static int g_obl_active_brush_use_pressure_area_radius = 0;
 static int g_obl_active_brush_invert_to_scrape_fill = 0;
 /* Batch 1 (Draw/Draw Sharp/Clay): hardness, direction, accumulate, front faces, plane trim. */
 static float g_obl_active_brush_hardness = 0.0f;
+static float g_obl_active_brush_normal_radius = 0.5f;
 static float g_obl_active_brush_direction = 0.0f; /* 0=Add (BRUSH_DIR_IN off), 1=Subtract */
+static int g_obl_active_brush_radius_unit = 0; /* 0=View, 1=Scene (BRUSH_LOCK_SIZE) */
 static int g_obl_active_brush_accumulate = 0;
 static int g_obl_active_brush_front_faces = 0;
 static int g_obl_active_brush_plane_trim = 0;
@@ -929,7 +931,9 @@ int mainBlenderLoop(void*pContext) {
           g_obl_active_brush_use_pressure_area_radius = (br->flag2 & BRUSH_AREA_RADIUS_PRESSURE) ? 1 : 0;
           g_obl_active_brush_invert_to_scrape_fill = (br->flag & BRUSH_INVERT_TO_SCRAPE_FILL) ? 1 : 0;
           g_obl_active_brush_hardness = br->hardness;
+          g_obl_active_brush_normal_radius = br->normal_radius_factor;
           g_obl_active_brush_direction = (br->flag & BRUSH_DIR_IN) ? 1.0f : 0.0f;
+          g_obl_active_brush_radius_unit = (br->flag & BRUSH_LOCK_SIZE) ? 1.0f : 0.0f;
           g_obl_active_brush_accumulate = (br->flag & BRUSH_ACCUMULATE) ? 1 : 0;
           g_obl_active_brush_front_faces = (br->flag & BRUSH_FRONTFACE) ? 1 : 0;
           g_obl_active_brush_plane_trim = (br->flag & BRUSH_PLANE_TRIM) ? 1 : 0;
@@ -975,6 +979,8 @@ int mainBlenderLoop(void*pContext) {
                  del Brush -> se persisten en el static de Blender. */
               case 9: OBL_color_filter_set(g_obl_active_cf_type, req_fval); break;
               case 10: br->hardness = CLAMPIS(req_fval, 0.0f, 1.0f); break;
+              /* 11 = normal_radius_factor (float 0..2) */
+              case 11: br->normal_radius_factor = CLAMPIS(req_fval, 0.0f, 2.0f); break;
               /* enums (field ids 101..106) */
               case 101: br->blend = (short)(int)req_fval; break;
               case 102: br->elastic_deform_type = (int)req_fval; break;
@@ -987,6 +993,11 @@ int mainBlenderLoop(void*pContext) {
               case 108:
                 if (req_fval >= 0.5f) br->flag |= BRUSH_DIR_IN;
                 else br->flag &= ~BRUSH_DIR_IN;
+                break;
+              /* 109 = radius unit (bitflag BRUSH_LOCK_SIZE): 0=View, 1=Scene */
+              case 109:
+                if (req_fval >= 0.5f) br->flag |= BRUSH_LOCK_SIZE;
+                else br->flag &= ~BRUSH_LOCK_SIZE;
                 break;
               /* bools (field ids 201..204) */
               case 201:
@@ -1131,6 +1142,7 @@ float oblGetActiveBrushExtra(int field){
     case 8: return g_obl_active_brush_plane_offset;
     case 9: return g_obl_active_cf_strength;   /* Color Filter strength */
     case 10: return g_obl_active_brush_hardness;
+    case 11: return g_obl_active_brush_normal_radius;
     case 101: return g_obl_active_brush_blend;
     case 102: return g_obl_active_brush_elastic_deform_type;
     case 103: return g_obl_active_brush_pose_deform_type;
@@ -1139,6 +1151,7 @@ float oblGetActiveBrushExtra(int field){
     case 106: return g_obl_active_brush_boundary_deform_type;
     case 107: return (float)g_obl_active_cf_type;   /* Color Filter type */
     case 108: return g_obl_active_brush_direction;   /* 0=Add, 1=Subtract */
+    case 109: return g_obl_active_brush_radius_unit;  /* 0=View, 1=Scene */
     case 201: return (float)g_obl_active_brush_use_persistent;
     case 202: return (float)g_obl_active_brush_use_pressure_area_radius;
     case 203: return (float)g_obl_active_brush_invert_to_scrape_fill;

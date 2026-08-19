@@ -50,6 +50,7 @@ import kotlin.math.abs
 import kotlin.math.asin
 import kotlin.math.atan2
 import kotlin.math.cos
+import kotlin.math.floor
 import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -214,6 +215,7 @@ private const val FIELD_ELASTIC_PRESERVE = 7
 private const val FIELD_PLANE_OFFSET = 8
 private const val FIELD_COLOR_FILTER_STRENGTH = 9
 private const val FIELD_HARDNESS = 10
+private const val FIELD_NORMAL_RADIUS = 11
 private const val FIELD_BLEND = 101
 private const val FIELD_ELASTIC_DEFORM_TYPE = 102
 private const val FIELD_POSE_DEFORM_TYPE = 103
@@ -222,6 +224,7 @@ private const val FIELD_CLOTH_DEFORM_TYPE = 105
 private const val FIELD_BOUNDARY_DEFORM_TYPE = 106
 private const val FIELD_COLOR_FILTER_TYPE = 107
 private const val FIELD_DIRECTION = 108
+private const val FIELD_RADIUS_UNIT = 109
 private const val FIELD_USE_PERSISTENT = 201
 private const val FIELD_USE_PRESSURE_AREA_RADIUS = 202
 private const val FIELD_INVERT_TO_SCRAPE_FILL = 203
@@ -233,6 +236,9 @@ private const val FIELD_PLANE_TRIM = 207
 private data class ExtraParam(val field: Int, val name: String, val min: Float, val max: Float)
 private data class DropdownSpec(val field: Int, val name: String, val options: List<String>)
 private data class ToggleSpec(val field: Int, val name: String)
+/** Control de lista segmentada (2+ botones, p.ej. Direction Add/Subtract, Radius Unit
+ *  View/Scene): se dibuja como píldoras contiguas como en el panel de Blender. */
+private data class RadioSpec(val field: Int, val name: String, val options: List<String>)
 
 /** Enum value lists, sincronizados con EnumPropertyItem del fork (rna_brush.c). */
 private val blendOptions = listOf(
@@ -246,6 +252,8 @@ private val clothDeformOptions = listOf("Drag", "Push", "Grab", "Pinch Point", "
 private val boundaryDeformOptions = listOf("Bend", "Expand", "Inflate", "Grab", "Twist", "Smooth")
 /* Brush.direction (rna_brush.c prop_direction_items): 0=ADD, 1=SUBTRACT (BRUSH_DIR_IN). */
 private val directionOptions = listOf("Add", "Subtract")
+/* Radius Unit (rna_brush.c brush_size_unit_items): 0=View, BRUSH_LOCK_SIZE=Scene. */
+private val radiusUnitOptions = listOf("View", "Scene")
 /* eSculptColorFilterTypes (sculpt_filter_color.cc): FILL=0 .. BLUE=9. */
 private val colorFilterOptions = listOf(
     "Fill", "Hue", "Saturation", "Value", "Brightness", "Contrast",
@@ -267,7 +275,8 @@ private fun panelRows(
     showBrushRows: Boolean,
     floatExtras: List<ExtraParam>,
     dropdowns: List<DropdownSpec>,
-    toggles: List<ToggleSpec>
+    toggles: List<ToggleSpec>,
+    radios: List<RadioSpec>
 ): List<PanelRowSpec> {
     val rows = mutableListOf<PanelRowSpec>()
     var y = ROW1_Y
@@ -276,9 +285,6 @@ private fun panelRows(
         rows += PanelRowSpec(2, 0, y); y += ROW_STEP
     }
     if (hasColor) {
-        // Color wheel circular (id 6): el centro del disco queda en y + WHEEL_H/2.
-        // El disco controla sat(x) + val(y) y el ring el hue; el slider Val (id 7)
-        // queda como control fino adicional debajo del wheel.
         rows += PanelRowSpec(6, 0, y + WHEEL_H / 2f); y += WHEEL_H
         rows += PanelRowSpec(7, 0, y); y += ROW_STEP
     }
@@ -286,12 +292,14 @@ private fun panelRows(
         rows += PanelRowSpec(100 + e.field, e.field, y); y += ROW_STEP
     }
     for (d in dropdowns) {
-        // Campo enum 101..107 -> fila 201..207 (rango de dropdown en handlers).
         rows += PanelRowSpec(200 + (d.field - 100), d.field, y); y += ROW_STEP
     }
     for (t in toggles) {
-        // Campo bool 201..204 -> fila 301..304 (rango de toggle en handlers).
         rows += PanelRowSpec(300 + (t.field - 200), t.field, y); y += ROW_STEP
+    }
+    for (r in radios) {
+        // Campo enum 108..109 -> fila 408..409 (rango de radio en handlers).
+        rows += PanelRowSpec(400 + (r.field - 100), r.field, y); y += ROW_STEP
     }
     return rows
 }
@@ -380,10 +388,15 @@ private val toolDropdowns: Map<String, List<DropdownSpec>> = mapOf(
         DropdownSpec(FIELD_POSE_DEFORM_TYPE, "Deform", poseDeformOptions),
         DropdownSpec(FIELD_POSE_ORIGIN_TYPE, "Origin", poseOriginOptions)
     ),
-    "Color Filter" to listOf(DropdownSpec(FIELD_COLOR_FILTER_TYPE, "Filter", colorFilterOptions)),
-    "Draw" to listOf(DropdownSpec(FIELD_DIRECTION, "Direction", directionOptions)),
-    "Draw Sharp" to listOf(DropdownSpec(FIELD_DIRECTION, "Direction", directionOptions)),
-    "Clay" to listOf(DropdownSpec(FIELD_DIRECTION, "Direction", directionOptions))
+    "Color Filter" to listOf(DropdownSpec(FIELD_COLOR_FILTER_TYPE, "Filter", colorFilterOptions))
+)
+
+/** Radios segmentados (field ids 108..109): se dibujan como lista de botones contiguos
+ *  (como el Direction Add/Subtract del panel de Blender), con tap directo, sin submenú. */
+private val toolRadios: Map<String, List<RadioSpec>> = mapOf(
+    "Draw" to listOf(RadioSpec(FIELD_DIRECTION, "Direction", directionOptions)),
+    "Draw Sharp" to listOf(RadioSpec(FIELD_DIRECTION, "Direction", directionOptions)),
+    "Clay" to listOf(RadioSpec(FIELD_DIRECTION, "Direction", directionOptions))
 )
 
 /** Toggles/bools (field id 201..204) por tool. */
@@ -408,15 +421,41 @@ private val toolToggles: Map<String, List<ToggleSpec>> = mapOf(
     )
 )
 
-/** Devuelve las 3 listas (float/dropdown/toggle) del tool visible en `panelIndex`. */
-private fun panelControls(panelIndex: Int): Triple<List<ExtraParam>, List<DropdownSpec>, List<ToggleSpec>> {
-    if (panelIndex < 0 || panelIndex >= sculptTools.size) return Triple(emptyList(), emptyList(), emptyList())
+/** Controles completos del panel de un tool: floats (sliders), dropdowns, toggles y
+ *  radios segmentados. */
+private data class PanelControls(
+    val floats: List<ExtraParam>,
+    val dropdowns: List<DropdownSpec>,
+    val toggles: List<ToggleSpec>,
+    val radios: List<RadioSpec>
+)
+
+/** Devuelve los controles del tool visible en `panelIndex`. Para brushes
+ *  (builtin_brush.*) añade SIEMPRE los ajustes compartidos de sculpt: Normal Radius
+ *  (normal_radius_factor, 0..2) y Radius Unit (View/Scene) — en Blender son
+ *  universales en el panel de brush.
+ *  OJO: el Radius Unit es estándar para TODO brush, no solo los que tienen radios. */
+private fun panelControls(panelIndex: Int): PanelControls {
+    if (panelIndex < 0 || panelIndex >= sculptTools.size) {
+        return PanelControls(emptyList(), emptyList(), emptyList(), emptyList())
+    }
     val label = sculptTools[panelIndex]
-    return Triple(
-        toolFloatExtras[label] ?: emptyList(),
-        toolDropdowns[label] ?: emptyList(),
-        toolToggles[label] ?: emptyList()
-    )
+    val isBrush = toolId(label).startsWith("builtin_brush.")
+    val floats = (toolFloatExtras[label] ?: emptyList()) +
+        if (isBrush) listOf(ExtraParam(FIELD_NORMAL_RADIUS, "Nrm Radius", 0f, 2f)) else emptyList()
+    val dropdowns = toolDropdowns[label] ?: emptyList()
+    val toggles = toolToggles[label] ?: emptyList()
+    val radios = (toolRadios[label] ?: emptyList()) +
+        if (isBrush) listOf(RadioSpec(FIELD_RADIUS_UNIT, "Unit", radiusUnitOptions)) else emptyList()
+    return PanelControls(floats, dropdowns, toggles, radios)
+}
+
+/** Factor de escala del submenú según el ancho de pantalla: en un móvil grande (o
+ *  de baja densidad) 24px de SUBROW_H se ve pequeño y en uno chico grande. Se ancla
+ *  a 1080px (FullHD): un panel de 1080 -> scale 1.0; más ancho -> más grande. */
+private fun submenuScale(context: Context): Float {
+    val sw = context.resources.displayMetrics.widthPixels.toFloat()
+    return (sw / 1080f).coerceIn(0.85f, 1.6f)
 }
 
 
@@ -601,15 +640,22 @@ fun CarouselDock() {
      // Altura extra (px) que debe crecer la ventana del overlay para alojar el panel.
      fun panelHeightPx(): Int {
          if (panelIndex < 0) return 0
-         val (f, d, t) = panelControls(panelIndex)
-        val rows = panelRows(panelHasColor(panelIndex), isBrushTool(panelIndex), f, d, t)
-        var h = panelHeight(rows) + PANEL_GAP
-        if (openDropdown >= 0) {
-            val dd = d.firstOrNull { it.field == openDropdown }
-            if (dd != null) h += dd.options.size * SUBROW_H
-        }
-        return h.toInt()
+         val pc = panelControls(panelIndex)
+        val rows = panelRows(panelHasColor(panelIndex), isBrushTool(panelIndex), pc.floats, pc.dropdowns, pc.toggles, pc.radios)
+        return (panelHeight(rows) + PANEL_GAP).toInt()
      }
+
+    // Ancho extra (px) para el submenú del dropdown abierto (sale a la derecha del
+    // chip; sin esto se saldría de la ventana y quedaría recortado/intocable).
+    fun panelWidthPx(): Int {
+        if (panelIndex < 0 || openDropdown < 0) return 0
+        val dd = panelControls(panelIndex).dropdowns.firstOrNull { it.field == openDropdown } ?: return 0
+        val scale = submenuScale(context)
+        // El submenú empieza en cx+PANEL_W/2-8 y mide submenuW; la ventana crece
+        // centrada, así que para cubrir el lado derecho hacen falta ~submenuW extra
+        // (repartido a ambos lados por LAYOUT_IN_SCREEN + CENTER_HORIZONTAL).
+        return submenuW(scale).toInt()
+    }
 
     // Aplica el color HSV actual del panel al brush activo (en vivo, como radius/strength).
     fun pushColor() {
@@ -666,7 +712,7 @@ fun CarouselDock() {
             }
             if (inSculpt != lastActive) {
                 lastActive = inSculpt
-                updateSculptArcWindow(collapsed, inSculpt, panelHeightPx())
+                updateSculptArcWindow(collapsed, inSculpt, panelHeightPx(), panelWidthPx())
             }
             delay(200)
         }
@@ -676,20 +722,20 @@ fun CarouselDock() {
     // con el tamaño de la ventana (chica si está colapsada, arco completo si no).
     LaunchedEffect(collapsed) {
         OverlayState.sculptArcCollapsed = collapsed
-        updateSculptArcWindow(collapsed, OverlayState.sculptArcActive, panelHeightPx())
+        updateSculptArcWindow(collapsed, OverlayState.sculptArcActive, panelHeightPx(), panelWidthPx())
     }
 
     // Submenú de dropdown: al abrir/cerrar, la ventana crece/encoge para alojar la
     // lista de opciones (el resto del panel queda igual).
     LaunchedEffect(openDropdown) {
-        updateSculptArcWindow(collapsed, OverlayState.sculptArcActive, panelHeightPx())
+        updateSculptArcWindow(collapsed, OverlayState.sculptArcActive, panelHeightPx(), panelWidthPx())
     }
 
     // Mini menu: al abrir el panel (long-press), la ventana crece hacia arriba para
     // alojar la card; se re-leen los valores del brush tras activar el tool (el drain
     // tarda unas frames en aplicarlo). Al cerrar, la ventana vuelve al tamaño normal.
     LaunchedEffect(panelIndex) {
-        updateSculptArcWindow(collapsed, OverlayState.sculptArcActive, panelHeightPx())
+        updateSculptArcWindow(collapsed, OverlayState.sculptArcActive, panelHeightPx(), panelWidthPx())
         if (panelIndex < 0) openDropdown = -1
         if (panelIndex >= 0) {
             delay(300)
@@ -703,15 +749,18 @@ fun CarouselDock() {
                     panelSat = hsv[1]
                     panelVal = hsv[2]
                 }
-                val (f, d, t) = panelControls(panelIndex)
-                for (e in f) {
+                val pc = panelControls(panelIndex)
+                for (e in pc.floats) {
                     panelExtras[e.field] = OBLNativeActivity.getActiveBrushExtraStatic(e.field)
                 }
-                for (dd in d) {
+                for (dd in pc.dropdowns) {
                     panelExtras[dd.field] = OBLNativeActivity.getActiveBrushExtraStatic(dd.field)
                 }
-                for (tg in t) {
+                for (tg in pc.toggles) {
                     panelExtras[tg.field] = OBLNativeActivity.getActiveBrushExtraStatic(tg.field)
+                }
+                for (rd in pc.radios) {
+                    panelExtras[rd.field] = OBLNativeActivity.getActiveBrushExtraStatic(rd.field)
                 }
             }
         }
@@ -754,19 +803,28 @@ fun CarouselDock() {
                                 openDropdown = -1
                                 return@onTap
                             }
-                            val (f, d, t) = panelControls(panelIndex)
-                            val rows = panelRows(panelHasColor(panelIndex), isBrushTool(panelIndex), f, d, t)
+                            val pc = panelControls(panelIndex)
+                            val rows = panelRows(panelHasColor(panelIndex), isBrushTool(panelIndex), pc.floats, pc.dropdowns, pc.toggles, pc.radios)
                             // Submenú de dropdown abierto: un tap en una opción la
                             // selecciona y cierra; cualquier otro tap SOLO cierra.
                             if (openDropdown >= 0) {
-                                val dd = d.firstOrNull { it.field == openDropdown }
+                                val dd = pc.dropdowns.firstOrNull { it.field == openDropdown }
                                 val r = rows.firstOrNull { it.id == 200 + (openDropdown - 100) }
                                 if (dd != null && r != null) {
-                                    val optY0 = r.y + ROW_STEP
-                                    val optBottom = optY0 + dd.options.size * SUBROW_H
+                                    val scale = submenuScale(context)
+                                    val subRowH = SUBROW_H * scale
+                                    val panelH = panelHeight(rows)
+                                    val openUp = r.y + subRowH / 2f + dd.options.size * subRowH > panelH
+                                    val optY0 = if (openUp)
+                                        r.y - subRowH / 2f - dd.options.size * subRowH
+                                    else
+                                        r.y + subRowH / 2f
+                                    val optBottom = optY0 + dd.options.size * subRowH
+                                    val subLeft = cx + PANEL_W / 2f - 8f
+                                    val subRight = subLeft + submenuW(scale)
                                     if (pos.y >= optY0 && pos.y <= optBottom &&
-                                        abs(pos.x - cx) <= PANEL_W / 2f) {
-                                        val idx = ((pos.y - optY0) / SUBROW_H).toInt()
+                                        pos.x >= subLeft && pos.x <= subRight) {
+                                        val idx = ((pos.y - optY0) / subRowH).toInt()
                                             .coerceIn(0, dd.options.size - 1)
                                         panelExtras[dd.field] = idx.toFloat()
                                         OBLNativeActivity.setActiveBrushExtraStatic(dd.field, idx.toFloat())
@@ -803,21 +861,30 @@ fun CarouselDock() {
                                 }
                                 else -> {
                                     if (s in 100..199) {
-                                        val e = f.firstOrNull { it.field == s - 100 } ?: return@onTap
+                                        val e = pc.floats.firstOrNull { it.field == s - 100 } ?: return@onTap
                                         val v = sliderFrac(pos.x, cx) * (e.max - e.min) + e.min
                                         panelExtras[e.field] = v
                                         pushExtra(e.field)
                                     } else if (s in 200..299) {
-                                        val dd = d.firstOrNull { it.field == s - 100 } ?: return@onTap
+                                        val dd = pc.dropdowns.firstOrNull { it.field == s - 100 } ?: return@onTap
                                         // Tap en el chip: abre (o cierra) el submenú con
                                         // TODAS las opciones. Ya no cicla con cada tap.
                                         openDropdown = if (openDropdown == dd.field) -1 else dd.field
                                     } else if (s in 300..399) {
-                                        val tg = t.firstOrNull { it.field == s - 100 } ?: return@onTap
+                                        val tg = pc.toggles.firstOrNull { it.field == s - 100 } ?: return@onTap
                                         val cur = panelExtras[tg.field] ?: 0f
                                         val next = if (cur >= 0.5f) 0f else 1f
                                         panelExtras[tg.field] = next
                                         OBLNativeActivity.setActiveBrushExtraStatic(tg.field, next)
+                                    } else if (s in 400..499) {
+                                        // Radio segmentado: selecciona el segmento bajo el dedo.
+                                        // id = 400+(field-100) -> field = s-300.
+                                        val rd = pc.radios.firstOrNull { it.field == s - 300 } ?: return@onTap
+                                        val idx = radioSegmentIndex(pos.x, cx, rd.options.size)
+                                        if (idx in rd.options.indices) {
+                                            panelExtras[rd.field] = idx.toFloat()
+                                            OBLNativeActivity.setActiveBrushExtraStatic(rd.field, idx.toFloat())
+                                        }
                                     }
                                 }
                             }
@@ -886,8 +953,8 @@ fun CarouselDock() {
                                 panelIndex = -1
                                 return@detectDragGestures
                             }
-                            val (f, d, t) = panelControls(panelIndex)
-                            val rows = panelRows(panelHasColor(panelIndex), isBrushTool(panelIndex), f, d, t)
+                            val pc = panelControls(panelIndex)
+                            val rows = panelRows(panelHasColor(panelIndex), isBrushTool(panelIndex), pc.floats, pc.dropdowns, pc.toggles, pc.radios)
                             val s = sliderHit(start.x, start.y, cx, rows)
                             // Un drag en cualquier control cierra el submenú abierto.
                             if (openDropdown >= 0 && s != 0) openDropdown = -1
@@ -979,8 +1046,8 @@ fun CarouselDock() {
                                     }
                                 }
                                 6 -> {
-                                    val (f2, d2, t2) = panelControls(panelIndex)
-                                    val rows2 = panelRows(panelHasColor(panelIndex), isBrushTool(panelIndex), f2, d2, t2)
+                                    val pc2 = panelControls(panelIndex)
+                                    val rows2 = panelRows(panelHasColor(panelIndex), isBrushTool(panelIndex), pc2.floats, pc2.dropdowns, pc2.toggles, pc2.radios)
                                     val r = rows2.firstOrNull { it.id == 6 } ?: return@detectDragGestures
                                     val wcx = size.width / 2f
                                     when (panelWheelMode) {
@@ -1026,8 +1093,8 @@ fun CarouselDock() {
                                 }
                                     else -> {
                                         if (panelDrag in 100..199) {
-                                            val (f, _, _) = panelControls(panelIndex)
-                                            val e = f.firstOrNull { it.field == panelDrag - 100 }
+                                            val pcd = panelControls(panelIndex)
+                                            val e = pcd.floats.firstOrNull { it.field == panelDrag - 100 }
                                                 ?: return@detectDragGestures
                                             val v = frac * (e.max - e.min) + e.min
                                             if (abs(v - (panelExtras[e.field] ?: v)) > 0.002f * (e.max - e.min)) {
@@ -1117,7 +1184,7 @@ fun CarouselDock() {
             } else {
                 // Mini menu: card redondeada arriba del arco (la ventana creció hacia
                 // arriba, la card se dibuja en el top del canvas).
-                val (pf, pd, pt) = panelControls(panelIndex)
+                val pctl = panelControls(panelIndex)
                 drawBrushPanel(
                     cx = cx,
                     label = sculptTools[panelIndex],
@@ -1128,11 +1195,13 @@ fun CarouselDock() {
                     hue = panelHue,
                     sat = panelSat,
                     value = panelVal,
-                    floatExtras = pf,
-                    dropdowns = pd,
-                    toggles = pt,
+                    floatExtras = pctl.floats,
+                    dropdowns = pctl.dropdowns,
+                    toggles = pctl.toggles,
+                    radios = pctl.radios,
                     extraValues = panelExtras,
-                    openDropdown = openDropdown
+                    openDropdown = openDropdown,
+                    scale = submenuScale(context)
                 )
             }
         }
@@ -1324,16 +1393,13 @@ private fun DrawScope.drawBrushPanel(
     floatExtras: List<ExtraParam>,
     dropdowns: List<DropdownSpec>,
     toggles: List<ToggleSpec>,
+    radios: List<RadioSpec>,
     extraValues: Map<Int, Float>,
-    openDropdown: Int = -1
+    openDropdown: Int = -1,
+    scale: Float = 1f
 ) {
-    val rows = panelRows(hasColor, showBrushRows, floatExtras, dropdowns, toggles)
-    var panelH = panelHeight(rows)
-    // El submenú de un dropdown expandido crece la card con sus opciones.
-    if (openDropdown >= 0) {
-        val dd = dropdowns.firstOrNull { it.field == openDropdown }
-        if (dd != null) panelH += dd.options.size * SUBROW_H
-    }
+    val rows = panelRows(hasColor, showBrushRows, floatExtras, dropdowns, toggles, radios)
+    val panelH = panelHeight(rows)
     val left = cx - PANEL_W / 2f
     drawRoundRect(
         color = Color(0xE62B2B2B),
@@ -1434,16 +1500,61 @@ private fun DrawScope.drawBrushPanel(
                     drawDropdown(cx, r.y, dd.name, dd.options,
                         (extraValues[dd.field] ?: 0f).toInt())
                     if (dd.field == openDropdown) {
+                        val openUp = r.y + SUBROW_H * scale / 2f + dd.options.size * SUBROW_H * scale > panelH
                         drawDropdownOptions(cx, r.y, dd.options,
-                            (extraValues[dd.field] ?: 0f).toInt())
+                            (extraValues[dd.field] ?: 0f).toInt(), scale, openUp)
                     }
                 } else if (r.id in 300..399) {
                     val tg = toggles.firstOrNull { it.field == r.id - 100 } ?: continue
                     val on = (extraValues[tg.field] ?: 0f) >= 0.5f
                     drawToggle(cx, r.y, tg.name, on)
+                } else if (r.id in 400..499) {
+                    val rs = radios.firstOrNull { it.field == r.id - 300 } ?: continue
+                    drawRadio(cx, r.y, rs.name, rs.options,
+                        (extraValues[rs.field] ?: 0f).toInt())
                 }
             }
         }
+    }
+}
+
+private fun DrawScope.drawRadio(
+    cx: Float,
+    y: Float,
+    name: String,
+    options: List<String>,
+    value: Int
+) {
+    val left = cx - PANEL_W / 2f + 12f
+    val right = cx + PANEL_W / 2f - 12f
+    val w = right - left
+    drawContext.canvas.nativeCanvas.drawText(
+        name, left, y - 12f,
+        Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.rgb(0xD0, 0xD0, 0xD0)
+            textSize = 12f
+            textAlign = Paint.Align.LEFT
+        }
+    )
+    val segW = w / options.size
+    for (i in options.indices) {
+        val segLeft = left + i * segW
+        val sel = i == value
+        drawRoundRect(
+            color = if (sel) Color(0xFFCC6F03) else Color(0xFF3A3A3A),
+            topLeft = Offset(segLeft, y - 8f),
+            size = Size(segW - 6f, 18f),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(9f)
+        )
+        drawContext.canvas.nativeCanvas.drawText(
+            options[i], segLeft + segW / 2f, y + 5f,
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = if (sel) android.graphics.Color.rgb(0xFF, 0xFF, 0xFF)
+                        else android.graphics.Color.rgb(0xD0, 0xD0, 0xD0)
+                textSize = 12f
+                textAlign = Paint.Align.CENTER
+            }
+        )
     }
 }
 
@@ -1553,39 +1664,53 @@ private fun DrawScope.drawDropdown(
     )
 }
 
-/** Submenú de un dropdown expandido: lista vertical de TODAS las opciones debajo del
- *  chip (y = chipY + ROW_STEP + i*SUBROW_H). La opción seleccionada resaltada en
- *  ámbar; tap en una fila la selecciona y cierra (ver onTap). */
+/** Submenú de un dropdown expandido: lista vertical de TODAS las opciones a la
+ *  DERECHA del chip (ver onTap: subLeft = cx + PANEL_W/2f - 8f). Escalado según
+ *  resolución (submenuScale). La opción seleccionada resaltada en ámbar; tap en
+ *  una fila la selecciona y cierra. Si el submenú no cabe por debajo (openUp), se
+ *  dibuja hacia ARRIBA para no salirse de la card. */
 private fun DrawScope.drawDropdownOptions(
     cx: Float,
     chipY: Float,
     options: List<String>,
-    selected: Int
+    selected: Int,
+    scale: Float,
+    openUp: Boolean = false
 ) {
-    val left = cx - PANEL_W / 2f + 12f
-    val right = cx + PANEL_W / 2f - 12f
-    val w = right - left
-    var y = chipY + ROW_STEP
+    val subRight = cx + PANEL_W / 2f - 8f
+    val subLeft = subRight - submenuW(scale)
+    val subRowH = SUBROW_H * scale
+    val startY = if (openUp) chipY - subRowH / 2f - options.size * subRowH else chipY + subRowH / 2f
     val p = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        textSize = 13f
+        textSize = 13f * scale
         textAlign = Paint.Align.LEFT
     }
     for ((i, opt) in options.withIndex()) {
         val isSel = i == selected
+        val y = startY + i * subRowH
         drawRoundRect(
             color = if (isSel) Color(0xFFCC6F03) else Color(0xFF3A3A3A),
-            topLeft = Offset(left, y - SUBROW_H / 2f),
-            size = Size(w, SUBROW_H - 4f),
-            cornerRadius = androidx.compose.ui.geometry.CornerRadius(8f)
+            topLeft = Offset(subLeft, y - subRowH / 2f),
+            size = Size(submenuW(scale), subRowH - 4f * scale),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(8f * scale)
         )
         p.color = android.graphics.Color.rgb(0xFF, 0xC1, 0x07)
         drawContext.canvas.nativeCanvas.drawText(
             if (isSel) "● " + opt else "   " + opt,
-            left + 12f, y + 4f,
+            subLeft + 12f * scale, y + 4f * scale,
             p
         )
-        y += SUBROW_H
     }
+}
+
+private fun submenuW(scale: Float): Float = 150f * scale
+
+/** Índice del segmento radio bajo el dedo en x (mismos bordes que drawRadio). */
+private fun radioSegmentIndex(x: Float, cx: Float, count: Int): Int {
+    val left = cx - PANEL_W / 2f + 12f
+    val right = cx + PANEL_W / 2f - 12f
+    val segW = (right - left) / count
+    return floor(((x - left) / segW)).toInt()
 }
 
 /** Toggle (switch): label a la izquierda, mini-switch gris/dorado a la derecha. */
