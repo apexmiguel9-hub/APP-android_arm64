@@ -3,6 +3,7 @@ package com.epai.oblender
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -123,7 +124,7 @@ private fun NomadSculptSlider(
                 .pointerInput(min, max) {
                     var firstX = 0f
                     var firstFrac = frac
-                    androidx.compose.foundation.gestures.detectDragGestures(
+                    detectDragGestures(
                         onDragStart = { start ->
                             firstX = start.x
                             firstFrac = (start.x / size.width).coerceIn(0f, 1f)
