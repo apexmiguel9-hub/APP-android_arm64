@@ -404,10 +404,9 @@ fun showRuntimeButtons(context: Context, lifecycleOwner: LifecycleOwner) {
 
 }
 
-fun hideRuntimeButtons() {
+fun hideRuntimeButtonsKeepSculpt() {
     hideVirtualPointerOverlay()
     hidePrecisionLensOverlay()
-    hideSculptArcOverlay()
     val views = OverlayState.runtimeButtonViews.toList()
     OverlayState.runtimeButtonViews.clear()
     for (v in views) {
@@ -416,6 +415,11 @@ fun hideRuntimeButtons() {
             wm.removeView(v)
         } catch (_: Exception) {}
     }
+}
+
+fun hideRuntimeButtons() {
+    hideRuntimeButtonsKeepSculpt()
+    hideSculptArcOverlay()
 }
 
 fun showVirtualPointerOverlay(context: Context, lifecycleOwner: LifecycleOwner) {

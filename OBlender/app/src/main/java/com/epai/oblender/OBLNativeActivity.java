@@ -497,7 +497,9 @@ public class OBLNativeActivity extends NativeActivity
                     mBooleanLastOblSettingFragmentVisible=false;
                 }
                 // Also hide runtime buttons when keyboard shows
-                OBLControllerOverlayKt.hideRuntimeButtons();
+                // (keep the sculpt overlay so the Nomad card/chip stays visible
+                //  while editing a value with the keyboard open).
+                OBLControllerOverlayKt.hideRuntimeButtonsKeepSculpt();
                 ScreenUtils.fullScreen(getWindow());
             }
 
