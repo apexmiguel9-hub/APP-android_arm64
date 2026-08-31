@@ -24,6 +24,7 @@
         <activity
             android:name=".OBLNativeActivity"
             android:screenOrientation="landscape"
+            android:launchMode="singleTop"
             android:resizeableActivity="true"
             android:configChanges="orientation|keyboardHidden|screenSize|smallestScreenSize|density|keyboard|navigation|screenLayout|uiMode"
             android:windowSoftInputMode="adjustNothing">

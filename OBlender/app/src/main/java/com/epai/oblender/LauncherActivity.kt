@@ -146,6 +146,7 @@ class LauncherActivity : ComponentActivity() {
             }
             Log.d(TAG, "starting OBLNativeActivity...")
             startActivity(intent)
+            finish()
         } catch (e: Exception) {
             Log.e(TAG, "launchBlender failed", e)
         }

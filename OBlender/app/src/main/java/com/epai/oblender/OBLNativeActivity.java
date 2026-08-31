@@ -521,6 +521,16 @@ public class OBLNativeActivity extends NativeActivity
         OBLControllerOverlayKt.showSculptArcOverlay(OBLNativeActivity.this, ProcessLifecycleOwner.get());
     }
 
+    /** Called from JNI (oblHideLoadingOverlay) after mainBlenderInitial completes. */
+    public void hideLoadingOverlay() {
+        runOnUiThread(() -> {
+            View overlay = findViewById(R.id.loading_overlay);
+            if (overlay != null) {
+                overlay.setVisibility(View.GONE);
+            }
+        });
+    }
+
     private void hideToolbar() {
         ScreenUtils.fullScreen(getWindow());
     }

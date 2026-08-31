@@ -34,6 +34,8 @@
 #include <BLI_blenlib.h>
 #include "creator/creator.h"
 
+extern void oblHideLoadingOverlay();
+
 #define LOGI(...) ((void)__android_log_print(ANDROID_LOG_INFO, "LearnOpenGLES", __VA_ARGS__))
 #define LOGW(...) ((void)__android_log_print(ANDROID_LOG_WARN, "LearnOpenGLES", __VA_ARGS__))
 
@@ -106,6 +108,7 @@ static int engine_init_display(struct android_app *app) {
     userData->pContext=mainBlenderInitial(2, (const char **) (argv));
     isInitial=true;
     hasWindow=true;
+    oblHideLoadingOverlay();
     return 0;
 }
 
@@ -140,7 +143,11 @@ static void engine_handle_cmd(struct android_app *app, int32_t cmd) {
             engine_term_display(app);
             break;
         case APP_CMD_GAINED_FOCUS:
-            // When our app gains focus, we start monitoring the accelerometer.
+            // When our app gains focus, force a redraw in case the viewport
+            // went stale while in the background.
+            if (isInitial) {
+                engine_init_display_reinit(app);
+            }
             break;
         case APP_CMD_LOST_FOCUS:
             // When our app loses focus, we stop monitoring the accelerometer.
@@ -179,9 +186,9 @@ void android_main(struct android_app *state) {
             int events;
             struct android_poll_source *source;
 
-            // we loop until all events are read, then continue
-            // to draw the next frame of animation.
-            while ((ident = ALooper_pollAll(0, nullptr, &events,
+            // Use blocking poll (-1) before init to avoid 100% CPU spin.
+            // Once initialized, non-blocking (0) is fine for frame pacing.
+            while ((ident = ALooper_pollAll(isInitial ? 0 : -1, nullptr, &events,
                                             (void **) &source)) >= 0) {
 
                 // Process this event.

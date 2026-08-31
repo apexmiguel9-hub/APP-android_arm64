@@ -516,6 +516,7 @@ jmethodID javaCallBackSetValue;
 jmethodID javaMethodGetClipboard;
 jmethodID javaMethodPutClipboard;
 jmethodID javaMethodSetCursorPosition;
+jmethodID javaMethodHideLoading;
 JavaVM *g_vm;
 ANativeWindow* aNativeWindow;
 
@@ -599,6 +600,13 @@ void showWindow(struct android_app *app,int32_t left,
     g_vm->DetachCurrentThread();
 }
 
+void oblHideLoadingOverlay() {
+    if (!javaCallBackObj || !javaMethodHideLoading) return;
+    JNIEnv *jenv = AttachCurrentThreadIfNeeded();
+    jenv->CallVoidMethod(javaCallBackObj, javaMethodHideLoading);
+    g_vm->DetachCurrentThread();
+}
+
 extern "C"
 JNIEXPORT jint JNICALL
 JNI_OnLoad(JavaVM *vm, void *reserved) {
@@ -619,11 +627,12 @@ extern "C" JNIEXPORT void JNICALL Java_com_epai_oblender_OBLNativeActivity_initi
     javaMethodGetClipboard=env->GetMethodID(aJClass,"getClipboard", "(Z)Ljava/lang/String;");
     javaMethodPutClipboard=env->GetMethodID(aJClass,"putClipboard", "(Ljava/lang/String;Z)V");
     javaMethodSetCursorPosition=env->GetMethodID(aJClass,"SetCursorPosition", "(JJ)V");
+    javaMethodHideLoading=env->GetMethodID(aJClass,"hideLoadingOverlay", "()V");
     std::string strHomePathTemp=jstring2string(env, stringparameter);
     std::string strConfigPathTemp=jstring2string(env,stringPython);
 
-    strcat(strHomePath,strHomePathTemp.c_str());
-    strcat(strConfigPath,strConfigPathTemp.c_str());
+    strcpy(strHomePath,strHomePathTemp.c_str());
+    strcpy(strConfigPath,strConfigPathTemp.c_str());
 }
 extern "C" JNIEXPORT void JNICALL Java_com_epai_oblender_OBLNativeActivity_updateSurface(
         JNIEnv *env,
