@@ -126,10 +126,10 @@ static void engine_draw_frame(struct android_app *app) {
 static void engine_handle_cmd(struct android_app *app, int32_t cmd) {
     switch (cmd) {
         case APP_CMD_SAVE_STATE:
-            // The system has asked us to save our current state.  Do so.
+            LOGI("APP_CMD_SAVE_STATE");
             break;
         case APP_CMD_INIT_WINDOW:
-            // The window is being shown, get it ready.
+            LOGI("APP_CMD_INIT_WINDOW: isInitial=%d window=%p", isInitial, app->window);
             hasWindow = true;
             if (!isInitial){
                 engine_init_display(app);
@@ -138,19 +138,30 @@ static void engine_handle_cmd(struct android_app *app, int32_t cmd) {
             }
             break;
         case APP_CMD_TERM_WINDOW:
-            // The window is being hidden or closed, clean it up.
+            LOGI("APP_CMD_TERM_WINDOW");
             hasWindow = false;
             engine_term_display(app);
             break;
         case APP_CMD_GAINED_FOCUS:
-            // No-op: APP_CMD_INIT_WINDOW handles reinit when returning
-            // from background. Reinit here would destroy the freshly
-            // created context on first launch, causing gray viewport.
+            LOGI("APP_CMD_GAINED_FOCUS");
             break;
         case APP_CMD_LOST_FOCUS:
-            // When our app loses focus, we stop monitoring the accelerometer.
-            // This is to avoid consuming battery while not being used.
-            // Also stop animating.
+            LOGI("APP_CMD_LOST_FOCUS");
+            break;
+        case APP_CMD_PAUSE:
+            LOGI("APP_CMD_PAUSE");
+            break;
+        case APP_CMD_RESUME:
+            LOGI("APP_CMD_RESUME");
+            break;
+        case APP_CMD_STOP:
+            LOGI("APP_CMD_STOP");
+            break;
+        case APP_CMD_START:
+            LOGI("APP_CMD_START");
+            break;
+        default:
+            LOGI("APP_CMD_%d", cmd);
             break;
     }
 }
