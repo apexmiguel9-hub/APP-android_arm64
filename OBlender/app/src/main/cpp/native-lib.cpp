@@ -143,11 +143,9 @@ static void engine_handle_cmd(struct android_app *app, int32_t cmd) {
             engine_term_display(app);
             break;
         case APP_CMD_GAINED_FOCUS:
-            // When our app gains focus, force a redraw in case the viewport
-            // went stale while in the background.
-            if (isInitial) {
-                engine_init_display_reinit(app);
-            }
+            // No-op: APP_CMD_INIT_WINDOW handles reinit when returning
+            // from background. Reinit here would destroy the freshly
+            // created context on first launch, causing gray viewport.
             break;
         case APP_CMD_LOST_FOCUS:
             // When our app loses focus, we stop monitoring the accelerometer.
